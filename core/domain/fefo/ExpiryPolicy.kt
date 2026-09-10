@@ -72,7 +72,7 @@ data class ExpiryPolicy(
             return ExpiryStatus.UNKNOWN_OR_NON_EXPIRING
         }
 
-        val expiryDate = StockBatch.parseExpiryDateInt(expiryDateInt)
+        val expiryDate = requireNotNull(StockBatch.parseExpiryDateInt(expiryDateInt))
         return when {
             expiryDate < facilityCalendarDate -> ExpiryStatus.EXPIRED
             expiryDate == facilityCalendarDate -> ExpiryStatus.EXPIRES_TODAY
