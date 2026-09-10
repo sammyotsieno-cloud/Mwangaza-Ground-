@@ -1,0 +1,6 @@
+{
+  "name": "Mwangaza-Ground",
+  "description": "Health Products, Inventory & Dispensing system for clinics and facilities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
