@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Mwangaza-Ground"
 include(":app")
+include(":core")
