@@ -85,6 +85,9 @@ class FakeCoreDatabase : TransactionRunner {
     val goodsReceiptDao = object : GoodsReceiptDao {
         override fun insertReceipt(receipt: GoodsReceipt) {
             if (receipts.containsKey(receipt.id)) throw IllegalStateException("Duplicate receipt id: ${receipt.id}")
+            if (receipts.values.any { it.receiptNumber == receipt.receiptNumber }) {
+                throw IllegalStateException("Duplicate receipt number constraint violation: ${receipt.receiptNumber}")
+            }
             receipts[receipt.id] = receipt
         }
 
@@ -110,6 +113,9 @@ class FakeCoreDatabase : TransactionRunner {
     val stockBatchDao = object : StockBatchDao {
         override fun insertBatch(batch: StockBatch) {
             if (batches.containsKey(batch.id)) throw IllegalStateException("Duplicate batch id: ${batch.id}")
+            if (batches.values.any { it.productId == batch.productId && it.batchNumber == batch.batchNumber && it.expiryDateInt == batch.expiryDateInt }) {
+                throw IllegalStateException("Duplicate batch constraint violation: ${batch.batchNumber}")
+            }
             batches[batch.id] = batch
         }
 
@@ -159,6 +165,26 @@ class FakeCoreDatabase : TransactionRunner {
 
         override fun getLayersForReceiptRef(receiptRef: String): List<InventoryCostLayer> =
             costLayers.values.filter { it.sourceReceiptRef == receiptRef }
+
+        override fun decrementRemainingQuantity(layerId: String, decrementUnits: Long, updatedAt: Long): Int {
+            val layer = costLayers[layerId] ?: return 0
+            if (layer.remainingQuantity.storageUnits < decrementUnits) {
+                return 0
+            }
+            val newQty = layer.remainingQuantity.copy(storageUnits = layer.remainingQuantity.storageUnits - decrementUnits)
+            costLayers[layerId] = layer.copy(remainingQuantity = newQty, updatedAt = updatedAt)
+            return 1
+        }
+
+        override fun incrementRemainingQuantity(layerId: String, incrementUnits: Long, updatedAt: Long): Int {
+            val layer = costLayers[layerId] ?: return 0
+            if (layer.remainingQuantity.storageUnits + incrementUnits > layer.initialQuantity.storageUnits) {
+                return 0
+            }
+            val newQty = layer.remainingQuantity.copy(storageUnits = layer.remainingQuantity.storageUnits + incrementUnits)
+            costLayers[layerId] = layer.copy(remainingQuantity = newQty, updatedAt = updatedAt)
+            return 1
+        }
     }
 
     val stockMovementDao = object : StockMovementDao {
@@ -203,11 +229,30 @@ class FakeCoreDatabase : TransactionRunner {
 
         override fun getAllocationsForCostLayer(layerId: String): List<StockAllocation> =
             allocations.filter { it.inventoryCostLayerId == layerId }.sortedBy { it.allocatedAt }
+
+        override fun getEffectiveCogsForProduct(productId: String): Long {
+            return allocations
+                .filter { alloc ->
+                    alloc.productId == productId &&
+                        sales[alloc.consumptionTransactionId]?.status == Sale.STATUS_COMPLETED
+                }
+                .sumOf { it.allocatedCost.amountMinorUnits }
+        }
+
+        override fun getEffectiveCogsForSale(saleId: String): Long {
+            if (sales[saleId]?.status != Sale.STATUS_COMPLETED) return 0L
+            return allocations
+                .filter { it.consumptionTransactionId == saleId }
+                .sumOf { it.allocatedCost.amountMinorUnits }
+        }
     }
 
     val saleDao = object : SaleDao {
         override fun insertSale(sale: Sale) {
             if (sales.containsKey(sale.id)) throw IllegalStateException("Duplicate sale id: ${sale.id}")
+            if (sales.values.any { it.saleNumber == sale.saleNumber }) {
+                throw IllegalStateException("Duplicate sale number constraint violation: ${sale.saleNumber}")
+            }
             sales[sale.id] = sale
         }
 

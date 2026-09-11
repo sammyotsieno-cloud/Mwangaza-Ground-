@@ -49,7 +49,7 @@ import androidx.room.PrimaryKey
         Index(value = ["supplier_id"]),
         Index(value = ["status"]),
         Index(value = ["received_at"]),
-        Index(value = ["receipt_number"]),
+        Index(value = ["receipt_number"], unique = true),
         Index(value = ["source_document_ref"])
     ]
 )

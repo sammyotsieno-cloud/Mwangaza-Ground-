@@ -54,7 +54,37 @@ object CostLayerAllocationService {
         for (candidate in candidateAllocations) {
             val batch = candidate.batch
             val neededQuantity = candidate.allocatedQuantity
+
+            // Invariant enforcement: verify quantity is strictly positive
+            require(neededQuantity.isPositive) {
+                "Candidate allocated quantity must be strictly positive (> 0), got: ${neededQuantity.storageUnits} (batch=${batch.id})"
+            }
+
+            // Invariant enforcement: verify Product -> Batch relationship
+            require(batch.productId == productId) {
+                "Product/Batch relationship violation: Batch '${batch.id}' belongs to product '${batch.productId}', but expected product '$productId'"
+            }
+
             val availableLayers = activeLayersByBatch[batch.id] ?: emptyList()
+
+            // Invariant enforcement: defensively verify Product -> Batch -> Layer relationships and scales
+            for (layer in availableLayers) {
+                require(layer.productId == productId) {
+                    "Product/Layer relationship violation: Cost layer '${layer.id}' belongs to product '${layer.productId}', expected '$productId'"
+                }
+                require(layer.stockBatchId == batch.id) {
+                    "Batch/Layer relationship violation: Cost layer '${layer.id}' belongs to batch '${layer.stockBatchId}', expected '${batch.id}'"
+                }
+                require(layer.remainingQuantity.scale == neededQuantity.scale) {
+                    "Quantity scale mismatch: Cost layer '${layer.id}' scale (${layer.remainingQuantity.scale}) does not match consumption scale (${neededQuantity.scale})"
+                }
+                require(layer.remainingQuantity.storageUnits >= 0L) {
+                    "Cost layer '${layer.id}' remaining quantity cannot be negative, got: ${layer.remainingQuantity.storageUnits}"
+                }
+                require(layer.remainingQuantity.storageUnits <= layer.initialQuantity.storageUnits) {
+                    "Cost layer '${layer.id}' remaining quantity (${layer.remainingQuantity.storageUnits}) exceeds initial quantity (${layer.initialQuantity.storageUnits})"
+                }
+            }
 
             // Deterministic ordering: oldest acquisition first, then oldest registration, then entity ID
             val sortedLayers = availableLayers
@@ -78,12 +108,12 @@ object CostLayerAllocationService {
             for (layer in sortedLayers) {
                 if (unitsRemainingToCover <= 0L) break
 
-                require(layer.remainingQuantity.scale == neededQuantity.scale) {
-                    "Cost layer scale (${layer.remainingQuantity.scale}) does not match consumption scale (${neededQuantity.scale})"
-                }
-
                 val availableInLayer = layer.remainingQuantity.storageUnits
                 val unitsFromThisLayer = minOf(unitsRemainingToCover, availableInLayer)
+
+                require(unitsFromThisLayer <= availableInLayer) {
+                    "Invariant violation: Attempting to allocate $unitsFromThisLayer units exceeding available $availableInLayer in layer ${layer.id}"
+                }
 
                 if (unitsFromThisLayer > 0L) {
                     val allocatedQty = Quantity(unitsFromThisLayer, neededQuantity.scale)

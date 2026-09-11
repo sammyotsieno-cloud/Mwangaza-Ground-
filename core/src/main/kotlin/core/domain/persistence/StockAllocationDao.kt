@@ -22,4 +22,20 @@ interface StockAllocationDao {
 
     @Query("SELECT * FROM stock_allocations WHERE inventory_cost_layer_id = :layerId ORDER BY allocated_at ASC")
     fun getAllocationsForCostLayer(layerId: String): List<StockAllocation>
+
+    @Query("""
+        SELECT COALESCE(SUM(sa.allocated_cost), 0)
+        FROM stock_allocations sa
+        INNER JOIN sales s ON sa.consumption_transaction_id = s.id
+        WHERE s.status = 'COMPLETED' AND sa.product_id = :productId
+    """)
+    fun getEffectiveCogsForProduct(productId: String): Long
+
+    @Query("""
+        SELECT COALESCE(SUM(sa.allocated_cost), 0)
+        FROM stock_allocations sa
+        INNER JOIN sales s ON sa.consumption_transaction_id = s.id
+        WHERE s.id = :saleId AND s.status = 'COMPLETED'
+    """)
+    fun getEffectiveCogsForSale(saleId: String): Long
 }

@@ -32,4 +32,22 @@ interface InventoryCostLayerDao {
 
     @Query("SELECT * FROM inventory_cost_layers WHERE source_receipt_ref = :receiptRef")
     fun getLayersForReceiptRef(receiptRef: String): List<InventoryCostLayer>
+
+    @Query("""
+        UPDATE inventory_cost_layers
+        SET remaining_quantity_storage_units = remaining_quantity_storage_units - :decrementUnits,
+            updated_at = :updatedAt
+        WHERE id = :layerId
+          AND remaining_quantity_storage_units >= :decrementUnits
+    """)
+    fun decrementRemainingQuantity(layerId: String, decrementUnits: Long, updatedAt: Long): Int
+
+    @Query("""
+        UPDATE inventory_cost_layers
+        SET remaining_quantity_storage_units = remaining_quantity_storage_units + :incrementUnits,
+            updated_at = :updatedAt
+        WHERE id = :layerId
+          AND remaining_quantity_storage_units + :incrementUnits <= initial_quantity_storage_units
+    """)
+    fun incrementRemainingQuantity(layerId: String, incrementUnits: Long, updatedAt: Long): Int
 }

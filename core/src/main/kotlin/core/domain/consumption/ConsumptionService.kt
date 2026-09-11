@@ -152,6 +152,13 @@ class ConsumptionService(
                         )
                     }
 
+                    // Defensive invariant check: verify all fetched batches belong to product
+                    for (batch in batches) {
+                        require(batch.productId == product.id) {
+                            "Batch '${batch.id}' belongs to product '${batch.productId}', expected '${product.id}'"
+                        }
+                    }
+
                     // Calculate currently available physical stock for each batch from the authoritative ledger
                     val batchesWithQuantities = batches.map { batch ->
                         val availableUnits = stockMovementDao.getPhysicalStockUnitsForBatch(batch.id)
@@ -265,12 +272,29 @@ class ConsumptionService(
                     updatedAt = request.transactionTimestamp
                 )
 
-                // 4. Atomic database writes
+                // 4. Atomic database-level cost-layer decrement (Requirement 3)
+                // Execute SQL-level atomic decrement for EACH allocation.
+                // If any layer cannot be decremented atomically (rows affected == 0),
+                // throw InsufficientStockException to abort transaction immediately.
+                for (allocation in allAllocations) {
+                    val rowsUpdated = inventoryCostLayerDao.decrementRemainingQuantity(
+                        layerId = allocation.inventoryCostLayerId,
+                        decrementUnits = allocation.allocatedQuantity.storageUnits,
+                        updatedAt = request.transactionTimestamp
+                    )
+                    if (rowsUpdated == 0) {
+                        throw InsufficientStockException(
+                            "Atomic decrement failed for cost layer '${allocation.inventoryCostLayerId}'. " +
+                            "Layer has insufficient remaining balance for requested ${allocation.allocatedQuantity.storageUnits} units."
+                        )
+                    }
+                }
+
+                // 5. Commit transaction records
                 saleDao.insertSale(sale)
                 saleDao.insertSaleItems(allSaleItems)
                 stockAllocationDao.insertAllocations(allAllocations)
                 stockMovementDao.insertMovements(allMovements)
-                inventoryCostLayerDao.updateLayers(allUpdatedLayers)
 
                 ConsumptionResult(
                     sale = sale,
@@ -285,29 +309,67 @@ class ConsumptionService(
 
     /**
      * Reversal / Void architectural pathway:
-     * Atomically voids a previously completed sale without deleting historical records.
+     * Atomically voids a previously completed sale without deleting or mutating historical records.
+     * Original StockAllocation records remain 100% immutable.
+     * Cost layers are atomically restored via SQL-level increment.
+     * Physical ledger balance is restored via compensating StockMovement (TYPE_RETURN).
+     * Effective COGS nets to zero.
      */
     fun voidSale(saleId: String, voidTimestamp: Long, reason: String): Sale {
         synchronized(transactionLock) {
             return transactionRunner.runInTransaction {
-                val sale = saleDao.getSaleById(saleId)
+                val sale = saleDao.getSaleById(saleId) ?: saleDao.getSaleByNumber(saleId)
                     ?: throw IllegalArgumentException("Sale not found: $saleId")
 
                 if (sale.isVoided) {
                     throw IllegalStateException("Sale '${sale.saleNumber}' is already voided.")
                 }
 
-                val allocations = stockAllocationDao.getAllocationsForSale(saleId)
+                val existingVoidMovements = stockMovementDao.getMovementsBySourceRef(sale.saleNumber)
+                    .filter { it.sourceTransactionType == "SALE_VOID" }
+                if (existingVoidMovements.isNotEmpty()) {
+                    throw IllegalStateException("Sale '${sale.saleNumber}' has already been voided.")
+                }
+
+                val allocations = stockAllocationDao.getAllocationsForSale(sale.id)
                 val compensatingMovements = mutableListOf<StockMovement>()
                 val restoredLayers = mutableListOf<InventoryCostLayer>()
 
                 for (alloc in allocations) {
+                    // Invariant check on allocation relationships
+                    val layer = inventoryCostLayerDao.getLayerById(alloc.inventoryCostLayerId)
+                        ?: throw IllegalStateException("Cost layer '${alloc.inventoryCostLayerId}' not found during void")
+
+                    require(layer.productId == alloc.productId) {
+                        "Layer ${layer.id} productId does not match allocation productId"
+                    }
+                    require(layer.stockBatchId == alloc.stockBatchId) {
+                        "Layer ${layer.id} stockBatchId does not match allocation stockBatchId"
+                    }
+
+                    // SQL-level atomic restoration of layer quantity
+                    val rowsRestored = inventoryCostLayerDao.incrementRemainingQuantity(
+                        layerId = alloc.inventoryCostLayerId,
+                        incrementUnits = alloc.allocatedQuantity.storageUnits,
+                        updatedAt = voidTimestamp
+                    )
+                    if (rowsRestored == 0) {
+                        throw IllegalStateException(
+                            "Atomic increment failed for cost layer '${alloc.inventoryCostLayerId}' during void of sale '${sale.saleNumber}'. " +
+                            "Restored quantity would exceed initial quantity."
+                        )
+                    }
+
+                    val updatedLayer = inventoryCostLayerDao.getLayerById(alloc.inventoryCostLayerId)!!
+                    restoredLayers.add(updatedLayer)
+
+                    // Compensating positive stock movement restoring physical inventory
                     val compensatingMovement = StockMovement(
                         id = UUID.randomUUID().toString(),
                         productId = alloc.productId,
                         stockBatchId = alloc.stockBatchId,
                         movementType = StockMovement.TYPE_RETURN,
-                        quantity = alloc.allocatedQuantity,
+                        quantity = alloc.allocatedQuantity, // positive quantity restores physical balance
                         occurredAt = voidTimestamp,
                         sourceTransactionRef = sale.saleNumber,
                         sourceTransactionType = "SALE_VOID",
@@ -315,17 +377,11 @@ class ConsumptionService(
                         createdAt = voidTimestamp
                     )
                     compensatingMovements.add(compensatingMovement)
-
-                    val layer = inventoryCostLayerDao.getLayerById(alloc.inventoryCostLayerId)
-                        ?: throw IllegalStateException("Cost layer '${alloc.inventoryCostLayerId}' not found during void")
-
-                    val restoredQty = layer.remainingQuantity + alloc.allocatedQuantity
-                    restoredLayers.add(layer.copy(remainingQuantity = restoredQty, updatedAt = voidTimestamp))
                 }
 
                 stockMovementDao.insertMovements(compensatingMovements)
-                inventoryCostLayerDao.updateLayers(restoredLayers)
 
+                // Original StockAllocation records are NEVER modified or deleted
                 val voidedSale = sale.copy(
                     status = Sale.STATUS_VOIDED,
                     notes = if (sale.notes == null) "VOIDED: $reason" else "${sale.notes} | VOIDED: $reason",
@@ -334,6 +390,20 @@ class ConsumptionService(
                 saleDao.updateSale(voidedSale)
                 voidedSale
             }
+        }
+    }
+
+    /**
+     * Calculates the effective Cost of Goods Sold (COGS) for a sale.
+     * If the sale has been voided, effective COGS nets to zero.
+     */
+    fun getEffectiveCogsForSale(saleId: String): Money {
+        val sale = saleDao.getSaleById(saleId) ?: saleDao.getSaleByNumber(saleId)
+            ?: throw IllegalArgumentException("Sale not found: $saleId")
+        return if (sale.isVoided) {
+            Money.ZERO
+        } else {
+            sale.totalCogs
         }
     }
 }

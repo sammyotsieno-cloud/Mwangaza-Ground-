@@ -1286,4 +1286,161 @@ class TransactionChainTest {
         // Final physical stock restored back to 500 tablets
         assertEquals(500L, db.stockMovementDao.getPhysicalStockUnitsForProduct(productDiscrete.id))
     }
+
+    // ==========================================
+    // HARDENING TESTS (30-33)
+    // ==========================================
+
+    @Test
+    fun test30_effectiveCogsNetsToZeroAfterSaleVoidWithoutMutatingOriginalAllocations() {
+        seedStock("BATCH-VOID-COGS", 20271231, boxes = 5L, totalCostMinor = 150_000L) // 500 tablets @ 300 minor
+
+        val saleResult = consumptionService.consumeStock(
+            ConsumptionRequest(
+                saleNumber = "SALE-VOID-COGS-01",
+                items = listOf(
+                    ConsumptionLineRequest(
+                        productId = productDiscrete.id,
+                        dispensingUnitId = unitBox100.id,
+                        requestedQuantity = Quantity.of(1L, QuantityScale.SCALE_0) // 100 tablets
+                    )
+                ),
+                facilityCalendarDate = testCalendarDate,
+                transactionTimestamp = testTimestamp + 10_000L
+            )
+        )
+
+        // Prior to void, effective COGS is 30,000 minor units (KSh 300.00)
+        assertEquals(Money.ofMinor(30_000L), consumptionService.getEffectiveCogsForSale(saleResult.sale.id))
+        assertEquals(30_000L, db.stockAllocationDao.getEffectiveCogsForSale(saleResult.sale.id))
+
+        val origAllocations = db.stockAllocationDao.getAllocationsForSale(saleResult.sale.id)
+        assertEquals(1, origAllocations.size)
+
+        // Void the sale
+        val voidedSale = consumptionService.voidSale(
+            saleId = saleResult.sale.id,
+            voidTimestamp = testTimestamp + 20_000L,
+            reason = "Customer canceled dispensing"
+        )
+        assertTrue(voidedSale.isVoided)
+
+        // 1. Effective COGS must net to ZERO
+        assertEquals(Money.ZERO, consumptionService.getEffectiveCogsForSale(saleResult.sale.id))
+        assertEquals(0L, db.stockAllocationDao.getEffectiveCogsForSale(saleResult.sale.id))
+
+        // 2. Original StockAllocation records must remain strictly immutable
+        val allocationsAfterVoid = db.stockAllocationDao.getAllocationsForSale(saleResult.sale.id)
+        assertEquals(1, allocationsAfterVoid.size)
+        assertEquals(origAllocations[0].id, allocationsAfterVoid[0].id)
+        assertEquals(origAllocations[0].allocatedQuantity, allocationsAfterVoid[0].allocatedQuantity)
+        assertEquals(origAllocations[0].allocatedCost, allocationsAfterVoid[0].allocatedCost)
+
+        // 3. Layer balance must be fully restored
+        val layer = db.inventoryCostLayerDao.getActiveLayersForProduct(productDiscrete.id).first()
+        assertEquals(500L, layer.remainingQuantity.storageUnits)
+    }
+
+    @Test
+    fun test31_doubleVoidingIsRejectedAndSafe() {
+        seedStock("BATCH-DBL-VOID", 20271231, boxes = 5L, totalCostMinor = 150_000L)
+
+        val saleResult = consumptionService.consumeStock(
+            ConsumptionRequest(
+                saleNumber = "SALE-DBL-VOID-01",
+                items = listOf(
+                    ConsumptionLineRequest(
+                        productId = productDiscrete.id,
+                        dispensingUnitId = unitBox100.id,
+                        requestedQuantity = Quantity.of(1L, QuantityScale.SCALE_0)
+                    )
+                ),
+                facilityCalendarDate = testCalendarDate,
+                transactionTimestamp = testTimestamp + 10_000L
+            )
+        )
+
+        consumptionService.voidSale(saleResult.sale.id, testTimestamp + 20_000L, "First void")
+
+        // Second void attempt must be rejected
+        try {
+            consumptionService.voidSale(saleResult.sale.id, testTimestamp + 30_000L, "Second void attempt")
+            fail("Expected IllegalStateException for double-voiding attempt")
+        } catch (e: IllegalStateException) {
+            assertTrue(e.message!!.contains("already voided"))
+        }
+
+        // Return movements must not be duplicated (must remain exactly 1)
+        val returnMovements = db.stockMovementDao.getMovementsForProduct(productDiscrete.id)
+            .filter { it.movementType == StockMovement.TYPE_RETURN }
+        assertEquals(1, returnMovements.size)
+        assertEquals(500L, db.stockMovementDao.getPhysicalStockUnitsForProduct(productDiscrete.id))
+    }
+
+    @Test
+    fun test32_atomicDecrementFailureAbortsEntireConsumptionTransaction() {
+        seedStock("BATCH-ATOMIC-FAIL", 20271231, boxes = 1L, totalCostMinor = 30_000L) // 100 tablets
+
+        // Artificially deplete cost layer balance directly (simulating concurrent depletion)
+        val layer = db.inventoryCostLayerDao.getActiveLayersForProduct(productDiscrete.id).first()
+        db.inventoryCostLayerDao.decrementRemainingQuantity(layer.id, 80L, testTimestamp) // leaves 20 tablets
+
+        try {
+            consumptionService.consumeStock(
+                ConsumptionRequest(
+                    saleNumber = "SALE-ATOMIC-FAIL-01",
+                    items = listOf(
+                        ConsumptionLineRequest(
+                            productId = productDiscrete.id,
+                            dispensingUnitId = unitBox100.id,
+                            requestedQuantity = Quantity.of(1L, QuantityScale.SCALE_0) // requests 100 tablets
+                        )
+                    ),
+                    facilityCalendarDate = testCalendarDate,
+                    transactionTimestamp = testTimestamp + 10_000L
+                )
+            )
+            fail("Expected allocation or atomic decrement failure")
+        } catch (e: Exception) {
+            // Expected
+        }
+
+        // Entire transaction must be aborted: 0 sales, 0 allocations, layer remains at 20
+        assertEquals(0, db.sales.size)
+        assertEquals(0, db.allocations.size)
+        val layerAfter = db.inventoryCostLayerDao.getLayerById(layer.id)!!
+        assertEquals(20L, layerAfter.remainingQuantity.storageUnits)
+    }
+
+    @Test
+    fun test33_productBatchLayerRelationshipMismatchFailsDefensively() {
+        val foreignBatch = StockBatch(
+            id = "BATCH-MISMATCH",
+            productId = "SOME-OTHER-PRODUCT-ID",
+            batchNumber = "BM-001",
+            expiryDateInt = 20281231,
+            receivedDateInt = 20260101,
+            supplierId = supplier.id,
+            createdAt = testTimestamp
+        )
+
+        val candidate = FefoCandidateAllocation(
+            batch = foreignBatch,
+            allocatedQuantity = Quantity.of(50L, QuantityScale.SCALE_0)
+        )
+
+        try {
+            CostLayerAllocationService.allocateCostLayers(
+                candidateAllocations = listOf(candidate),
+                activeLayersByBatch = mapOf(foreignBatch.id to emptyList()),
+                consumptionTransactionId = "SALE-FAIL-REL",
+                consumptionItemId = "ITEM-FAIL-REL",
+                productId = productDiscrete.id,
+                allocationTimestamp = testTimestamp
+            )
+            fail("Expected IllegalArgumentException for Product/Batch mismatch")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message!!.contains("relationship violation"))
+        }
+    }
 }
