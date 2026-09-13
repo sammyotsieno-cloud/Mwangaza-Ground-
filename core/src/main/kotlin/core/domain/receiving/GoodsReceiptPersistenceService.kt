@@ -1,21 +1,3 @@
-package core.domain.receiving
-
-import core.domain.model.GoodsReceipt
-import core.domain.model.GoodsReceiptItem
-import core.domain.model.ProductMaster
-import core.domain.model.ProductUnit
-import core.domain.model.StockBatch
-import core.domain.persistence.CoreDatabase
-import core.domain.persistence.GoodsReceiptDao
-import core.domain.persistence.InventoryCostLayerDao
-import core.domain.persistence.RoomTransactionRunner
-import core.domain.persistence.StockBatchDao
-import core.domain.persistence.StockMovementDao
-import core.domain.persistence.TransactionRunner
-import java.time.Instant
-import java.time.ZoneOffset
-
-/**
  * Service orchestrating the atomic persistence of inventory receiving transactions.
  *
  * Responsibilities:
@@ -269,15 +251,18 @@ class GoodsReceiptPersistenceService(
      *
      * UTC is intentionally used here because GoodsReceipt currently stores an
      * instant and the model does not yet expose an explicit facility timezone.
+     *
+     * Calendar is used instead of java.time.Instant because the application
+     * minimum SDK is API 24 and java.time.Instant requires API 26.
      */
     private fun epochMillisToDateInt(epochMillis: Long): Int {
-        val date = Instant.ofEpochMilli(epochMillis)
-            .atZone(ZoneOffset.UTC)
-            .toLocalDate()
+        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+            timeInMillis = epochMillis
+        }
 
-        return (date.year * 10_000) +
-            (date.monthValue * 100) +
-            date.dayOfMonth
+        return (calendar.get(Calendar.YEAR) * 10_000) +
+            ((calendar.get(Calendar.MONTH) + 1) * 100) +
+            calendar.get(Calendar.DAY_OF_MONTH)
     }
 
     /**
