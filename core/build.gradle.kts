@@ -34,10 +34,12 @@ android {
 }
 
 dependencies {
-    // Room Persistence & Annotations (required by existing domain models and RoomConverters)
+    // Room is exposed through CoreDatabase, which is consumed by :app.
+    // Therefore Room runtime and KTX must be part of the core API surface.
     val roomVersion = "2.6.1"
-    implementation("androidx.room:room-runtime:$roomVersion")
-    implementation("androidx.room:room-ktx:$roomVersion")
+
+    api("androidx.room:room-runtime:$roomVersion")
+    api("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
     testImplementation("junit:junit:4.13.2")
