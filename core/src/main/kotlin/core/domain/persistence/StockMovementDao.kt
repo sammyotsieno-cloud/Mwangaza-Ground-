@@ -14,6 +14,9 @@ interface StockMovementDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertMovements(movements: List<StockMovement>)
 
+    @Query("SELECT * FROM stock_movements ORDER BY occurred_at DESC, created_at DESC")
+    fun getAllMovements(): List<StockMovement>
+
     @Query("SELECT * FROM stock_movements WHERE product_id = :productId ORDER BY occurred_at ASC, created_at ASC")
     fun getMovementsForProduct(productId: String): List<StockMovement>
 

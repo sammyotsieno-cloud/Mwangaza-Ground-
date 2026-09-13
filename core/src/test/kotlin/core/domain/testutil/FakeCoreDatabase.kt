@@ -101,6 +101,9 @@ class FakeCoreDatabase : TransactionRunner {
             receipts[receipt.id] = receipt
         }
 
+        override fun getAllReceipts(): List<GoodsReceipt> =
+            receipts.values.sortedByDescending { it.receivedAt }
+
         override fun getReceiptById(id: String): GoodsReceipt? = receipts[id]
 
         override fun getReceiptByNumber(receiptNumber: String): GoodsReceipt? =
@@ -122,6 +125,9 @@ class FakeCoreDatabase : TransactionRunner {
         override fun insertBatches(newBatches: List<StockBatch>) {
             newBatches.forEach { insertBatch(it) }
         }
+
+        override fun getAllBatches(): List<StockBatch> =
+            batches.values.sortedWith(compareBy<StockBatch> { it.expiryDateInt }.thenBy { it.createdAt })
 
         override fun getBatchById(id: String): StockBatch? = batches[id]
 
@@ -196,6 +202,9 @@ class FakeCoreDatabase : TransactionRunner {
             movements.addAll(newMovements)
         }
 
+        override fun getAllMovements(): List<StockMovement> =
+            movements.sortedByDescending { it.occurredAt }
+
         override fun getMovementsForProduct(productId: String): List<StockMovement> =
             movements.filter { it.productId == productId }.sortedBy { it.occurredAt }
 
@@ -266,6 +275,9 @@ class FakeCoreDatabase : TransactionRunner {
             sales[sale.id] = sale
         }
 
+        override fun getAllSales(): List<Sale> =
+            sales.values.sortedByDescending { it.occurredAt }
+
         override fun getSaleById(id: String): Sale? = sales[id]
 
         override fun getSaleByNumber(saleNumber: String): Sale? =
@@ -284,11 +296,26 @@ class FakeCoreDatabase : TransactionRunner {
             newUnits.forEach { units[it.id] = it }
         }
 
+        override fun insertUnit(unit: ProductUnit) {
+            units[unit.id] = unit
+        }
+
+        override fun updateProduct(product: ProductMaster) {
+            products[product.id] = product
+        }
+
         override fun insertPriceConfig(config: UnitPriceConfig) {
             priceConfigs[config.productUnitId] = config
         }
 
+        override fun savePriceConfig(config: UnitPriceConfig) {
+            priceConfigs[config.productUnitId] = config
+        }
+
         override fun getProductById(id: String): ProductMaster? = products[id]
+
+        override fun getAllProducts(): List<ProductMaster> =
+            products.values.sortedWith(compareByDescending<ProductMaster> { it.isActive }.thenBy { it.displayName })
 
         override fun getBaseUnitForProduct(productId: String): ProductUnit? =
             units.values.firstOrNull { it.productId == productId && it.isBaseUnit }
@@ -298,7 +325,13 @@ class FakeCoreDatabase : TransactionRunner {
         override fun getUnitsForProduct(productId: String): List<ProductUnit> =
             units.values.filter { it.productId == productId }
 
+        override fun getAllUnits(): List<ProductUnit> =
+            units.values.toList()
+
         override fun getActivePriceConfigForUnit(unitId: String): UnitPriceConfig? =
             priceConfigs[unitId]?.takeIf { it.isActive }
+
+        override fun getAllPriceConfigs(): List<UnitPriceConfig> =
+            priceConfigs.values.toList()
     }
 }

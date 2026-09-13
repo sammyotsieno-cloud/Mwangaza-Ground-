@@ -61,4 +61,19 @@ abstract class CoreDatabase : RoomDatabase() {
     abstract fun stockAllocationDao(): StockAllocationDao
     abstract fun saleDao(): SaleDao
     abstract fun productMasterDao(): ProductMasterDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: CoreDatabase? = null
+
+        fun getInstance(context: android.content.Context): CoreDatabase {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: androidx.room.Room.databaseBuilder(
+                    context.applicationContext,
+                    CoreDatabase::class.java,
+                    "mwangaza_ground.db"
+                ).build().also { INSTANCE = it }
+            }
+        }
+    }
 }

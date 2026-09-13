@@ -1,5 +1,9 @@
 package org.mwangaza.app.ui.navigation
 
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
@@ -8,11 +12,14 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,9 +27,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import org.mwangaza.app.data.AppContainer
 import org.mwangaza.app.ui.screens.DashboardScreen
+import org.mwangaza.app.ui.screens.DispensingScreen
+import org.mwangaza.app.ui.screens.ExpiryAlertsScreen
+import org.mwangaza.app.ui.screens.GoodsReceivingScreen
+import org.mwangaza.app.ui.screens.InventoryScreen
 import org.mwangaza.app.ui.screens.NotificationsScreen
 import org.mwangaza.app.ui.screens.PlaceholderScreen
+import org.mwangaza.app.ui.screens.ProductsScreen
+import org.mwangaza.app.ui.screens.ReportsScreen
 import org.mwangaza.app.ui.screens.SettingsScreen
 
 private sealed class BottomNavItem(
@@ -36,20 +51,63 @@ private sealed class BottomNavItem(
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    container: AppContainer? = null
+) {
+    val context = LocalContext.current
+    val appContainer = container ?: remember(context) { AppContainer(context.applicationContext) }
+
     var currentBottomTab by remember { mutableStateOf<BottomNavItem>(BottomNavItem.Dashboard) }
     var currentFeature by remember { mutableStateOf<String?>(null) }
+    var showExitConfirmation by remember { mutableStateOf(false) }
 
-    val bottomItems = listOf(
-        BottomNavItem.Dashboard,
-        BottomNavItem.Notifications,
-        BottomNavItem.Settings
-    )
+    // Intercept Back Press 1: From any feature screen back to Dashboard
+    BackHandler(enabled = currentFeature != null) {
+        currentFeature = null
+    }
+
+    // Intercept Back Press 2: From Notifications or Settings back to Dashboard tab
+    BackHandler(enabled = currentFeature == null && currentBottomTab != BottomNavItem.Dashboard) {
+        currentBottomTab = BottomNavItem.Dashboard
+    }
+
+    // Intercept Back Press 3: On Dashboard root, prompt for application exit
+    BackHandler(enabled = currentFeature == null && currentBottomTab == BottomNavItem.Dashboard) {
+        showExitConfirmation = true
+    }
+
+    if (showExitConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirmation = false },
+            title = { Text("Exit Application") },
+            text = { Text("Are you sure you want to exit Mwangaza Ground?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExitConfirmation = false
+                        (context as? Activity)?.finish()
+                    }
+                ) {
+                    Text("Exit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Scaffold(
         bottomBar = {
             if (currentFeature == null) {
                 NavigationBar {
+                    val bottomItems = listOf(
+                        BottomNavItem.Dashboard,
+                        BottomNavItem.Notifications,
+                        BottomNavItem.Settings
+                    )
                     bottomItems.forEach { item ->
                         val selected = currentBottomTab == item
                         NavigationBarItem(
@@ -71,38 +129,83 @@ fun AppNavigation() {
             }
         }
     ) { innerPadding ->
-        when {
-            currentFeature != null -> {
-                val title = when (currentFeature) {
-                    "receiving" -> "Goods Receiving"
-                    "dispensing" -> "Dispensing / Sales"
-                    "inventory" -> "Inventory"
-                    "products" -> "Products"
-                    "alerts" -> "Expiry Alerts"
-                    "reports" -> "Reports"
-                    "suppliers" -> "Suppliers"
-                    "adjustments" -> "Stock Adjustments"
-                    else -> "Feature"
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(if (currentFeature == null) innerPadding else androidx.compose.foundation.layout.PaddingValues())
+        ) {
+            when {
+                currentFeature == "products" -> {
+                    ProductsScreen(
+                        container = appContainer,
+                        onBack = { currentFeature = null }
+                    )
                 }
-                PlaceholderScreen(
-                    title = title,
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
+                currentFeature == "receiving" -> {
+                    GoodsReceivingScreen(
+                        container = appContainer,
+                        onBack = { currentFeature = null }
+                    )
+                }
+                currentFeature == "dispensing" -> {
+                    DispensingScreen(
+                        container = appContainer,
+                        onBack = { currentFeature = null }
+                    )
+                }
+                currentFeature == "inventory" -> {
+                    InventoryScreen(
+                        container = appContainer,
+                        onBack = { currentFeature = null }
+                    )
+                }
+                currentFeature == "alerts" -> {
+                    ExpiryAlertsScreen(
+                        container = appContainer,
+                        onBack = { currentFeature = null }
+                    )
+                }
+                currentFeature == "reports" -> {
+                    ReportsScreen(
+                        container = appContainer,
+                        onBack = { currentFeature = null }
+                    )
+                }
+                currentFeature == "suppliers" -> {
+                    PlaceholderScreen(
+                        title = "Suppliers",
+                        explanation = "Supplier entity identity is defined in database schema, but automated supplier account ledger and procurement orchestration services are pending future architectural reconciliation. Use Goods Receiving for supplier invoice & batch tracking.",
+                        onBack = { currentFeature = null }
+                    )
+                }
+                currentFeature == "adjustments" -> {
+                    PlaceholderScreen(
+                        title = "Stock Adjustments",
+                        explanation = "Direct stock adjustments require atomic inventory cost layer reallocation and write-off ledger reconciliation to maintain zero-drift FIFO integrity. Currently, intake is recorded via Goods Receiving and reversals via Dispensing Void.",
+                        onBack = { currentFeature = null }
+                    )
+                }
+                currentFeature != null -> {
+                    PlaceholderScreen(
+                        title = "Feature",
+                        onBack = { currentFeature = null }
+                    )
+                }
 
-            currentBottomTab is BottomNavItem.Dashboard -> {
-                DashboardScreen(
-                    onFeatureClick = { route -> currentFeature = route },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
+                currentBottomTab is BottomNavItem.Dashboard -> {
+                    DashboardScreen(
+                        onFeatureClick = { route -> currentFeature = route },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
 
-            currentBottomTab is BottomNavItem.Notifications -> {
-                NotificationsScreen(modifier = Modifier.padding(innerPadding))
-            }
+                currentBottomTab is BottomNavItem.Notifications -> {
+                    NotificationsScreen(modifier = Modifier.fillMaxSize())
+                }
 
-            currentBottomTab is BottomNavItem.Settings -> {
-                SettingsScreen(modifier = Modifier.padding(innerPadding))
+                currentBottomTab is BottomNavItem.Settings -> {
+                    SettingsScreen(modifier = Modifier.fillMaxSize())
+                }
             }
         }
     }

@@ -19,6 +19,9 @@ interface GoodsReceiptDao {
     @Update
     fun updateReceipt(receipt: GoodsReceipt)
 
+    @Query("SELECT * FROM goods_receipts ORDER BY received_at DESC")
+    fun getAllReceipts(): List<GoodsReceipt>
+
     @Query("SELECT * FROM goods_receipts WHERE id = :id")
     fun getReceiptById(id: String): GoodsReceipt?
 

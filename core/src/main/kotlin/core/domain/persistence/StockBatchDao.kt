@@ -14,6 +14,9 @@ interface StockBatchDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertBatches(batches: List<StockBatch>)
 
+    @Query("SELECT * FROM stock_batches ORDER BY expiry_date_int ASC, created_at ASC")
+    fun getAllBatches(): List<StockBatch>
+
     @Query("SELECT * FROM stock_batches WHERE id = :id")
     fun getBatchById(id: String): StockBatch?
 

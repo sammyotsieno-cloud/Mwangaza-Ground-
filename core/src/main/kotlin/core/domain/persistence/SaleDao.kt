@@ -19,6 +19,9 @@ interface SaleDao {
     @Update
     fun updateSale(sale: Sale)
 
+    @Query("SELECT * FROM sales ORDER BY occurred_at DESC")
+    fun getAllSales(): List<Sale>
+
     @Query("SELECT * FROM sales WHERE id = :id")
     fun getSaleById(id: String): Sale?
 
