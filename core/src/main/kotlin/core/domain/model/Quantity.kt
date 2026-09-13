@@ -1,8 +1,6 @@
 package core.domain.model
-
 import androidx.room.ColumnInfo
 import java.math.BigDecimal
-
 /**
  * Pure domain value object representing an exact physical quantity.
  *
@@ -183,8 +181,15 @@ data class Quantity(
                 )
             }
 
+            /*
+             * Use BigDecimal.longValueExact() directly.
+             *
+             * This preserves exactness and Long overflow detection while
+             * avoiding BigInteger.longValueExact(), which requires API 31
+             * on the Android API surface used by this project.
+             */
             val storageUnits = try {
-                scaled.toBigIntegerExact().longValueExact()
+                scaled.longValueExact()
             } catch (e: ArithmeticException) {
                 throw ArithmeticException(
                     "Decimal value '$decimalString' at scale ${scale.scale} " +
