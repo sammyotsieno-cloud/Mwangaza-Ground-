@@ -10,31 +10,39 @@ import java.math.BigInteger
 /**
  * Room entity defining one commercial or operational unit for a ProductMaster.
  *
- * ProductUnit answers one question:
+ * ProductUnit answers:
  *
  *     "How many canonical BASE UNITS does one of these units represent?"
  *
- * It does NOT define:
+ * It owns:
+ * - commercial/operational unit identity
+ * - exact rational conversion to the product's canonical base unit
+ * - purchase/dispensing/display capabilities
+ * - unit lifecycle
+ *
+ * It does NOT own:
  * - quantity precision
  * - quantity storage scale
  * - minimum transaction increment
- * - actual inventory quantity
- * - price
+ * - inventory quantity
+ * - selling price
  * - acquisition cost
  * - batch or expiry
  *
- * Those responsibilities belong to Quantity/QuantityScale, transactional records,
- * pricing models, and inventory models respectively.
+ * ProductMaster owns the product-level quantity precision and minimum
+ * transaction increment.
+ *
+ * Quantity owns exact quantity arithmetic.
  *
  * ---------------------------------------------------------------------------
  * CONVERSION MODEL
  * ---------------------------------------------------------------------------
  *
- * A commercial unit is represented as an exact rational conversion:
+ * A commercial unit is represented as:
  *
  *     1 commercial unit
  *         =
- *     conversionNumerator / conversionDenominator base units
+ *     conversionNumerator / conversionDenominator canonical base units
  *
  * Examples:
  *
@@ -56,12 +64,29 @@ import java.math.BigInteger
  * No floating-point arithmetic is used.
  *
  * ---------------------------------------------------------------------------
+ * BASE UNIT INVARIANT
+ * ---------------------------------------------------------------------------
+ *
+ * Exactly one ProductUnit for a product is intended to represent the
+ * canonical base unit.
+ *
+ * If isBaseUnit == true, its conversion MUST be exactly:
+ *
+ *     1/1
+ *
+ * A base unit representing 10/1 tablets, for example, would contradict the
+ * meaning of canonical base unit and is therefore rejected.
+ *
+ * Database/service-level logic must additionally ensure that a product does
+ * not have multiple active base units.
+ *
+ * ---------------------------------------------------------------------------
  * PRECISION BOUNDARY
  * ---------------------------------------------------------------------------
  *
  * ProductUnit does NOT know whether the product is stored at scale 0, 3, etc.
  *
- * For example:
+ * Example:
  *
  *     Product:
  *         canonical base unit = mL
@@ -71,47 +96,45 @@ import java.math.BigInteger
  *         Bottle
  *         conversion = 100/1 mL
  *
- * The conversion layer therefore remains expressed in physical base units,
- * while QuantityScale separately determines that:
+ * QuantityScale then determines that:
  *
  *     100 mL = 100,000 storage units
  *
- * This prevents packaging conversion from being confused with decimal
- * precision/storage scale.
+ * Packaging conversion and decimal precision therefore remain separate.
  *
  * ---------------------------------------------------------------------------
  * FRACTIONAL COMMERCIAL UNITS
  * ---------------------------------------------------------------------------
  *
- * Rational conversion allows legitimate commercial units that are not whole
- * multiples of the base unit.
+ * Rational conversion permits legitimate commercial units that are not whole
+ * multiples of the canonical base unit.
  *
  * Example:
  *
  *     1 measuring dose = 1/2 mL
  *
- * Whether a transaction may use that unit, and whether the resulting quantity
- * satisfies the product's minimum transaction increment, is decided by the
- * quantity/domain validation layer.
+ * Whether that quantity is legally usable in a transaction is determined by
+ * the product's quantity precision and minimum transaction increment.
  *
- * ProductUnit itself does not decide whether a product may be fractionally
- * dispensed.
+ * ProductUnit does not decide whether fractional dispensing is permitted.
  *
  * ---------------------------------------------------------------------------
  * HISTORICAL SAFETY
  * ---------------------------------------------------------------------------
  *
- * A ProductUnit is configuration/master data.
+ * ProductUnit is configuration/master data.
  *
- * Once a unit has been used by a historical transaction, its conversion
- * semantics must not be silently changed in place. The application/service
- * layer must either:
+ * Once a unit has participated in a historical transaction, its conversion
+ * semantics must not be silently changed in place.
  *
- * - prevent modification of the conversion of a historically used unit, or
- * - retire the old ProductUnit and create a new one.
+ * The application/service layer must either:
  *
- * Historical transaction records must retain the quantity/conversion facts
- * necessary to reconstruct what actually occurred.
+ * - prevent modification of conversion semantics for historically used units,
+ *   or
+ * - retire the old unit and create a new one.
+ *
+ * Historical transactions must retain sufficient quantity/conversion facts
+ * to reconstruct what actually occurred.
  */
 @Entity(
     tableName = "product_units",
@@ -145,13 +168,6 @@ data class ProductUnit(
 
     /**
      * Numerator of the exact commercial-unit → canonical-base-unit conversion.
-     *
-     * Examples:
-     * - tablet = 1
-     * - blister = 10
-     * - box = 100
-     * - bottle of 100 mL = 100
-     * - half-mL measure = 1
      */
     @ColumnInfo(name = "conversion_numerator")
     val conversionNumerator: Long,
@@ -159,16 +175,15 @@ data class ProductUnit(
     /**
      * Positive denominator of the exact commercial-unit → canonical-base-unit
      * conversion.
-     *
-     * Examples:
-     * - tablet = 1
-     * - blister = 1
-     * - box = 1
-     * - half-mL measure = 2
      */
     @ColumnInfo(name = "conversion_denominator")
     val conversionDenominator: Long = 1L,
 
+    /**
+     * Identifies the canonical base unit for this product.
+     *
+     * When true, conversion must be exactly 1/1.
+     */
     @ColumnInfo(name = "is_base_unit")
     val isBaseUnit: Boolean = false,
 
@@ -222,13 +237,10 @@ data class ProductUnit(
                 "got: $sortOrder (id=$id)"
         }
 
-        /*
-         * Store every rational conversion in canonical reduced form.
-         *
-         * This does not mutate the constructor values, but the domain exposes
-         * the normalized values through normalizedConversionNumerator and
-         * normalizedConversionDenominator.
-         */
+        require(!isBaseUnit || representsExactlyOneBaseUnit) {
+            "A ProductUnit marked as the canonical base unit must represent " +
+                "exactly 1/1 canonical base unit (id=$id, conversion=$conversionNumerator/$conversionDenominator)"
+        }
     }
 
     /**
@@ -260,9 +272,6 @@ data class ProductUnit(
     /**
      * Returns true when this commercial unit represents exactly one
      * canonical base unit.
-     *
-     * Example:
-     *     tablet = 1/1 tablet
      */
     val representsExactlyOneBaseUnit: Boolean
         get() =
@@ -272,41 +281,22 @@ data class ProductUnit(
     /**
      * Returns true when this commercial unit represents a whole-number
      * quantity of canonical base units.
-     *
-     * Examples:
-     *     blister = 10/1 tablets -> true
-     *     box = 100/1 tablets -> true
-     *     half-mL measure = 1/2 mL -> false
      */
     val representsWholeBaseUnits: Boolean
         get() = normalizedConversionDenominator == 1L
 
     /**
-     * Returns the exact conversion as a human-readable fraction.
-     *
-     * Examples:
-     *     "1/1"
-     *     "10/1"
-     *     "100/1"
-     *     "1/2"
+     * Exact conversion represented as a reduced fraction.
      */
     val conversionFraction: String
         get() =
             "$normalizedConversionNumerator/$normalizedConversionDenominator"
 
     /**
-     * Converts a whole number of commercial units into a rational number
-     * of canonical base units.
+     * Converts a whole number of commercial units into an exact rational
+     * quantity of canonical base units.
      *
-     * The result is deliberately represented as numerator/denominator rather
-     * than Long so that a non-integral conversion cannot be silently rounded.
-     *
-     * Example:
-     *
-     *     3 half-mL measures
-     *
-     *     = 3 × 1/2 mL
-     *     = 3/2 mL
+     * The result is deliberately rational rather than rounded to Long.
      */
     fun convertCommercialUnits(
         commercialUnits: Long
@@ -328,13 +318,12 @@ data class ProductUnit(
     }
 
     /**
-     * Exact rational quantity used only as an intermediate conversion result.
+     * Exact rational quantity used as an intermediate conversion result.
      *
-     * It is intentionally NOT the inventory quantity representation.
+     * This is NOT the inventory quantity representation.
      *
-     * Transactional inventory quantities must ultimately be converted into
-     * Quantity using the ProductMaster's canonical quantity precision and
-     * minimum transaction increment rules.
+     * Transactional inventory quantities must ultimately be represented as
+     * Quantity using the ProductMaster quantity scale and minimum increment.
      */
     data class RationalQuantity(
         val numerator: Long,
