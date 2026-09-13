@@ -1,15 +1,23 @@
 package core.domain.model
 
+import androidx.room.ColumnInfo
 import java.math.BigDecimal
 
 /**
  * Pure domain value object representing an exact physical quantity.
  *
- * Stored internally as an exact [storageUnits] (Long) together with a [scale] (QuantityScale).
- * Authoritative quantity arithmetic is strictly integer-based with overflow checking.
- * No Double or Float is used for authoritative representation or calculation.
+ * Stored internally as exact [storageUnits] (Long) together with a [scale]
+ * (QuantityScale). Authoritative quantity arithmetic is strictly integer-based
+ * with overflow checking. No Double or Float is used for authoritative
+ * representation or calculation.
+ *
+ * When embedded by Room, [storageUnits] is persisted as the explicit
+ * `storage_units` column. This gives embedded quantities deterministic column
+ * names such as `quantity_storage_units` and
+ * `remaining_quantity_storage_units` when prefixes are used.
  */
 data class Quantity(
+    @ColumnInfo(name = "storage_units")
     val storageUnits: Long,
     val scale: QuantityScale
 ) : Comparable<Quantity> {
@@ -59,11 +67,13 @@ data class Quantity(
      */
     fun divideExact(divisor: Long): Quantity {
         require(divisor != 0L) { "Division by zero" }
+
         if (storageUnits % divisor != 0L) {
             throw ArithmeticException(
                 "Cannot divide quantity $storageUnits by $divisor exactly without remainder."
             )
         }
+
         return Quantity(storageUnits / divisor, scale)
     }
 
@@ -71,22 +81,25 @@ data class Quantity(
      * Validates whether this quantity's storageUnits is an exact integer multiple
      * of the specified [minimumIncrement].
      *
-     * @param minimumIncrement Must be a positive integer in the same scaled storage unit representation.
+     * @param minimumIncrement Must be a positive integer in the same scaled
+     * storage-unit representation.
      */
     fun isMultipleOf(minimumIncrement: Long): Boolean {
         require(minimumIncrement > 0L) {
             "Minimum increment must be positive, but was $minimumIncrement"
         }
+
         return storageUnits % minimumIncrement == 0L
     }
 
     /**
-     * Enforces that this quantity's storageUnits is an exact integer multiple of [minimumIncrement],
-     * throwing [IllegalArgumentException] if violated.
+     * Enforces that this quantity's storageUnits is an exact integer multiple
+     * of [minimumIncrement].
      */
     fun validateMultipleOf(minimumIncrement: Long) {
         require(isMultipleOf(minimumIncrement)) {
-            "Quantity storageUnits $storageUnits is not a valid multiple of minimum increment $minimumIncrement at scale ${scale.scale}."
+            "Quantity storageUnits $storageUnits is not a valid multiple " +
+                "of minimum increment $minimumIncrement at scale ${scale.scale}."
         }
     }
 
@@ -96,53 +109,93 @@ data class Quantity(
     }
 
     /**
-     * Formats this quantity as a human-readable decimal string without using Double/Float.
-     * Trailing decimal zeros are stripped (e.g. 500 units at scale 3 -> "0.5").
+     * Formats this quantity as a human-readable decimal string without using
+     * Double/Float.
+     *
+     * Example:
+     * 500 storage units at scale 3 -> "0.5"
      */
     fun toPlainString(): String {
         if (storageUnits == 0L || scale.scale == 0) {
             return storageUnits.toString()
         }
-        val bd = BigDecimal.valueOf(storageUnits).movePointLeft(scale.scale)
+
+        val bd = BigDecimal
+            .valueOf(storageUnits)
+            .movePointLeft(scale.scale)
+
         return bd.stripTrailingZeros().toPlainString()
     }
 
-    private fun requireSameScale(other: Quantity, operation: String) {
+    private fun requireSameScale(
+        other: Quantity,
+        operation: String
+    ) {
         require(this.scale == other.scale) {
-            "Cannot perform $operation between incompatible scales: ${this.scale} and ${other.scale}."
+            "Cannot perform $operation between incompatible scales: " +
+                "${this.scale} and ${other.scale}."
         }
     }
 
     companion object {
-        val ZERO_SCALE_0 = Quantity(0L, QuantityScale.SCALE_0)
 
-        fun zero(scale: QuantityScale): Quantity = Quantity(0L, scale)
+        val ZERO_SCALE_0 = Quantity(
+            0L,
+            QuantityScale.SCALE_0
+        )
 
-        fun of(storageUnits: Long, scale: QuantityScale): Quantity = Quantity(storageUnits, scale)
+        fun zero(scale: QuantityScale): Quantity =
+            Quantity(0L, scale)
+
+        fun of(
+            storageUnits: Long,
+            scale: QuantityScale
+        ): Quantity =
+            Quantity(storageUnits, scale)
 
         /**
-         * Parses a decimal string (e.g. "0.5", "1.25", "10") into a [Quantity] at the specified [scale].
-         * Fails deterministically with [IllegalArgumentException] if the string has precision
-         * finer than the target scale, or [ArithmeticException] if it overflows Long.
+         * Parses a decimal string such as "0.5", "1.25", or "10"
+         * into a Quantity at the specified scale.
+         *
+         * Fails deterministically if the value cannot be represented exactly
+         * at the requested scale or if Long storage would overflow.
          */
-        fun fromDecimalString(decimalString: String, scale: QuantityScale): Quantity {
+        fun fromDecimalString(
+            decimalString: String,
+            scale: QuantityScale
+        ): Quantity {
+
             val bd = try {
                 BigDecimal(decimalString.trim())
             } catch (e: NumberFormatException) {
-                throw IllegalArgumentException("Invalid decimal string format: '$decimalString'", e)
-            }
-            val scaled = bd.movePointRight(scale.scale)
-            if (scaled.remainder(BigDecimal.ONE).signum() != 0) {
                 throw IllegalArgumentException(
-                    "Decimal value '$decimalString' cannot be represented exactly at scale ${scale.scale} without precision loss."
+                    "Invalid decimal string format: '$decimalString'",
+                    e
                 )
             }
+
+            val scaled = bd.movePointRight(scale.scale)
+
+            if (scaled.remainder(BigDecimal.ONE).signum() != 0) {
+                throw IllegalArgumentException(
+                    "Decimal value '$decimalString' cannot be represented " +
+                        "exactly at scale ${scale.scale} without precision loss."
+                )
+            }
+
             val storageUnits = try {
                 scaled.toBigIntegerExact().longValueExact()
             } catch (e: ArithmeticException) {
-                throw ArithmeticException("Decimal value '$decimalString' at scale ${scale.scale} overflows Long storage units.")
+                throw ArithmeticException(
+                    "Decimal value '$decimalString' at scale ${scale.scale} " +
+                        "overflows Long storage units."
+                )
             }
-            return Quantity(storageUnits, scale)
+
+            return Quantity(
+                storageUnits,
+                scale
+            )
         }
     }
 }
