@@ -208,7 +208,10 @@ class GoodsReceiptPersistenceService(
 
                 is ReceivingResult.Failure -> {
                     throw IllegalArgumentException(
-                        buildReceivingFailureMessage(result)
+                        buildReceivingFailureMessage(
+                            receiptId = receipt.id,
+                            failure = result
+                        )
                     )
                 }
             }
@@ -280,10 +283,11 @@ class GoodsReceiptPersistenceService(
     /**
      * Creates a stable diagnostic message for a failed receiving-domain result.
      *
-     * The exact error types remain owned by GoodsReceiptService; this persistence
-     * layer only needs to prevent a failed domain result from being persisted.
+     * The receipt identifier comes from the commit request because
+     * ReceivingResult.Failure does not expose a receiptId property.
      */
     private fun buildReceivingFailureMessage(
+        receiptId: String,
         failure: ReceivingResult.Failure
     ): String {
         val errors = failure.errors.joinToString(separator = "; ") {
@@ -291,13 +295,13 @@ class GoodsReceiptPersistenceService(
         }
 
         return if (failure.warnings.isEmpty()) {
-            "Goods receipt '${failure.receiptId}' failed validation: $errors"
+            "Goods receipt '$receiptId' failed validation: $errors"
         } else {
             val warnings = failure.warnings.joinToString(separator = "; ") {
                 it.toString()
             }
 
-            "Goods receipt '${failure.receiptId}' failed validation: " +
+            "Goods receipt '$receiptId' failed validation: " +
                 "$errors. Warnings: $warnings"
         }
     }
