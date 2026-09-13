@@ -8,36 +8,94 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Room entity representing a discrete financial acquisition tranche used to value stock
- * and calculate future Cost of Goods Sold (COGS).
+ * Room entity representing one discrete financial acquisition tranche.
  *
- * Core Concept:
- * - Answers: "At what specific acquisition unit cost was this quantity of stock acquired, and how much of this cost pool remains?"
- * - Distinct from [StockBatch]:
- *     * [StockBatch] answers: "Which physical lot is this?"
- *     * [InventoryCostLayer] answers: "What did this quantity cost to acquire?"
- * - A single physical [StockBatch] can have multiple [InventoryCostLayer] records if acquired at different
- *   times, prices, or from different purchase receipts.
+ * Architectural authority:
  *
- * Immutable Acquisition Facts vs. Mutable Operational State:
- * 1. Immutable Historical Acquisition Facts:
- *    - [id], [productId], [stockBatchId], [supplierId], [initialQuantity], [acquisitionUnitCost],
- *      [acquiredAt], [sourceReceiptRef], and [createdAt].
- *    - Once created and committed, these fields represent immutable historical procurement facts.
- *      They must NEVER be rewritten, edited in place, or altered by operational corrections.
- * 2. Mutable Operational State:
- *    - [remainingQuantity] and [updatedAt].
- *    - [remainingQuantity] is the current operational quantity remaining in this cost layer.
- *      It mutates operationally as stock is consumed (e.g. through future sales, damages, expiries)
- *      or restored through explicit transactional reversal/restoration mechanisms.
- *    - Historical immutability does NOT mean [remainingQuantity] is frozen; rather, it means
- *      historical acquisition facts cannot be rewritten to explain current balances.
+ * - StockBatch answers:
+ *     "Which physical lot is this stock from?"
  *
- * Invariants & Exactness:
- * - [acquisitionUnitCost] is an exact [Money] value object (Phase 1 KES minor units, 2 decimal places).
- * - Invariant: 0 <= [remainingQuantity] <= [initialQuantity].
- * - Invariant: [initialQuantity] and [remainingQuantity] must share the exact same [QuantityScale].
- * - Invariant: [initialQuantity] must be strictly positive (> 0).
+ * - InventoryCostLayer answers:
+ *     "At what acquisition cost was this quantity acquired,
+ *      and how much of that acquisition-cost pool remains?"
+ *
+ * - StockMovement answers:
+ *     "What physical stock-flow event changed inventory?"
+ *
+ * - StockAllocation answers:
+ *     "Which cost layers were consumed to explain a later
+ *      stock-exit/COGS event?"
+ *
+ * InventoryCostLayer MUST NOT become:
+ * - a second physical stock ledger;
+ * - a batch-identity authority;
+ * - a selling-price record;
+ * - a FEFO engine;
+ * - a COGS allocation engine;
+ * - a receipt workflow;
+ * - a replacement for StockMovement.
+ *
+ * ---------------------------------------------------------------------------
+ * HISTORICAL ACQUISITION FACTS
+ * ---------------------------------------------------------------------------
+ *
+ * The following fields describe the historical acquisition event and are
+ * immutable after the layer is committed:
+ *
+ * - id
+ * - productId
+ * - stockBatchId
+ * - supplierId
+ * - initialQuantity
+ * - acquisitionUnitCost
+ * - acquiredAt
+ * - sourceReceiptRef
+ * - createdAt
+ *
+ * These values must never be rewritten merely to make current inventory
+ * balances appear correct.
+ *
+ * ---------------------------------------------------------------------------
+ * OPERATIONAL STATE
+ * ---------------------------------------------------------------------------
+ *
+ * remainingQuantity is the only quantity state that changes as the cost layer
+ * is consumed or explicitly restored.
+ *
+ * It is constrained by:
+ *
+ *     0 <= remainingQuantity <= initialQuantity
+ *
+ * The DAO also performs guarded atomic quantity changes. This entity's role
+ * is to reject impossible states; it does not perform the transaction itself.
+ *
+ * ---------------------------------------------------------------------------
+ * QUANTITY SEMANTICS
+ * ---------------------------------------------------------------------------
+ *
+ * initialQuantity and remainingQuantity use the same exact QuantityScale.
+ *
+ * Quantity remains responsible for mathematical representation.
+ * ProductMaster remains responsible for product-specific quantity policy.
+ * InventoryCostLayer records the quantity belonging to this acquisition
+ * tranche; it does not define the product's commercial conversion policy.
+ *
+ * ---------------------------------------------------------------------------
+ * COST SEMANTICS
+ * ---------------------------------------------------------------------------
+ *
+ * acquisitionUnitCost is the historical acquisition cost per canonical
+ * quantity unit represented by the layer.
+ *
+ * It is NOT:
+ * - the current selling price;
+ * - the product's configured selling price;
+ * - a recalculated average cost;
+ * - a display approximation.
+ *
+ * The receiving workflow is responsible for constructing this value.
+ * Later COGS logic consumes the layer without rewriting its historical
+ * acquisition cost.
  */
 @Entity(
     tableName = "inventory_cost_layers",
@@ -65,85 +123,236 @@ import androidx.room.PrimaryKey
         Index(value = ["product_id"]),
         Index(value = ["stock_batch_id"]),
         Index(value = ["supplier_id"]),
-        Index(value = ["acquired_at"])
+        Index(value = ["acquired_at"]),
+        Index(value = ["source_receipt_ref"])
     ]
 )
 data class InventoryCostLayer(
+
     @PrimaryKey
     @ColumnInfo(name = "id")
     val id: String,
 
+    /**
+     * Product whose physical stock and acquisition cost this layer represents.
+     */
     @ColumnInfo(name = "product_id")
     val productId: String,
 
+    /**
+     * Physical batch to which this acquisition layer belongs.
+     *
+     * The batch remains the physical identity authority.
+     */
     @ColumnInfo(name = "stock_batch_id")
     val stockBatchId: String,
 
+    /**
+     * Supplier associated with this acquisition event.
+     *
+     * Supplier attribution belongs to the acquisition layer rather than
+     * StockBatch because the same physical batch can be acquired through
+     * multiple receiving events.
+     */
     @ColumnInfo(name = "supplier_id")
     val supplierId: String? = null,
 
+    /**
+     * Quantity originally acquired into this cost layer.
+     *
+     * This is an immutable historical quantity.
+     */
     @Embedded(prefix = "initial_quantity_")
     val initialQuantity: Quantity,
 
+    /**
+     * Quantity from this acquisition layer that remains available.
+     *
+     * This is operational state and may change through controlled inventory
+     * consumption or explicit restoration.
+     */
     @Embedded(prefix = "remaining_quantity_")
     val remainingQuantity: Quantity,
 
+    /**
+     * Historical acquisition cost per canonical quantity represented by
+     * this layer.
+     *
+     * Money is exact; no floating-point representation is permitted.
+     */
     @ColumnInfo(name = "acquisition_unit_cost")
     val acquisitionUnitCost: Money,
 
+    /**
+     * Timestamp at which the acquisition occurred.
+     *
+     * This is historical and must not be rewritten to alter layer ordering.
+     */
     @ColumnInfo(name = "acquired_at")
     val acquiredAt: Long,
 
+    /**
+     * Historical reference to the receiving event that created this layer.
+     *
+     * This is a provenance reference, not the layer's identity.
+     */
     @ColumnInfo(name = "source_receipt_ref")
     val sourceReceiptRef: String? = null,
 
+    /**
+     * Timestamp at which this database record was created.
+     */
     @ColumnInfo(name = "created_at")
     val createdAt: Long,
 
+    /**
+     * Timestamp of the most recent operational-state persistence change.
+     *
+     * Historical acquisition facts remain immutable even when this value
+     * changes because remainingQuantity changes.
+     */
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long
 ) {
+
     init {
+
         require(id.isNotBlank() && id.trim() == id) {
-            "InventoryCostLayer id must not be blank or contain leading/trailing whitespace"
+            "InventoryCostLayer id must not be blank or contain " +
+                "leading/trailing whitespace"
         }
+
         require(productId.isNotBlank() && productId.trim() == productId) {
-            "InventoryCostLayer productId must not be blank or contain leading/trailing whitespace"
+            "InventoryCostLayer productId must not be blank or contain " +
+                "leading/trailing whitespace"
         }
-        require(stockBatchId.isNotBlank() && stockBatchId.trim() == stockBatchId) {
-            "InventoryCostLayer stockBatchId must not be blank or contain leading/trailing whitespace"
+
+        require(
+            stockBatchId.isNotBlank() &&
+                stockBatchId.trim() == stockBatchId
+        ) {
+            "InventoryCostLayer stockBatchId must not be blank or contain " +
+                "leading/trailing whitespace"
         }
+
         if (supplierId != null) {
-            require(supplierId.isNotBlank() && supplierId.trim() == supplierId) {
-                "InventoryCostLayer supplierId must not be blank or contain whitespace if provided"
+            require(
+                supplierId.isNotBlank() &&
+                    supplierId.trim() == supplierId
+            ) {
+                "InventoryCostLayer supplierId must not be blank or contain " +
+                    "leading/trailing whitespace if provided"
             }
         }
+
+        if (sourceReceiptRef != null) {
+            require(
+                sourceReceiptRef.isNotBlank() &&
+                    sourceReceiptRef.trim() == sourceReceiptRef
+            ) {
+                "InventoryCostLayer sourceReceiptRef must not be blank or " +
+                    "contain leading/trailing whitespace if provided"
+            }
+        }
+
+        /*
+         * The initial and remaining quantities belong to the same cost pool.
+         * They therefore MUST use the exact same QuantityScale.
+         *
+         * No implicit rescaling is performed here.
+         */
         require(initialQuantity.scale == remainingQuantity.scale) {
-            "InventoryCostLayer initialQuantity scale (${initialQuantity.scale}) and remainingQuantity scale (${remainingQuantity.scale}) must match"
+            "InventoryCostLayer initialQuantity scale " +
+                "(${initialQuantity.scale}) and remainingQuantity scale " +
+                "(${remainingQuantity.scale}) must match"
         }
+
+        /*
+         * A cost layer cannot represent an empty acquisition event.
+         */
         require(initialQuantity.storageUnits > 0L) {
-            "InventoryCostLayer initialQuantity must be strictly positive (> 0), got: ${initialQuantity.storageUnits}"
+            "InventoryCostLayer initialQuantity must be strictly positive " +
+                "(> 0), got: ${initialQuantity.storageUnits}"
         }
+
+        /*
+         * Remaining quantity may reach zero after complete consumption,
+         * but it can never become negative.
+         */
         require(remainingQuantity.storageUnits >= 0L) {
-            "InventoryCostLayer remainingQuantity must be non-negative (>= 0), got: ${remainingQuantity.storageUnits}"
+            "InventoryCostLayer remainingQuantity must be non-negative " +
+                "(>= 0), got: ${remainingQuantity.storageUnits}"
         }
-        require(remainingQuantity.storageUnits <= initialQuantity.storageUnits) {
-            "InventoryCostLayer remainingQuantity (${remainingQuantity.storageUnits}) must not exceed initialQuantity (${initialQuantity.storageUnits})"
+
+        /*
+         * Operational state may never exceed the historical acquisition.
+         */
+        require(
+            remainingQuantity.storageUnits <= initialQuantity.storageUnits
+        ) {
+            "InventoryCostLayer remainingQuantity " +
+                "(${remainingQuantity.storageUnits}) must not exceed " +
+                "initialQuantity (${initialQuantity.storageUnits})"
         }
+
+        /*
+         * Acquisition cost is historical monetary value.
+         * Negative acquisition cost is not valid for this domain.
+         *
+         * A zero acquisition cost is deliberately permitted because the
+         * receiving domain may legitimately represent donated/promotional/
+         * zero-cost acquisition.
+         */
         require(acquisitionUnitCost.amountMinorUnits >= 0L) {
-            "InventoryCostLayer acquisitionUnitCost must not be negative, got: ${acquisitionUnitCost.amountMinorUnits}"
+            "InventoryCostLayer acquisitionUnitCost must not be negative, " +
+                "got: ${acquisitionUnitCost.amountMinorUnits}"
         }
+
         require(acquiredAt > 0L) {
-            "InventoryCostLayer acquiredAt must be a positive epoch timestamp, got: $acquiredAt (id=$id)"
+            "InventoryCostLayer acquiredAt must be a positive epoch " +
+                "timestamp, got: $acquiredAt (id=$id)"
         }
+
         require(createdAt > 0L) {
-            "InventoryCostLayer createdAt must be a positive epoch timestamp, got: $createdAt (id=$id)"
+            "InventoryCostLayer createdAt must be a positive epoch " +
+                "timestamp, got: $createdAt (id=$id)"
         }
+
         require(updatedAt > 0L) {
-            "InventoryCostLayer updatedAt must be a positive epoch timestamp, got: $updatedAt (id=$id)"
+            "InventoryCostLayer updatedAt must be a positive epoch " +
+                "timestamp, got: $updatedAt (id=$id)"
         }
+
         require(updatedAt >= createdAt) {
-            "InventoryCostLayer updatedAt ($updatedAt) must not precede createdAt ($createdAt) (id=$id)"
+            "InventoryCostLayer updatedAt ($updatedAt) must not precede " +
+                "createdAt ($createdAt) (id=$id)"
         }
     }
+
+    /**
+     * Returns true when the cost layer has no quantity remaining.
+     *
+     * This is derived operational state only.
+     * It does not delete or invalidate the historical acquisition layer.
+     */
+    val isDepleted: Boolean
+        get() = remainingQuantity.storageUnits == 0L
+
+    /**
+     * Returns true when some, but not all, of the original acquisition
+     * quantity remains.
+     */
+    val isPartiallyConsumed: Boolean
+        get() =
+            remainingQuantity.storageUnits > 0L &&
+                remainingQuantity.storageUnits <
+                    initialQuantity.storageUnits
+
+    /**
+     * Returns true when the complete acquisition quantity remains.
+     */
+    val isFullyAvailable: Boolean
+        get() =
+            remainingQuantity.storageUnits ==
+                initialQuantity.storageUnits
 }
