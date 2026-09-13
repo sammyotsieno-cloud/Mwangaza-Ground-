@@ -66,29 +66,61 @@ fun ReportsScreen(
     LaunchedEffect(Unit) {
         scope.launch {
             isLoading = true
+
             withContext(Dispatchers.IO) {
                 val products = container.productMasterDao.getAllProducts()
                 val sales = container.saleDao.getAllSales()
                 val receipts = container.goodsReceiptDao.getAllReceipts()
                 val movements = container.stockMovementDao.getAllMovements()
 
-                val completedSales = sales.filter { !it.isVoided }
+                val completedSales = sales.filter { it.isCompleted }
                 val voidedSales = sales.filter { it.isVoided }
 
-                val totalRevenueMinor = completedSales.sumOf { it.totalSellingAmount.amountMinorUnits }
-                val totalCogsMinor = completedSales.sumOf { it.totalCogs.amountMinorUnits }
+                val totalRevenueMinor =
+                    completedSales.sumOf { it.totalSellingAmount.amountMinorUnits }
 
-                // Inventory valuation across all active layers
+                val totalCogsMinor =
+                    completedSales.sumOf { it.totalCogs.amountMinorUnits }
+
+                /*
+                 * Inventory valuation is derived from active InventoryCostLayer
+                 * records. acquisitionUnitCost is the authoritative acquisition
+                 * cost stored by each cost layer.
+                 *
+                 * The calculation intentionally does not use:
+                 * - current selling price
+                 * - current reference cost
+                 * - historical sales prices
+                 *
+                 * Historical acquisition information remains attached to the
+                 * individual cost layer.
+                 */
                 var totalValuationMinor = 0L
                 var activeLayerCount = 0
-                products.forEach { p ->
-                    val layers = container.inventoryCostLayerDao.getActiveLayersForProduct(p.id)
+
+                products.forEach { product ->
+                    val layers =
+                        container.inventoryCostLayerDao
+                            .getActiveLayersForProduct(product.id)
+
                     activeLayerCount += layers.size
-                    totalValuationMinor += layers.sumOf { l ->
-                        if (l.initialQuantity.storageUnits > 0L) {
-                            (l.remainingQuantity.storageUnits * l.initialCost.amountMinorUnits) / l.initialQuantity.storageUnits
-                        } else 0L
-                    }
+
+                    totalValuationMinor = Math.addExact(
+                        totalValuationMinor,
+                        layers.sumOf { layer ->
+                            val initialQuantity =
+                                layer.initialQuantity.storageUnits
+
+                            if (initialQuantity > 0L) {
+                                Math.multiplyExact(
+                                    layer.remainingQuantity.storageUnits,
+                                    layer.acquisitionUnitCost.amountMinorUnits
+                                ) / initialQuantity
+                            } else {
+                                0L
+                            }
+                        }
+                    )
                 }
 
                 reportData = FinancialReportData(
@@ -103,6 +135,7 @@ fun ReportsScreen(
                     totalStockMovementsCount = movements.size
                 )
             }
+
             isLoading = false
         }
     }
@@ -111,15 +144,21 @@ fun ReportsScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Reports & Financials") },
+                title = {
+                    Text("Reports & Financials")
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
                     }
                 }
             )
         }
     ) { innerPadding ->
+
         if (isLoading || reportData == null) {
             Box(
                 modifier = Modifier
@@ -131,7 +170,8 @@ fun ReportsScreen(
             }
         } else {
             val data = reportData!!
-            val grossMarginMinor = data.totalSalesRevenueMinor - data.totalSalesCogsMinor
+            val grossMarginMinor =
+                data.totalSalesRevenueMinor - data.totalSalesCogsMinor
 
             Column(
                 modifier = Modifier
@@ -141,76 +181,158 @@ fun ReportsScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Sales & Margins Card
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
                         Text(
                             text = "Sales Performance & Profitability",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
+
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        val revStr = "KES ${(data.totalSalesRevenueMinor / 100)}.${(data.totalSalesRevenueMinor % 100).toString().padStart(2, '0')}"
-                        val cogsStr = "KES ${(data.totalSalesCogsMinor / 100)}.${(data.totalSalesCogsMinor % 100).toString().padStart(2, '0')}"
-                        val marginStr = "KES ${(grossMarginMinor / 100)}.${(grossMarginMinor % 100).toString().padStart(2, '0')}"
+                        val revenueString =
+                            formatMinorUnits(data.totalSalesRevenueMinor)
 
-                        ReportRow(label = "Total Sales Revenue", value = revStr, isEmphasized = true)
-                        ReportRow(label = "Cost of Goods Sold (COGS)", value = cogsStr)
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        ReportRow(label = "Gross Margin", value = marginStr, isEmphasized = true)
+                        val cogsString =
+                            formatMinorUnits(data.totalSalesCogsMinor)
+
+                        val marginString =
+                            formatMinorUnits(grossMarginMinor)
+
+                        ReportRow(
+                            label = "Total Sales Revenue",
+                            value = revenueString,
+                            isEmphasized = true
+                        )
+
+                        ReportRow(
+                            label = "Cost of Goods Sold (COGS)",
+                            value = cogsString
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+
+                        ReportRow(
+                            label = "Gross Margin",
+                            value = marginString,
+                            isEmphasized = true
+                        )
 
                         Spacer(modifier = Modifier.height(8.dp))
+
                         Text(
-                            text = "Completed Sales: ${data.completedSalesCount} | Voided / Reversed Sales: ${data.voidedSalesCount}",
+                            text =
+                                "Completed Sales: ${data.completedSalesCount} | " +
+                                    "Voided / Reversed Sales: ${data.voidedSalesCount}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                // Inventory Valuation Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
                         Text(
                             text = "Inventory Valuation",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
+
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        val valStr = "KES ${(data.totalInventoryValuationMinor / 100)}.${(data.totalInventoryValuationMinor % 100).toString().padStart(2, '0')}"
-                        ReportRow(label = "Current FIFO Stock Valuation", value = valStr, isEmphasized = true)
-                        ReportRow(label = "Active Unexhausted Cost Layers", value = "${data.totalActiveCostLayers} pools")
-                        ReportRow(label = "Registered Products in Catalog", value = "${data.totalProductsCount} products")
+                        val valuationString =
+                            formatMinorUnits(
+                                data.totalInventoryValuationMinor
+                            )
+
+                        ReportRow(
+                            label = "Current Inventory Valuation",
+                            value = valuationString,
+                            isEmphasized = true
+                        )
+
+                        ReportRow(
+                            label = "Active Unexhausted Cost Layers",
+                            value = "${data.totalActiveCostLayers} pools"
+                        )
+
+                        ReportRow(
+                            label = "Registered Products in Catalog",
+                            value = "${data.totalProductsCount} products"
+                        )
                     }
                 }
 
-                // Ledger Health & Operations Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
                         Text(
                             text = "Operational Ledger Integrity",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
+
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        ReportRow(label = "Committed Goods Receipts", value = "${data.totalReceiptsCount} transactions")
-                        ReportRow(label = "Immutable Stock Movement Records", value = "${data.totalStockMovementsCount} ledger entries")
+                        ReportRow(
+                            label = "Goods Receipts",
+                            value = "${data.totalReceiptsCount} transactions"
+                        )
+
+                        ReportRow(
+                            label = "Immutable Stock Movement Records",
+                            value = "${data.totalStockMovementsCount} ledger entries"
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+private fun formatMinorUnits(
+    amountMinorUnits: Long
+): String {
+    val negative = amountMinorUnits < 0L
+    val absoluteAmount =
+        if (negative) -amountMinorUnits else amountMinorUnits
+
+    val major = absoluteAmount / 100L
+    val minor = absoluteAmount % 100L
+
+    return buildString {
+        if (negative) {
+            append("-")
+        }
+
+        append("KES ")
+        append(major)
+        append(".")
+        append(minor.toString().padStart(2, '0'))
     }
 }
 
@@ -229,15 +351,41 @@ private fun ReportRow(
     ) {
         Text(
             text = label,
-            style = if (isEmphasized) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
-            color = if (isEmphasized) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (isEmphasized) FontWeight.SemiBold else FontWeight.Normal
+            style =
+                if (isEmphasized) {
+                    MaterialTheme.typography.bodyLarge
+                } else {
+                    MaterialTheme.typography.bodyMedium
+                },
+            color =
+                if (isEmphasized) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            fontWeight =
+                if (isEmphasized) {
+                    FontWeight.SemiBold
+                } else {
+                    FontWeight.Normal
+                }
         )
+
         Text(
             text = value,
-            style = if (isEmphasized) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+            style =
+                if (isEmphasized) {
+                    MaterialTheme.typography.titleMedium
+                } else {
+                    MaterialTheme.typography.bodyMedium
+                },
             fontWeight = FontWeight.Bold,
-            color = if (isEmphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            color =
+                if (isEmphasized) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
         )
     }
 }
