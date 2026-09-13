@@ -19,9 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,6 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import org.mwangaza.app.ui.navigation.AppNavigation
+import org.mwangaza.app.ui.theme.MwangazaTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,8 +55,7 @@ class MainActivity : ComponentActivity() {
                         onSplashFinished = { showSplash = false }
                     )
                 } else {
-                    // TODO: Replace with your real Home screen
-                    HomePlaceholder()
+                    AppNavigation()
                 }
             }
         }
@@ -65,7 +64,6 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AnimatedSplashScreen(onSplashFinished: () -> Unit) {
-    // Breathing / pulse animation for the logo
     val infiniteTransition = rememberInfiniteTransition(label = "splash")
 
     val scale by infiniteTransition.animateFloat(
@@ -88,15 +86,11 @@ fun AnimatedSplashScreen(onSplashFinished: () -> Unit) {
         label = "glow"
     )
 
-    // Text fade-in
     var textAlpha by remember { mutableStateOf(0f) }
 
     LaunchedEffect(Unit) {
-        // Text appears after a short delay
         delay(600)
         textAlpha = 1f
-
-        // Total splash duration
         delay(2200)
         onSplashFinished()
     }
@@ -107,8 +101,8 @@ fun AnimatedSplashScreen(onSplashFinished: () -> Unit) {
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF020617),   // almost black
-                        Color(0xFF0B1B3A),   // deep navy
+                        Color(0xFF020617),
+                        Color(0xFF0B1B3A),
                         Color(0xFF020617)
                     )
                 )
@@ -119,9 +113,7 @@ fun AnimatedSplashScreen(onSplashFinished: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(32.dp)
         ) {
-            // === LOGO ===
-            // Put the dark splash PNG we generated earlier into:
-            // app/src/main/res/drawable/mwangaza_splash.png
+            // Make sure you have: app/src/main/res/drawable/mwangaza_splash.png
             Image(
                 painter = painterResource(id = R.drawable.mwangaza_splash),
                 contentDescription = "Mwangaza Medical Centre",
@@ -134,7 +126,6 @@ fun AnimatedSplashScreen(onSplashFinished: () -> Unit) {
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Optional secondary text that fades in
             Text(
                 text = "Illuminating Care",
                 color = Color(0xFF94A3B8).copy(alpha = textAlpha),
@@ -146,33 +137,4 @@ fun AnimatedSplashScreen(onSplashFinished: () -> Unit) {
             )
         }
     }
-}
-
-@Composable
-fun HomePlaceholder() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0F172A)),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "Home Screen\n(Ready for your UI)",
-            color = Color.White,
-            fontSize = 20.sp,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-fun MwangazaTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Color(0xFF3B82F6),
-            background = Color(0xFF020617),
-            surface = Color(0xFF0F172A)
-        ),
-        content = content
-    )
 }
