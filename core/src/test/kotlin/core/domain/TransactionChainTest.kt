@@ -20,6 +20,7 @@ import core.domain.model.StockBatch
 import core.domain.model.StockMovement
 import core.domain.model.UnitPriceConfig
 import core.domain.receiving.GoodsReceiptPersistenceService
+import core.domain.receiving.ReceivingResult
 import core.domain.testutil.FakeCoreDatabase
 import core.domain.time.LocalDateValue
 import org.junit.Assert.assertEquals
@@ -163,20 +164,45 @@ class TransactionChainTest {
         )
     }
 
+    /**
+     * Test helper deliberately narrows the persistence result to Success.
+     *
+     * The production service returns the sealed ReceivingResult type.
+     * Tests below need access to Success-only fields such as newBatches,
+     * costLayers, and stockMovements, so failures are converted to a
+     * test-visible exception at this boundary.
+     */
     private fun commitReceipt(
         receipt: GoodsReceipt,
         item: GoodsReceiptItem,
         timestamp: Long = testTimestamp
-    ) = receivingService.commitReceipt(
-        receipt = receipt,
-        items = listOf(item),
-        productsById = mapOf(productDiscrete.id to productDiscrete),
-        unitsById = mapOf(
-            unitBox100.id to unitBox100,
-            unitTablet.id to unitTablet
-        ),
-        commitTimestamp = timestamp
-    )
+    ): ReceivingResult.Success {
+        val result = receivingService.commitReceipt(
+            receipt = receipt,
+            items = listOf(item),
+            productsById = mapOf(productDiscrete.id to productDiscrete),
+            unitsById = mapOf(
+                unitBox100.id to unitBox100,
+                unitTablet.id to unitTablet
+            ),
+            commitTimestamp = timestamp
+        )
+
+        return when (result) {
+            is ReceivingResult.Success -> result
+
+            is ReceivingResult.Failure -> {
+                val message = result.errors.joinToString("; ") {
+                    it.toString()
+                }
+
+                throw IllegalStateException(
+                    "Expected goods receipt commit to succeed, " +
+                        "but receipt '${receipt.id}' failed: $message"
+                )
+            }
+        }
+    }
 
     // ==========================================
     // RECEIVING TESTS
@@ -298,12 +324,12 @@ class TransactionChainTest {
 
         assertEquals(
             1_200L,
-            bundle.newMovements.first().quantity.storageUnits
+            bundle.stockMovements.first().quantity.storageUnits
         )
 
         assertEquals(
             1_200L,
-            bundle.newCostLayers.first().initialQuantity.storageUnits
+            bundle.costLayers.first().initialQuantity.storageUnits
         )
     }
 
@@ -357,7 +383,7 @@ class TransactionChainTest {
         assertEquals(1, db.batches.size)
         assertEquals(
             originalBatchId,
-            bundle2.newCostLayers.first().stockBatchId
+            bundle2.costLayers.first().stockBatchId
         )
 
         assertEquals(
@@ -386,9 +412,9 @@ class TransactionChainTest {
 
         val bundle = commitReceipt(receipt, item)
 
-        assertEquals(1, bundle.newCostLayers.size)
+        assertEquals(1, bundle.costLayers.size)
 
-        val layer = bundle.newCostLayers.first()
+        val layer = bundle.costLayers.first()
 
         assertEquals(
             500L,
@@ -436,9 +462,9 @@ class TransactionChainTest {
 
         val bundle = commitReceipt(receipt, item)
 
-        assertEquals(2, bundle.newCostLayers.size)
+        assertEquals(2, bundle.costLayers.size)
 
-        val totalCostSum = bundle.newCostLayers.sumOf {
+        val totalCostSum = bundle.costLayers.sumOf {
             it.initialQuantity.storageUnits *
                 it.acquisitionUnitCost.amountMinorUnits
         }
@@ -465,7 +491,7 @@ class TransactionChainTest {
 
         val bundle = commitReceipt(receipt, item)
 
-        val movement = bundle.newMovements.first()
+        val movement = bundle.stockMovements.first()
 
         assertEquals(
             StockMovement.TYPE_PURCHASE_RECEIPT,
@@ -707,11 +733,11 @@ class TransactionChainTest {
     @Test
     fun test14_oneCostLayerIsConsumedCorrectly() {
         val batch = StockBatch(
-            "B1",
-            productDiscrete.id,
-            "B1",
-            20270101,
-            testTimestamp,
+            id = "B1",
+            productId = productDiscrete.id,
+            batchNumber = "B1",
+            expiryDateInt = 20270101,
+            createdAt = testTimestamp,
             updatedAt = testTimestamp
         )
 
@@ -765,11 +791,11 @@ class TransactionChainTest {
     @Test
     fun test15_multipleCostLayersWithinOneBatchAreConsumedCorrectly() {
         val batchA = StockBatch(
-            "BATCH-A",
-            productDiscrete.id,
-            "A",
-            20270101,
-            testTimestamp,
+            id = "BATCH-A",
+            productId = productDiscrete.id,
+            batchNumber = "A",
+            expiryDateInt = 20270101,
+            createdAt = testTimestamp,
             updatedAt = testTimestamp
         )
 
@@ -852,20 +878,20 @@ class TransactionChainTest {
     @Test
     fun test16_multiplePhysicalBatchesAndMultipleCostLayersAreHandledCorrectly() {
         val batch1 = StockBatch(
-            "B1",
-            productDiscrete.id,
-            "B1",
-            20261201,
-            testTimestamp,
+            id = "B1",
+            productId = productDiscrete.id,
+            batchNumber = "B1",
+            expiryDateInt = 20261201,
+            createdAt = testTimestamp,
             updatedAt = testTimestamp
         )
 
         val batch2 = StockBatch(
-            "B2",
-            productDiscrete.id,
-            "B2",
-            20270601,
-            testTimestamp,
+            id = "B2",
+            productId = productDiscrete.id,
+            batchNumber = "B2",
+            expiryDateInt = 20270601,
+            createdAt = testTimestamp,
             updatedAt = testTimestamp
         )
 
@@ -924,11 +950,11 @@ class TransactionChainTest {
     @Test
     fun test17_cogsIsExact() {
         val batch = StockBatch(
-            "B-EXACT",
-            productDiscrete.id,
-            "EXACT",
-            20270101,
-            testTimestamp,
+            id = "B-EXACT",
+            productId = productDiscrete.id,
+            batchNumber = "EXACT",
+            expiryDateInt = 20270101,
+            createdAt = testTimestamp,
             updatedAt = testTimestamp
         )
 
@@ -969,11 +995,11 @@ class TransactionChainTest {
     @Test
     fun test18_remainingCostLayerQuantitiesRemainCorrect() {
         val batch = StockBatch(
-            "B-REM",
-            productDiscrete.id,
-            "REM",
-            20270101,
-            testTimestamp,
+            id = "B-REM",
+            productId = productDiscrete.id,
+            batchNumber = "REM",
+            expiryDateInt = 20270101,
+            createdAt = testTimestamp,
             updatedAt = testTimestamp
         )
 
@@ -1537,7 +1563,8 @@ class TransactionChainTest {
             productUnitId = unitBox100.id,
             sellingPrice = Money.ofMinor(80_000L),
             isActive = true,
-            createdAt = testTimestamp + 100_000L
+            createdAt = testTimestamp + 100_000L,
+            updatedAt = testTimestamp + 100_000L
         )
 
         db.productMasterDao.insertPriceConfig(newPrice)
