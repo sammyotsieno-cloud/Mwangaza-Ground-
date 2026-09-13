@@ -96,22 +96,35 @@ class ConsumptionService(
         stockAllocationDao = database.stockAllocationDao()
     )
 
-    // In-process lock to prevent thread interleaving on top of SQLite transaction serialization
+    /**
+     * In-process serialization of inventory mutations for this process.
+     *
+     * This does not replace database transaction guarantees. It prevents two
+     * consumption calls from this service instance from interleaving while the
+     * transaction is being planned and committed.
+     */
     private val transactionLock = Any()
 
     /**
      * Executes a complete stock consumption transaction.
      */
     fun consumeStock(request: ConsumptionRequest): ConsumptionResult {
-        require(request.items.isNotEmpty()) { "Consumption request must contain at least one item" }
+        require(request.items.isNotEmpty()) {
+            "Consumption request must contain at least one item"
+        }
 
         synchronized(transactionLock) {
             return transactionRunner.runInTransaction {
-                // 1. Idempotency check: Reject duplicate sale number
+
+                // 1. Idempotency check: reject an already committed transaction.
                 val existingSale = saleDao.getSaleByNumber(request.saleNumber)
                     ?: saleDao.getSaleById(request.saleId)
+
                 if (existingSale != null) {
-                    throw IllegalStateException("Sale transaction '${request.saleNumber}' (id=${request.saleId}) already exists.")
+                    throw IllegalStateException(
+                        "Sale transaction '${request.saleNumber}' " +
+                            "(id=${request.saleId}) already exists."
+                    )
                 }
 
                 val allSaleItems = mutableListOf<SaleItem>()
@@ -122,57 +135,93 @@ class ConsumptionService(
                 var totalSaleSellingAmountMinor = 0L
                 var totalSaleCogsMinor = 0L
 
-                // 2. Process each requested line item
+                // 2. Process each requested line item.
                 request.items.forEachIndexed { lineIndex, lineReq ->
-                    val product = productMasterDao.getProductById(lineReq.productId)
-                        ?: throw IllegalArgumentException("Product not found: ${lineReq.productId}")
 
-                    val dispensingUnit = productMasterDao.getUnitById(lineReq.dispensingUnitId)
-                        ?: throw IllegalArgumentException("Unit not found: ${lineReq.dispensingUnitId}")
+                    val product = productMasterDao.getProductById(lineReq.productId)
+                        ?: throw IllegalArgumentException(
+                            "Product not found: ${lineReq.productId}"
+                        )
+
+                    val dispensingUnit = productMasterDao.getUnitById(
+                        lineReq.dispensingUnitId
+                    ) ?: throw IllegalArgumentException(
+                        "Unit not found: ${lineReq.dispensingUnitId}"
+                    )
 
                     require(dispensingUnit.productId == product.id) {
-                        "Unit '${dispensingUnit.id}' does not belong to product '${product.id}'"
-                    }
-                    require(lineReq.requestedQuantity.isPositive) {
-                        "Requested quantity must be strictly positive (> 0), got: ${lineReq.requestedQuantity.storageUnits}"
+                        "Unit '${dispensingUnit.id}' does not belong to " +
+                            "product '${product.id}'"
                     }
 
-                    // Convert dispensing quantity to base quantity
+                    require(lineReq.requestedQuantity.isPositive) {
+                        "Requested quantity must be strictly positive (> 0), " +
+                            "got: ${lineReq.requestedQuantity.storageUnits}"
+                    }
+
+                    /*
+                     * The requested quantity already carries the quantity scale.
+                     *
+                     * ProductMaster does not own a quantityScale field in the
+                     * current model. Therefore this repair deliberately avoids
+                     * reintroducing that obsolete API.
+                     *
+                     * The dispensing unit's conversionMultiplier represents
+                     * scaled canonical base storage units per one dispensing unit.
+                     */
                     val baseQuantityUnits = Math.multiplyExact(
                         lineReq.requestedQuantity.storageUnits,
                         dispensingUnit.conversionMultiplier
                     )
-                    val baseQuantity = Quantity(baseQuantityUnits, product.quantityScale)
 
-                    // Load physical batches for this product
+                    val baseQuantity = Quantity(
+                        storageUnits = baseQuantityUnits,
+                        scale = lineReq.requestedQuantity.scale
+                    )
+
+                    // Load physical batches for this product.
                     val batches = stockBatchDao.getBatchesForProduct(product.id)
+
                     if (batches.isEmpty()) {
                         throw InsufficientStockException(
-                            "No physical stock batches exist for product '${product.canonicalName}' (${product.id})"
+                            "No physical stock batches exist for product " +
+                                "'${product.displayName}' (${product.id})"
                         )
                     }
 
-                    // Defensive invariant check: verify all fetched batches belong to product
+                    // Defensive invariant check:
+                    // every selected batch must belong to this product.
                     for (batch in batches) {
                         require(batch.productId == product.id) {
-                            "Batch '${batch.id}' belongs to product '${batch.productId}', expected '${product.id}'"
+                            "Batch '${batch.id}' belongs to product " +
+                                "'${batch.productId}', expected '${product.id}'"
                         }
                     }
 
-                    // Calculate currently available physical stock for each batch from the authoritative ledger
+                    /*
+                     * StockMovement is the authoritative physical stock ledger.
+                     *
+                     * Batch balances are therefore calculated from movements,
+                     * rather than trusting a mutable stock counter on StockBatch.
+                     */
                     val batchesWithQuantities = batches.map { batch ->
-                        val availableUnits = stockMovementDao.getPhysicalStockUnitsForBatch(batch.id)
-                        batch to Quantity(availableUnits, product.quantityScale)
+                        val availableUnits =
+                            stockMovementDao.getPhysicalStockUnitsForBatch(batch.id)
+
+                        batch to Quantity(
+                            storageUnits = availableUnits,
+                            scale = baseQuantity.scale
+                        )
                     }
 
-                    // Evaluate batches against FEFO policy
+                    // Evaluate batches against FEFO policy.
                     val evaluatedCandidates = FefoService.evaluateCandidates(
                         batchesWithQuantities = batchesWithQuantities,
                         facilityCalendarDate = request.facilityCalendarDate,
                         policy = request.expiryPolicy
                     )
 
-                    // Plan batch allocations under FEFO
+                    // Plan batch allocations under FEFO.
                     val fefoPlan = FefoService.planAllocation(
                         requestedQuantity = baseQuantity,
                         evaluatedCandidates = evaluatedCandidates
@@ -180,38 +229,61 @@ class ConsumptionService(
 
                     if (!fefoPlan.isFullySatisfied) {
                         throw InsufficientStockException(
-                            "Insufficient eligible stock for product '${product.canonicalName}'. " +
-                                "Requested: ${baseQuantity.storageUnits} base units, " +
-                                "available eligible: ${fefoPlan.allocatedTotal.storageUnits} base units."
+                            "Insufficient eligible stock for product " +
+                                "'${product.displayName}'. " +
+                                "Requested: ${baseQuantity.storageUnits} " +
+                                "base units, available eligible: " +
+                                "${fefoPlan.allocatedTotal.storageUnits} base units."
                         )
                     }
 
-                    // Resolve active cost layers for the selected batches
+                    // Resolve active cost layers for the selected batches.
                     val layersByBatch = fefoPlan.allocations.associate { candidate ->
-                        candidate.batch.id to inventoryCostLayerDao.getActiveLayersForBatch(candidate.batch.id)
+                        candidate.batch.id to
+                            inventoryCostLayerDao.getActiveLayersForBatch(
+                                candidate.batch.id
+                            )
                     }
 
                     val saleItemId = UUID.randomUUID().toString()
 
-                    // Allocate consumption across discrete cost layers & compute exact COGS
-                    val allocationResult = CostLayerAllocationService.allocateCostLayers(
-                        candidateAllocations = fefoPlan.allocations,
-                        activeLayersByBatch = layersByBatch,
-                        consumptionTransactionId = request.saleId,
-                        consumptionItemId = saleItemId,
-                        productId = product.id,
-                        allocationTimestamp = request.transactionTimestamp
-                    )
+                    /*
+                     * Allocate consumption across cost layers and compute COGS.
+                     *
+                     * The cost-allocation service remains authoritative for
+                     * acquisition-cost allocation. This service only orchestrates
+                     * the transaction.
+                     */
+                    val allocationResult =
+                        CostLayerAllocationService.allocateCostLayers(
+                            candidateAllocations = fefoPlan.allocations,
+                            activeLayersByBatch = layersByBatch,
+                            consumptionTransactionId = request.saleId,
+                            consumptionItemId = saleItemId,
+                            productId = product.id,
+                            allocationTimestamp = request.transactionTimestamp
+                        )
 
-                    // Snapshot selling price
+                    // Snapshot selling price.
                     val sellingPrice = lineReq.customUnitPrice
-                        ?: productMasterDao.getActivePriceConfigForUnit(dispensingUnit.id)?.sellingPrice
+                        ?: productMasterDao
+                            .getActivePriceConfigForUnit(dispensingUnit.id)
+                            ?.sellingPrice
                         ?: Money.ZERO
 
+                    /*
+                     * NOTE:
+                     * This multiplication remains based on the existing pricing
+                     * contract and is intentionally not redesigned in this repair.
+                     *
+                     * The scale-aware selling-price model will be corrected in
+                     * the dedicated quantity/pricing hardening step.
+                     */
                     val lineSellingTotalMinor = Math.multiplyExact(
                         lineReq.requestedQuantity.storageUnits,
                         sellingPrice.amountMinorUnits
                     )
+
                     val lineSellingTotal = Money(lineSellingTotalMinor)
                     val lineCogs = allocationResult.totalCogs
 
@@ -234,12 +306,20 @@ class ConsumptionService(
                     allAllocations.addAll(allocationResult.allocations)
                     allUpdatedLayers.addAll(allocationResult.updatedCostLayers)
 
-                    totalSaleSellingAmountMinor = Math.addExact(totalSaleSellingAmountMinor, lineSellingTotalMinor)
-                    totalSaleCogsMinor = Math.addExact(totalSaleCogsMinor, lineCogs.amountMinorUnits)
+                    totalSaleSellingAmountMinor = Math.addExact(
+                        totalSaleSellingAmountMinor,
+                        lineSellingTotalMinor
+                    )
 
-                    // Create negative stock movements for each consumed batch
+                    totalSaleCogsMinor = Math.addExact(
+                        totalSaleCogsMinor,
+                        lineCogs.amountMinorUnits
+                    )
+
+                    // Create negative stock movements for each consumed batch.
                     for (candidate in fefoPlan.allocations) {
                         val negativeQuantity = -candidate.allocatedQuantity
+
                         val movement = StockMovement(
                             id = UUID.randomUUID().toString(),
                             productId = product.id,
@@ -253,11 +333,12 @@ class ConsumptionService(
                             reason = "Sale: ${request.saleNumber}",
                             createdAt = request.transactionTimestamp
                         )
+
                         allMovements.add(movement)
                     }
                 }
 
-                // 3. Create the parent Sale transaction header
+                // 3. Create the parent Sale transaction header.
                 val sale = Sale(
                     id = request.saleId,
                     saleNumber = request.saleNumber,
@@ -272,25 +353,33 @@ class ConsumptionService(
                     updatedAt = request.transactionTimestamp
                 )
 
-                // 4. Atomic database-level cost-layer decrement (Requirement 3)
-                // Execute SQL-level atomic decrement for EACH allocation.
-                // If any layer cannot be decremented atomically (rows affected == 0),
-                // throw InsufficientStockException to abort transaction immediately.
+                /*
+                 * 4. Atomically decrement each cost layer.
+                 *
+                 * If any decrement fails, the enclosing transaction must roll
+                 * back all preceding writes.
+                 */
                 for (allocation in allAllocations) {
-                    val rowsUpdated = inventoryCostLayerDao.decrementRemainingQuantity(
-                        layerId = allocation.inventoryCostLayerId,
-                        decrementUnits = allocation.allocatedQuantity.storageUnits,
-                        updatedAt = request.transactionTimestamp
-                    )
+                    val rowsUpdated =
+                        inventoryCostLayerDao.decrementRemainingQuantity(
+                            layerId = allocation.inventoryCostLayerId,
+                            decrementUnits =
+                                allocation.allocatedQuantity.storageUnits,
+                            updatedAt = request.transactionTimestamp
+                        )
+
                     if (rowsUpdated == 0) {
                         throw InsufficientStockException(
-                            "Atomic decrement failed for cost layer '${allocation.inventoryCostLayerId}'. " +
-                            "Layer has insufficient remaining balance for requested ${allocation.allocatedQuantity.storageUnits} units."
+                            "Atomic decrement failed for cost layer " +
+                                "'${allocation.inventoryCostLayerId}'. " +
+                                "Layer has insufficient remaining balance for " +
+                                "requested " +
+                                "${allocation.allocatedQuantity.storageUnits} units."
                         )
                     }
                 }
 
-                // 5. Commit transaction records
+                // 5. Commit transaction records.
                 saleDao.insertSale(sale)
                 saleDao.insertSaleItems(allSaleItems)
                 stockAllocationDao.insertAllocations(allAllocations)
@@ -309,97 +398,164 @@ class ConsumptionService(
 
     /**
      * Reversal / Void architectural pathway:
-     * Atomically voids a previously completed sale without deleting or mutating historical records.
-     * Original StockAllocation records remain 100% immutable.
-     * Cost layers are atomically restored via SQL-level increment.
-     * Physical ledger balance is restored via compensating StockMovement (TYPE_RETURN).
-     * Effective COGS nets to zero.
+     *
+     * Atomically voids a previously completed sale without deleting or mutating
+     * historical records.
+     *
+     * Original StockAllocation records remain immutable.
+     * Cost layers are restored.
+     * Physical inventory is restored through compensating StockMovement records.
      */
-    fun voidSale(saleId: String, voidTimestamp: Long, reason: String): Sale {
+    fun voidSale(
+        saleId: String,
+        voidTimestamp: Long,
+        reason: String
+    ): Sale {
+
         synchronized(transactionLock) {
             return transactionRunner.runInTransaction {
-                val sale = saleDao.getSaleById(saleId) ?: saleDao.getSaleByNumber(saleId)
-                    ?: throw IllegalArgumentException("Sale not found: $saleId")
+
+                val sale =
+                    saleDao.getSaleById(saleId)
+                        ?: saleDao.getSaleByNumber(saleId)
+                        ?: throw IllegalArgumentException(
+                            "Sale not found: $saleId"
+                        )
 
                 if (sale.isVoided) {
-                    throw IllegalStateException("Sale '${sale.saleNumber}' is already voided.")
+                    throw IllegalStateException(
+                        "Sale '${sale.saleNumber}' is already voided."
+                    )
                 }
 
-                val existingVoidMovements = stockMovementDao.getMovementsBySourceRef(sale.saleNumber)
-                    .filter { it.sourceTransactionType == "SALE_VOID" }
+                val existingVoidMovements =
+                    stockMovementDao
+                        .getMovementsBySourceRef(sale.saleNumber)
+                        .filter {
+                            it.sourceTransactionType == "SALE_VOID"
+                        }
+
                 if (existingVoidMovements.isNotEmpty()) {
-                    throw IllegalStateException("Sale '${sale.saleNumber}' has already been voided.")
+                    throw IllegalStateException(
+                        "Sale '${sale.saleNumber}' has already been voided."
+                    )
                 }
 
-                val allocations = stockAllocationDao.getAllocationsForSale(sale.id)
-                val compensatingMovements = mutableListOf<StockMovement>()
-                val restoredLayers = mutableListOf<InventoryCostLayer>()
+                val allocations =
+                    stockAllocationDao.getAllocationsForSale(sale.id)
+
+                val compensatingMovements =
+                    mutableListOf<StockMovement>()
+
+                val restoredLayers =
+                    mutableListOf<InventoryCostLayer>()
 
                 for (alloc in allocations) {
-                    // Invariant check on allocation relationships
-                    val layer = inventoryCostLayerDao.getLayerById(alloc.inventoryCostLayerId)
-                        ?: throw IllegalStateException("Cost layer '${alloc.inventoryCostLayerId}' not found during void")
+
+                    val layer =
+                        inventoryCostLayerDao.getLayerById(
+                            alloc.inventoryCostLayerId
+                        ) ?: throw IllegalStateException(
+                            "Cost layer '${alloc.inventoryCostLayerId}' " +
+                                "not found during void"
+                        )
 
                     require(layer.productId == alloc.productId) {
-                        "Layer ${layer.id} productId does not match allocation productId"
-                    }
-                    require(layer.stockBatchId == alloc.stockBatchId) {
-                        "Layer ${layer.id} stockBatchId does not match allocation stockBatchId"
+                        "Layer ${layer.id} productId does not match " +
+                            "allocation productId"
                     }
 
-                    // SQL-level atomic restoration of layer quantity
-                    val rowsRestored = inventoryCostLayerDao.incrementRemainingQuantity(
-                        layerId = alloc.inventoryCostLayerId,
-                        incrementUnits = alloc.allocatedQuantity.storageUnits,
-                        updatedAt = voidTimestamp
-                    )
+                    require(layer.stockBatchId == alloc.stockBatchId) {
+                        "Layer ${layer.id} stockBatchId does not match " +
+                            "allocation stockBatchId"
+                    }
+
+                    /*
+                     * Restore the exact quantity to the exact cost layer
+                     * that originally supplied the sale.
+                     */
+                    val rowsRestored =
+                        inventoryCostLayerDao.incrementRemainingQuantity(
+                            layerId = alloc.inventoryCostLayerId,
+                            incrementUnits =
+                                alloc.allocatedQuantity.storageUnits,
+                            updatedAt = voidTimestamp
+                        )
+
                     if (rowsRestored == 0) {
                         throw IllegalStateException(
-                            "Atomic increment failed for cost layer '${alloc.inventoryCostLayerId}' during void of sale '${sale.saleNumber}'. " +
-                            "Restored quantity would exceed initial quantity."
+                            "Atomic increment failed for cost layer " +
+                                "'${alloc.inventoryCostLayerId}' during void " +
+                                "of sale '${sale.saleNumber}'. " +
+                                "Restored quantity would exceed initial quantity."
                         )
                     }
 
-                    val updatedLayer = inventoryCostLayerDao.getLayerById(alloc.inventoryCostLayerId)!!
+                    val updatedLayer =
+                        inventoryCostLayerDao.getLayerById(
+                            alloc.inventoryCostLayerId
+                        )!!
+
                     restoredLayers.add(updatedLayer)
 
-                    // Compensating positive stock movement restoring physical inventory
+                    /*
+                     * Compensating positive movement restores the same physical
+                     * batch that originally supplied the sale.
+                     */
                     val compensatingMovement = StockMovement(
                         id = UUID.randomUUID().toString(),
                         productId = alloc.productId,
                         stockBatchId = alloc.stockBatchId,
                         movementType = StockMovement.TYPE_RETURN,
-                        quantity = alloc.allocatedQuantity, // positive quantity restores physical balance
+                        quantity = alloc.allocatedQuantity,
                         occurredAt = voidTimestamp,
                         sourceTransactionRef = sale.saleNumber,
                         sourceTransactionType = "SALE_VOID",
                         reason = "Void of sale ${sale.saleNumber}: $reason",
                         createdAt = voidTimestamp
                     )
+
                     compensatingMovements.add(compensatingMovement)
                 }
 
                 stockMovementDao.insertMovements(compensatingMovements)
 
-                // Original StockAllocation records are NEVER modified or deleted
+                /*
+                 * Original SaleItem, StockAllocation and StockMovement records
+                 * remain untouched. Only the Sale status/header is transitioned.
+                 */
                 val voidedSale = sale.copy(
                     status = Sale.STATUS_VOIDED,
-                    notes = if (sale.notes == null) "VOIDED: $reason" else "${sale.notes} | VOIDED: $reason",
+                    notes = if (sale.notes == null) {
+                        "VOIDED: $reason"
+                    } else {
+                        "${sale.notes} | VOIDED: $reason"
+                    },
                     updatedAt = voidTimestamp
                 )
+
                 saleDao.updateSale(voidedSale)
+
                 voidedSale
             }
         }
     }
 
     /**
-     * Calculates the effective Cost of Goods Sold (COGS) for a sale.
-     * If the sale has been voided, effective COGS nets to zero.
+     * Calculates effective COGS for a sale.
+     *
+     * A voided sale has zero effective COGS because its original inventory
+     * consumption has been physically and financially reversed.
      */
     fun getEffectiveCogsForSale(saleId: String): Money {
-        val sale = saleDao.getSaleById(saleId) ?: saleDao.getSaleByNumber(saleId)
-            ?: throw IllegalArgumentException("Sale not found: $saleId")
+
+        val sale =
+            saleDao.getSaleById(saleId)
+                ?: saleDao.getSaleByNumber(saleId)
+                ?: throw IllegalArgumentException(
+                    "Sale not found: $saleId"
+                )
+
         return if (sale.isVoided) {
             Money.ZERO
         } else {
