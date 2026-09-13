@@ -1,6 +1,5 @@
 package core.domain.model
 import java.math.BigDecimal
-import java.math.BigInteger
 import java.math.RoundingMode
 /**
  * Pure domain value object representing an exact monetary amount for the
@@ -66,16 +65,18 @@ data class Money(
 
     /**
      * Divides this monetary amount by an exact integer divisor.
-     * Throws [ArithmeticException] if division leaves a non-zero remainder, preventing
-     * silent truncation of currency subunits.
+     * Throws [ArithmeticException] if division leaves a non-zero remainder,
+     * preventing silent truncation of currency subunits.
      */
     fun divideExact(divisor: Long): Money {
         require(divisor != 0L) { "Division by zero" }
+
         if (amountMinorUnits % divisor != 0L) {
             throw ArithmeticException(
                 "Cannot divide $amountMinorUnits minor units by $divisor exactly without remainder."
             )
         }
+
         return Money(amountMinorUnits / divisor)
     }
 
@@ -86,8 +87,10 @@ data class Money(
      */
     fun divideHalfUp(divisor: Long): Money {
         require(divisor != 0L) { "Division by zero" }
+
         val bd = BigDecimal.valueOf(amountMinorUnits)
             .divide(BigDecimal.valueOf(divisor), 0, RoundingMode.HALF_UP)
+
         return Money(bd.longValueExact())
     }
 
@@ -241,10 +244,8 @@ data class Money(
          * Rejects any decimal string containing precision beyond
          * [fractionDigits] without silent loss or rounding.
          *
-         * The conversion from BigInteger to Long deliberately avoids
-         * BigInteger.longValueExact(), which requires API 31.
-         * Explicit range checking keeps this implementation compatible
-         * with the application's min SDK 24.
+         * Uses BigDecimal.longValueExact() directly so the conversion remains
+         * exact while staying compatible with the application's min SDK 24.
          */
         fun fromDecimalString(
             decimalString: String,
@@ -273,16 +274,7 @@ data class Money(
             }
 
             val minorUnits = try {
-                val integerValue = scaled.toBigIntegerExact()
-
-                if (
-                    integerValue.compareTo(BigInteger.valueOf(Long.MIN_VALUE)) < 0 ||
-                    integerValue.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0
-                ) {
-                    throw ArithmeticException("Long overflow")
-                }
-
-                integerValue.longValue()
+                scaled.longValueExact()
             } catch (e: ArithmeticException) {
                 throw ArithmeticException(
                     "Decimal value '$decimalString' overflows Long minor units."
