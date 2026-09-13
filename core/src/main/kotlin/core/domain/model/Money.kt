@@ -1,51 +1,104 @@
 package core.domain.model
+
 import java.math.BigDecimal
 import java.math.RoundingMode
+
 /**
- * Pure domain value object representing an exact monetary amount for the
- * application's fixed Phase-1 currency: Kenyan Shillings (KES).
+ * Exact monetary value object for Mwangaza-Ground Phase 1.
  *
- * Stored internally as exact [amountMinorUnits] (Long), representing cents
- * (minor currency units with fixed 2 decimal places).
- *
- * Phase 1 Currency Invariant:
- * - Currency: Kenyan Shilling (KES)
+ * Currency:
+ * - Kenyan Shilling (KES)
  * - Symbol: KSh
- * - Minor unit: Cent (1 KSh = 100 minor units)
- * - Minor-unit fraction digits: 2
+ * - Minor unit: 1/100 KSh
+ * - Fixed precision: 2 decimal places
+ *
+ * Internal representation:
+ * - Long minor units
  *
  * Examples:
- * - KSh 125.50 = 12,550 minor units
- * - KSh 10.00  = 1,000 minor units
- * - KSh 5.75   = 575 minor units
- * - KSh 0.01   = 1 minor unit
+ * - KSh 125.50 = 12_550
+ * - KSh 10.00  = 1_000
+ * - KSh 5.75   = 575
+ * - KSh 0.01   = 1
  *
- * Authoritative financial calculations strictly forbid Double and Float.
- * All arithmetic is integer/minor-unit based with overflow detection.
- * Exact total cost basis is preserved without rounded unit-price truncation.
+ * Money deliberately knows nothing about:
+ * - inventory
+ * - products
+ * - packaging
+ * - quantities
+ * - cost layers
+ * - FEFO
+ * - COGS
+ *
+ * Acquisition-cost allocation must therefore remain outside this class.
+ * In particular, a total acquisition cost that cannot be divided exactly
+ * into minor currency units must remain a cost pool rather than being
+ * repeatedly rounded into a historical unit cost.
+ *
+ * Double and Float are prohibited from authoritative monetary calculations.
  */
 data class Money(
     val amountMinorUnits: Long
 ) : Comparable<Money> {
 
-    val isZero: Boolean get() = amountMinorUnits == 0L
-    val isPositive: Boolean get() = amountMinorUnits > 0L
-    val isNegative: Boolean get() = amountMinorUnits < 0L
+    val isZero: Boolean
+        get() = amountMinorUnits == 0L
 
+    val isPositive: Boolean
+        get() = amountMinorUnits > 0L
+
+    val isNegative: Boolean
+        get() = amountMinorUnits < 0L
+
+    /**
+     * Adds two monetary amounts with overflow protection.
+     */
     operator fun plus(other: Money): Money {
-        return Money(Math.addExact(this.amountMinorUnits, other.amountMinorUnits))
+        return Money(
+            Math.addExact(
+                amountMinorUnits,
+                other.amountMinorUnits
+            )
+        )
     }
 
+    /**
+     * Subtracts two monetary amounts with overflow protection.
+     */
     operator fun minus(other: Money): Money {
-        return Money(Math.subtractExact(this.amountMinorUnits, other.amountMinorUnits))
+        return Money(
+            Math.subtractExact(
+                amountMinorUnits,
+                other.amountMinorUnits
+            )
+        )
     }
 
+    /**
+     * Negates this amount with overflow protection.
+     */
     operator fun unaryMinus(): Money {
-        return Money(Math.negateExact(this.amountMinorUnits))
+        return Money(
+            Math.negateExact(amountMinorUnits)
+        )
     }
 
+    /**
+     * Multiplies a monetary amount by an exact integer multiplier.
+     *
+     * This is appropriate for operations such as:
+     *
+     * KSh 7.00 × 10 units = KSh 70.00
+     *
+     * It is not a replacement for fractional cost allocation.
+     */
     operator fun times(multiplier: Long): Money {
-        return Money(Math.multiplyExact(this.amountMinorUnits, multiplier))
+        return Money(
+            Math.multiplyExact(
+                amountMinorUnits,
+                multiplier
+            )
+        )
     }
 
     operator fun times(multiplier: Int): Money {
@@ -53,61 +106,120 @@ data class Money(
     }
 
     /**
-     * Computes the absolute value of this monetary amount.
-     * Throws [ArithmeticException] if [amountMinorUnits] is [Long.MIN_VALUE] (overflow).
+     * Returns the absolute monetary value.
+     *
+     * Throws if the amount is Long.MIN_VALUE because its positive
+     * counterpart cannot be represented by Long.
      */
     fun abs(): Money {
         if (amountMinorUnits == Long.MIN_VALUE) {
-            throw ArithmeticException("Overflow computing abs(Long.MIN_VALUE)")
-        }
-        return if (amountMinorUnits < 0L) Money(-amountMinorUnits) else this
-    }
-
-    /**
-     * Divides this monetary amount by an exact integer divisor.
-     * Throws [ArithmeticException] if division leaves a non-zero remainder,
-     * preventing silent truncation of currency subunits.
-     */
-    fun divideExact(divisor: Long): Money {
-        require(divisor != 0L) { "Division by zero" }
-
-        if (amountMinorUnits % divisor != 0L) {
             throw ArithmeticException(
-                "Cannot divide $amountMinorUnits minor units by $divisor exactly without remainder."
+                "Overflow computing abs(Long.MIN_VALUE)"
             )
         }
 
-        return Money(amountMinorUnits / divisor)
+        return if (amountMinorUnits < 0L) {
+            Money(-amountMinorUnits)
+        } else {
+            this
+        }
     }
 
     /**
-     * Divides this monetary amount by an integer divisor using explicit
-     * [RoundingMode.HALF_UP] rounding.
-     * Used when an operation produces an unavoidable fractional minor unit.
-     */
-    fun divideHalfUp(divisor: Long): Money {
-        require(divisor != 0L) { "Division by zero" }
-
-        val bd = BigDecimal.valueOf(amountMinorUnits)
-            .divide(BigDecimal.valueOf(divisor), 0, RoundingMode.HALF_UP)
-
-        return Money(bd.longValueExact())
-    }
-
-    /**
-     * Computes a percentage of this monetary amount from a decimal string
-     * (e.g. "10", "7.5", "0.5").
+     * Divides this amount by an integer divisor only when the result
+     * is exactly representable in minor currency units.
      *
-     * Uses exact decimal arithmetic and rounds to the nearest minor currency
-     * unit using [roundingMode] (default HALF_UP).
-     * Strictly avoids Double/Float.
+     * Example:
+     *
+     * KSh 9.00 / 3 = KSh 3.00
+     *
+     * But:
+     *
+     * KSh 100.00 / 3
+     *
+     * is rejected because 10,000 / 3 cents is not integral.
+     *
+     * This method deliberately does NOT silently round.
+     */
+    fun divideExact(divisor: Long): Money {
+        require(divisor != 0L) {
+            "Division by zero"
+        }
+
+        if (amountMinorUnits % divisor != 0L) {
+            throw ArithmeticException(
+                "Cannot divide $amountMinorUnits minor units " +
+                    "by $divisor exactly without remainder."
+            )
+        }
+
+        return Money(
+            amountMinorUnits / divisor
+        )
+    }
+
+    /**
+     * Divides this amount using an explicitly selected rounding mode.
+     *
+     * This method is intentionally named divideRounded rather than
+     * divideHalfUp so callers must acknowledge that rounding is occurring.
+     *
+     * IMPORTANT:
+     * This must NOT be used as the authoritative mechanism for allocating
+     * an acquisition-cost pool across inventory quantities.
+     *
+     * Example:
+     *
+     * KSh 100.00 / 3
+     *
+     * cannot become three authoritative KSh 33.33 costs because that would
+     * account for only KSh 99.99.
+     *
+     * Inventory cost allocation must instead retain the total acquisition
+     * cost and allocate the remaining remainder deterministically.
+     */
+    fun divideRounded(
+        divisor: Long,
+        roundingMode: RoundingMode = RoundingMode.HALF_UP
+    ): Money {
+        require(divisor != 0L) {
+            "Division by zero"
+        }
+
+        val result = BigDecimal
+            .valueOf(amountMinorUnits)
+            .divide(
+                BigDecimal.valueOf(divisor),
+                0,
+                roundingMode
+            )
+
+        return try {
+            Money(result.longValueExact())
+        } catch (e: ArithmeticException) {
+            throw ArithmeticException(
+                "Rounded division result overflows Long minor units."
+            )
+        }
+    }
+
+    /**
+     * Calculates a percentage using a decimal percentage string.
+     *
+     * Examples:
+     *
+     * Money(10_000).percent("10")   = Money(1_000)
+     * Money(10_000).percent("7.5") = Money(750)
+     *
+     * The percentage itself is represented as a decimal string so that
+     * floating-point arithmetic is never introduced.
      */
     fun percent(
         percentageString: String,
         roundingMode: RoundingMode = RoundingMode.HALF_UP
     ): Money {
-        val pct = try {
-            BigDecimal(percentageString.trim()).movePointLeft(2)
+        val percentage = try {
+            BigDecimal(percentageString.trim())
         } catch (e: NumberFormatException) {
             throw IllegalArgumentException(
                 "Invalid percentage string format: '$percentageString'",
@@ -115,58 +227,59 @@ data class Money(
             )
         }
 
-        val result = BigDecimal.valueOf(amountMinorUnits)
-            .multiply(pct)
+        val result = BigDecimal
+            .valueOf(amountMinorUnits)
+            .multiply(percentage)
+            .movePointLeft(2)
             .setScale(0, roundingMode)
 
-        val minorUnits = try {
-            result.longValueExact()
+        return try {
+            Money(result.longValueExact())
         } catch (e: ArithmeticException) {
             throw ArithmeticException(
-                "Percentage calculation result overflows Long minor units"
+                "Percentage calculation result overflows Long minor units."
             )
         }
-
-        return Money(minorUnits)
     }
 
     /**
-     * Computes a percentage of this monetary amount given basis points
-     * (1 basis point = 0.01% = 0.0001).
+     * Calculates a percentage using basis points.
      *
-     * For example:
-     * - 750 basis points = 7.50%
-     * - 1,000 basis points = 10.00%
+     * 1 basis point = 0.01%
      *
-     * Rounds using [roundingMode] (default HALF_UP).
+     * Examples:
+     *
+     * 750 basis points  = 7.50%
+     * 1,000 basis points = 10.00%
      */
     fun percentBasisPoints(
         basisPoints: Long,
         roundingMode: RoundingMode = RoundingMode.HALF_UP
     ): Money {
-        val result = BigDecimal.valueOf(amountMinorUnits)
+        val result = BigDecimal
+            .valueOf(amountMinorUnits)
             .multiply(BigDecimal.valueOf(basisPoints))
-            .divide(BigDecimal.valueOf(10_000L), 0, roundingMode)
+            .divide(
+                BigDecimal.valueOf(10_000L),
+                0,
+                roundingMode
+            )
 
-        val minorUnits = try {
-            result.longValueExact()
+        return try {
+            Money(result.longValueExact())
         } catch (e: ArithmeticException) {
             throw ArithmeticException(
-                "Basis point calculation result overflows Long minor units"
+                "Basis point calculation result overflows Long minor units."
             )
         }
-
-        return Money(minorUnits)
     }
 
     /**
-     * Computes a percentage of this monetary amount using integer numerator
-     * and denominator.
+     * Calculates a percentage using an integer numerator and denominator.
      *
-     * For example, 7.5% can be represented as numerator 75,
-     * denominator 1000.
+     * Example:
      *
-     * Rounds using [roundingMode] (default HALF_UP).
+     * 7.5% = 75 / 1000
      */
     fun percent(
         percentageNumerator: Long,
@@ -174,10 +287,12 @@ data class Money(
         roundingMode: RoundingMode = RoundingMode.HALF_UP
     ): Money {
         require(percentageDenominator > 0L) {
-            "Percentage denominator must be positive, but was $percentageDenominator"
+            "Percentage denominator must be positive, " +
+                "but was $percentageDenominator"
         }
 
-        val result = BigDecimal.valueOf(amountMinorUnits)
+        val result = BigDecimal
+            .valueOf(amountMinorUnits)
             .multiply(BigDecimal.valueOf(percentageNumerator))
             .divide(
                 BigDecimal.valueOf(percentageDenominator),
@@ -185,91 +300,135 @@ data class Money(
                 roundingMode
             )
 
-        val minorUnits = try {
-            result.longValueExact()
+        return try {
+            Money(result.longValueExact())
         } catch (e: ArithmeticException) {
             throw ArithmeticException(
-                "Percentage calculation result overflows Long minor units"
+                "Percentage calculation result overflows Long minor units."
             )
         }
-
-        return Money(minorUnits)
-    }
-
-    override fun compareTo(other: Money): Int {
-        return this.amountMinorUnits.compareTo(other.amountMinorUnits)
     }
 
     /**
-     * Formats this monetary amount as a standard decimal string
-     * (e.g. 12550 minor units -> "125.50").
+     * Formats the monetary amount using the application's fixed
+     * two-decimal KES precision.
      *
-     * Uses Phase 1 fixed [FRACTION_DIGITS] (2 decimal places) by default.
-     * Strictly float-free.
+     * Examples:
+     *
+     * Money(12_550).toPlainString() -> "125.50"
+     * Money(1_000).toPlainString()  -> "10.00"
+     * Money(575).toPlainString()    -> "5.75"
+     * Money(-125).toPlainString()   -> "-1.25"
+     *
+     * Precision is intentionally NOT configurable.
+     *
+     * Money in Phase 1 always means KSh with exactly two decimal places.
      */
-    fun toPlainString(fractionDigits: Int = FRACTION_DIGITS): String {
-        require(fractionDigits >= 0) {
-            "Fraction digits cannot be negative: $fractionDigits"
-        }
-
-        if (fractionDigits == 0) {
-            return amountMinorUnits.toString()
-        }
-
-        return BigDecimal.valueOf(amountMinorUnits)
-            .movePointLeft(fractionDigits)
-            .setScale(fractionDigits, RoundingMode.UNNECESSARY)
+    fun toPlainString(): String {
+        return BigDecimal
+            .valueOf(amountMinorUnits)
+            .movePointLeft(FRACTION_DIGITS)
+            .setScale(
+                FRACTION_DIGITS,
+                RoundingMode.UNNECESSARY
+            )
             .toPlainString()
     }
 
+    override fun compareTo(other: Money): Int {
+        return amountMinorUnits.compareTo(
+            other.amountMinorUnits
+        )
+    }
+
     companion object {
+
+        /**
+         * Phase-1 currency.
+         */
         const val CURRENCY_CODE: String = "KES"
+
+        /**
+         * Kenyan Shilling display symbol.
+         */
         const val CURRENCY_SYMBOL: String = "KSh"
+
+        /**
+         * KES has exactly two decimal places in Phase 1.
+         */
         const val FRACTION_DIGITS: Int = 2
+
+        /**
+         * One Kenyan Shilling contains 100 minor units.
+         */
         const val MINOR_UNITS_PER_SHILLING: Long = 100L
 
+        /**
+         * Zero monetary amount.
+         */
         val ZERO: Money = Money(0L)
 
         fun zero(): Money = ZERO
 
-        fun ofMinor(amountMinorUnits: Long): Money = Money(amountMinorUnits)
+        /**
+         * Creates Money directly from exact minor units.
+         *
+         * Example:
+         *
+         * Money.ofMinor(65_000)
+         *
+         * represents KSh 650.00.
+         */
+        fun ofMinor(
+            amountMinorUnits: Long
+        ): Money {
+            return Money(amountMinorUnits)
+        }
 
         /**
-         * Parses a decimal string (e.g. "125.50", "5.75", "10.00")
-         * into a [Money] value object.
+         * Parses a KES decimal value using the fixed Phase-1
+         * two-decimal precision.
          *
-         * Enforces Phase 1 fixed [fractionDigits] (2 decimal places) by
-         * default.
+         * Accepted:
+         * - "650"
+         * - "650.00"
+         * - "650.50"
+         * - "0.01"
+         * - "-10.25"
          *
-         * Rejects any decimal string containing precision beyond
-         * [fractionDigits] without silent loss or rounding.
+         * Rejected:
+         * - "10.001"
+         * - "10.005"
+         * - values outside Long minor-unit range
          *
-         * Uses BigDecimal.longValueExact() directly so the conversion remains
-         * exact while staying compatible with the application's min SDK 24.
+         * No rounding is performed during parsing.
          */
         fun fromDecimalString(
-            decimalString: String,
-            fractionDigits: Int = FRACTION_DIGITS
+            decimalString: String
         ): Money {
-            require(fractionDigits >= 0) {
-                "Fraction digits cannot be negative: $fractionDigits"
+            val normalized = decimalString.trim()
+
+            require(normalized.isNotEmpty()) {
+                "Money value cannot be empty."
             }
 
-            val bd = try {
-                BigDecimal(decimalString.trim())
+            val decimal = try {
+                BigDecimal(normalized)
             } catch (e: NumberFormatException) {
                 throw IllegalArgumentException(
-                    "Invalid decimal string format: '$decimalString'",
+                    "Invalid KES decimal value: '$decimalString'",
                     e
                 )
             }
 
-            val scaled = bd.movePointRight(fractionDigits)
+            val scaled = decimal.movePointRight(
+                FRACTION_DIGITS
+            )
 
             if (scaled.remainder(BigDecimal.ONE).signum() != 0) {
                 throw IllegalArgumentException(
-                    "Decimal value '$decimalString' contains fractional precision " +
-                        "exceeding $fractionDigits minor unit digits without loss."
+                    "KES value '$decimalString' contains more than " +
+                        "$FRACTION_DIGITS decimal places."
                 )
             }
 
@@ -277,7 +436,7 @@ data class Money(
                 scaled.longValueExact()
             } catch (e: ArithmeticException) {
                 throw ArithmeticException(
-                    "Decimal value '$decimalString' overflows Long minor units."
+                    "KES value '$decimalString' overflows Long minor units."
                 )
             }
 
