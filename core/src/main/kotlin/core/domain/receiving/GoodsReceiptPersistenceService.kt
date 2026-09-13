@@ -1,3 +1,18 @@
+package core.domain.receiving
+import core.domain.model.GoodsReceipt
+import core.domain.model.GoodsReceiptItem
+import core.domain.model.ProductMaster
+import core.domain.model.ProductUnit
+import core.domain.persistence.CoreDatabase
+import core.domain.persistence.GoodsReceiptDao
+import core.domain.persistence.InventoryCostLayerDao
+import core.domain.persistence.RoomTransactionRunner
+import core.domain.persistence.StockBatchDao
+import core.domain.persistence.StockMovementDao
+import core.domain.persistence.TransactionRunner
+import java.util.Calendar
+import java.util.TimeZone
+/**
  * Service orchestrating the atomic persistence of inventory receiving transactions.
  *
  * Responsibilities:
@@ -43,9 +58,6 @@ class GoodsReceiptPersistenceService(
      * @param unitsById Commercial and base units involved in the receipt.
      * @param commitTimestamp Epoch millisecond timestamp of the commit.
      * @return The successful [ReceivingResult] produced by the domain service.
-     *
-     * @throws IllegalStateException If the receipt has already been committed,
-     * has already produced cost layers/movements, or domain validation fails.
      */
     fun commitReceipt(
         receipt: GoodsReceipt,
@@ -59,12 +71,6 @@ class GoodsReceiptPersistenceService(
         }
 
         return transactionRunner.runInTransaction {
-            /*
-             * 1. Idempotency guard.
-             *
-             * A retry after a successful database commit must not create another
-             * receipt, movement, batch, or cost layer.
-             */
             val existingReceipt = goodsReceiptDao.getReceiptById(receipt.id)
                 ?: goodsReceiptDao.getReceiptByNumber(receipt.receiptNumber)
 
@@ -75,12 +81,6 @@ class GoodsReceiptPersistenceService(
                 )
             }
 
-            /*
-             * A committed receipt should have both of these physical/financial
-             * consequences. If either already exists while the receipt itself
-             * is not marked committed, treat the state as an interrupted or
-             * duplicate transaction rather than silently creating more stock.
-             */
             val existingLayers =
                 inventoryCostLayerDao.getLayersForReceiptRef(receipt.receiptNumber)
 
@@ -101,11 +101,6 @@ class GoodsReceiptPersistenceService(
                 )
             }
 
-            /*
-             * 2. Load existing batches for all products represented by this
-             * receipt. GoodsReceiptService uses these to resolve whether a
-             * physical StockBatch already exists.
-             */
             val productIds = items
                 .map { it.productId }
                 .toSet()
@@ -115,17 +110,6 @@ class GoodsReceiptPersistenceService(
                     stockBatchDao.getBatchesForProduct(productId)
                 }
 
-            /*
-             * 3. Resolve canonical base units.
-             *
-             * ProductUnit already carries the product relationship and the
-             * isBaseUnit flag, so the persistence layer does not invent a second
-             * base-unit source.
-             *
-             * A product must have exactly one base unit in the supplied map.
-             * Duplicate base units are rejected rather than choosing one
-             * arbitrarily.
-             */
             val baseUnitsByProductId = productIds.associateWith { productId ->
                 val baseUnits = unitsById.values.filter { unit ->
                     unit.productId == productId && unit.isBaseUnit
@@ -148,25 +132,8 @@ class GoodsReceiptPersistenceService(
                 }
             }
 
-            /*
-             * 4. The current domain service expects a reference calendar date
-             * in YYYYMMDD form.
-             *
-             * GoodsReceipt.receivedAt is the authoritative timestamp already
-             * carried by the receipt. Convert it to a deterministic UTC calendar
-             * date here rather than inventing another date field.
-             *
-             * Facility-local calendar handling can be hardened later if the
-             * architecture introduces an explicit facility timezone.
-             */
             val referenceDateInt = epochMillisToDateInt(receipt.receivedAt)
 
-            /*
-             * 5. Prepare the domain result.
-             *
-             * The current GoodsReceiptService API returns ReceivingResult.
-             * Do not recreate the obsolete GoodsReceiptCommitBundle abstraction.
-             */
             val result = GoodsReceiptService.prepareCommit(
                 receipt = receipt,
                 items = items,
@@ -178,13 +145,6 @@ class GoodsReceiptPersistenceService(
                 commitInstant = commitTimestamp
             )
 
-            /*
-             * 6. Persist only a successful domain result.
-             *
-             * A ReceivingResult.Failure is converted into an exception so the
-             * transaction cannot accidentally commit a partially prepared
-             * receipt.
-             */
             val success = when (result) {
                 is ReceivingResult.Success -> result
 
@@ -198,23 +158,10 @@ class GoodsReceiptPersistenceService(
                 }
             }
 
-            /*
-             * 7. Persist the complete receiving transaction.
-             *
-             * All writes occur inside the same transactionRunner boundary.
-             * If any write fails, the transaction must roll back.
-             */
             if (existingReceipt == null) {
                 goodsReceiptDao.insertReceipt(success.committedReceipt)
                 goodsReceiptDao.insertReceiptItems(items)
             } else {
-                /*
-                 * A non-committed existing receipt represents an existing draft.
-                 * Update it to the committed domain representation.
-                 *
-                 * Never overwrite existing committed historical data because
-                 * that case was rejected above.
-                 */
                 goodsReceiptDao.updateReceipt(success.committedReceipt)
 
                 val existingItems =
@@ -237,10 +184,6 @@ class GoodsReceiptPersistenceService(
                 stockMovementDao.insertMovements(success.stockMovements)
             }
 
-            /*
-             * Return the actual domain result, including warnings, rather than
-             * constructing a second persistence-specific result object.
-             */
             success
         }
     }
@@ -249,11 +192,8 @@ class GoodsReceiptPersistenceService(
      * Converts epoch milliseconds into the YYYYMMDD integer representation
      * required by GoodsReceiptService.
      *
-     * UTC is intentionally used here because GoodsReceipt currently stores an
-     * instant and the model does not yet expose an explicit facility timezone.
-     *
      * Calendar is used instead of java.time.Instant because the application
-     * minimum SDK is API 24 and java.time.Instant requires API 26.
+     * minimum SDK is API 24.
      */
     private fun epochMillisToDateInt(epochMillis: Long): Int {
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
@@ -265,12 +205,6 @@ class GoodsReceiptPersistenceService(
             calendar.get(Calendar.DAY_OF_MONTH)
     }
 
-    /**
-     * Creates a stable diagnostic message for a failed receiving-domain result.
-     *
-     * The receipt identifier comes from the commit request because
-     * ReceivingResult.Failure does not expose a receiptId property.
-     */
     private fun buildReceivingFailureMessage(
         receiptId: String,
         failure: ReceivingResult.Failure
