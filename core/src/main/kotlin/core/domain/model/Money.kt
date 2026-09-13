@@ -1,8 +1,7 @@
 package core.domain.model
-
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.math.RoundingMode
-
 /**
  * Pure domain value object representing an exact monetary amount for the
  * application's fixed Phase-1 currency: Kenyan Shillings (KES).
@@ -81,7 +80,8 @@ data class Money(
     }
 
     /**
-     * Divides this monetary amount by an integer divisor using explicit [RoundingMode.HALF_UP] rounding.
+     * Divides this monetary amount by an integer divisor using explicit
+     * [RoundingMode.HALF_UP] rounding.
      * Used when an operation produces an unavoidable fractional minor unit.
      */
     fun divideHalfUp(divisor: Long): Money {
@@ -92,8 +92,11 @@ data class Money(
     }
 
     /**
-     * Computes a percentage of this monetary amount from a decimal string (e.g. "10", "7.5", "0.5").
-     * Uses exact decimal arithmetic and rounds to the nearest minor currency unit using [roundingMode] (default HALF_UP).
+     * Computes a percentage of this monetary amount from a decimal string
+     * (e.g. "10", "7.5", "0.5").
+     *
+     * Uses exact decimal arithmetic and rounds to the nearest minor currency
+     * unit using [roundingMode] (default HALF_UP).
      * Strictly avoids Double/Float.
      */
     fun percent(
@@ -103,22 +106,35 @@ data class Money(
         val pct = try {
             BigDecimal(percentageString.trim()).movePointLeft(2)
         } catch (e: NumberFormatException) {
-            throw IllegalArgumentException("Invalid percentage string format: '$percentageString'", e)
+            throw IllegalArgumentException(
+                "Invalid percentage string format: '$percentageString'",
+                e
+            )
         }
+
         val result = BigDecimal.valueOf(amountMinorUnits)
             .multiply(pct)
             .setScale(0, roundingMode)
+
         val minorUnits = try {
             result.longValueExact()
         } catch (e: ArithmeticException) {
-            throw ArithmeticException("Percentage calculation result overflows Long minor units")
+            throw ArithmeticException(
+                "Percentage calculation result overflows Long minor units"
+            )
         }
+
         return Money(minorUnits)
     }
 
     /**
-     * Computes a percentage of this monetary amount given basis points (1 basis point = 0.01% = 0.0001).
-     * For example, 750 basis points = 7.50%, 1,000 basis points = 10.00%.
+     * Computes a percentage of this monetary amount given basis points
+     * (1 basis point = 0.01% = 0.0001).
+     *
+     * For example:
+     * - 750 basis points = 7.50%
+     * - 1,000 basis points = 10.00%
+     *
      * Rounds using [roundingMode] (default HALF_UP).
      */
     fun percentBasisPoints(
@@ -128,17 +144,25 @@ data class Money(
         val result = BigDecimal.valueOf(amountMinorUnits)
             .multiply(BigDecimal.valueOf(basisPoints))
             .divide(BigDecimal.valueOf(10_000L), 0, roundingMode)
+
         val minorUnits = try {
             result.longValueExact()
         } catch (e: ArithmeticException) {
-            throw ArithmeticException("Basis point calculation result overflows Long minor units")
+            throw ArithmeticException(
+                "Basis point calculation result overflows Long minor units"
+            )
         }
+
         return Money(minorUnits)
     }
 
     /**
-     * Computes a percentage of this monetary amount using integer numerator and denominator.
-     * For example, 7.5% can be represented as numerator 75, denominator 1000.
+     * Computes a percentage of this monetary amount using integer numerator
+     * and denominator.
+     *
+     * For example, 7.5% can be represented as numerator 75,
+     * denominator 1000.
+     *
      * Rounds using [roundingMode] (default HALF_UP).
      */
     fun percent(
@@ -149,14 +173,23 @@ data class Money(
         require(percentageDenominator > 0L) {
             "Percentage denominator must be positive, but was $percentageDenominator"
         }
+
         val result = BigDecimal.valueOf(amountMinorUnits)
             .multiply(BigDecimal.valueOf(percentageNumerator))
-            .divide(BigDecimal.valueOf(percentageDenominator), 0, roundingMode)
+            .divide(
+                BigDecimal.valueOf(percentageDenominator),
+                0,
+                roundingMode
+            )
+
         val minorUnits = try {
             result.longValueExact()
         } catch (e: ArithmeticException) {
-            throw ArithmeticException("Percentage calculation result overflows Long minor units")
+            throw ArithmeticException(
+                "Percentage calculation result overflows Long minor units"
+            )
         }
+
         return Money(minorUnits)
     }
 
@@ -165,15 +198,21 @@ data class Money(
     }
 
     /**
-     * Formats this monetary amount as a standard decimal string (e.g. 12550 minor units -> "125.50").
+     * Formats this monetary amount as a standard decimal string
+     * (e.g. 12550 minor units -> "125.50").
+     *
      * Uses Phase 1 fixed [FRACTION_DIGITS] (2 decimal places) by default.
      * Strictly float-free.
      */
     fun toPlainString(fractionDigits: Int = FRACTION_DIGITS): String {
-        require(fractionDigits >= 0) { "Fraction digits cannot be negative: $fractionDigits" }
+        require(fractionDigits >= 0) {
+            "Fraction digits cannot be negative: $fractionDigits"
+        }
+
         if (fractionDigits == 0) {
             return amountMinorUnits.toString()
         }
+
         return BigDecimal.valueOf(amountMinorUnits)
             .movePointLeft(fractionDigits)
             .setScale(fractionDigits, RoundingMode.UNNECESSARY)
@@ -193,28 +232,63 @@ data class Money(
         fun ofMinor(amountMinorUnits: Long): Money = Money(amountMinorUnits)
 
         /**
-         * Parses a decimal string (e.g. "125.50", "5.75", "10.00") into a [Money] value object.
-         * Enforces Phase 1 fixed [FRACTION_DIGITS] (2 decimal places) by default.
-         * Rejects any decimal string containing precision beyond [fractionDigits] without silent loss or rounding.
+         * Parses a decimal string (e.g. "125.50", "5.75", "10.00")
+         * into a [Money] value object.
+         *
+         * Enforces Phase 1 fixed [fractionDigits] (2 decimal places) by
+         * default.
+         *
+         * Rejects any decimal string containing precision beyond
+         * [fractionDigits] without silent loss or rounding.
+         *
+         * The conversion from BigInteger to Long deliberately avoids
+         * BigInteger.longValueExact(), which requires API 31.
+         * Explicit range checking keeps this implementation compatible
+         * with the application's min SDK 24.
          */
-        fun fromDecimalString(decimalString: String, fractionDigits: Int = FRACTION_DIGITS): Money {
-            require(fractionDigits >= 0) { "Fraction digits cannot be negative: $fractionDigits" }
+        fun fromDecimalString(
+            decimalString: String,
+            fractionDigits: Int = FRACTION_DIGITS
+        ): Money {
+            require(fractionDigits >= 0) {
+                "Fraction digits cannot be negative: $fractionDigits"
+            }
+
             val bd = try {
                 BigDecimal(decimalString.trim())
             } catch (e: NumberFormatException) {
-                throw IllegalArgumentException("Invalid decimal string format: '$decimalString'", e)
-            }
-            val scaled = bd.movePointRight(fractionDigits)
-            if (scaled.remainder(BigDecimal.ONE).signum() != 0) {
                 throw IllegalArgumentException(
-                    "Decimal value '$decimalString' contains fractional precision exceeding $fractionDigits minor unit digits without loss."
+                    "Invalid decimal string format: '$decimalString'",
+                    e
                 )
             }
-            val minorUnits = try {
-                scaled.toBigIntegerExact().longValueExact()
-            } catch (e: ArithmeticException) {
-                throw ArithmeticException("Decimal value '$decimalString' overflows Long minor units.")
+
+            val scaled = bd.movePointRight(fractionDigits)
+
+            if (scaled.remainder(BigDecimal.ONE).signum() != 0) {
+                throw IllegalArgumentException(
+                    "Decimal value '$decimalString' contains fractional precision " +
+                        "exceeding $fractionDigits minor unit digits without loss."
+                )
             }
+
+            val minorUnits = try {
+                val integerValue = scaled.toBigIntegerExact()
+
+                if (
+                    integerValue.compareTo(BigInteger.valueOf(Long.MIN_VALUE)) < 0 ||
+                    integerValue.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0
+                ) {
+                    throw ArithmeticException("Long overflow")
+                }
+
+                integerValue.longValue()
+            } catch (e: ArithmeticException) {
+                throw ArithmeticException(
+                    "Decimal value '$decimalString' overflows Long minor units."
+                )
+            }
+
             return Money(minorUnits)
         }
     }
