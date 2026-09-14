@@ -98,7 +98,9 @@ sealed class ReceivingError(val message: String) {
         ReceivingError("ProductUnit '$unitId' on line $lineIndex is inactive and cannot receive stock.")
 
     data class UnitNotPurchasable(val unitId: String, val lineIndex: Int) :
-        ReceivingError("ProductUnit '$unitId' on line $lineIndex is not configured as a purchase/receiving unit.")
+        ReceivingError(
+            "ProductUnit '$unitId' on line $lineIndex is not configured as a purchase/receiving unit."
+        )
 
     data class UnitProductMismatch(
         val unitId: String,
@@ -106,7 +108,8 @@ sealed class ReceivingError(val message: String) {
         val actualProductId: String,
         val lineIndex: Int
     ) : ReceivingError(
-        "ProductUnit '$unitId' on line $lineIndex belongs to product '$actualProductId', not expected '$expectedProductId'."
+        "ProductUnit '$unitId' on line $lineIndex belongs to product '$actualProductId', " +
+            "not expected '$expectedProductId'."
     )
 
     data class BaseUnitNotFound(val productId: String, val lineIndex: Int) :
@@ -187,9 +190,6 @@ sealed class ReceivingError(val message: String) {
     data class QuantityConversionOverflow(val lineIndex: Int, val detail: String) :
         ReceivingError("Quantity conversion on line $lineIndex overflows Long storage units: $detail")
 
-    data class CostCalculationOverflow(val lineIndex: Int, val detail: String) :
-        ReceivingError("Cost calculation on line $lineIndex overflows minor units: $detail")
-
     data class InvalidUnitCost(val lineIndex: Int, val amountMinorUnits: Long) :
         ReceivingError(
             "Line $lineIndex has an invalid negative unit cost: $amountMinorUnits minor units."
@@ -199,16 +199,6 @@ sealed class ReceivingError(val message: String) {
         ReceivingError(
             "Line $lineIndex has an invalid negative total cost: $amountMinorUnits minor units."
         )
-
-    data class UnitCostTotalMismatch(
-        val lineIndex: Int,
-        val expectedMinorUnits: Long,
-        val actualMinorUnits: Long
-    ) : ReceivingError(
-        "Line $lineIndex total acquisition cost does not equal unit cost multiplied by " +
-            "the received commercial quantity. Expected $expectedMinorUnits minor units, " +
-            "got $actualMinorUnits."
-    )
 
     data class InvalidExpiryDate(val lineIndex: Int, val expiryDateInt: Int) :
         ReceivingError("Line $lineIndex has invalid Gregorian expiry date integer: $expiryDateInt")
@@ -272,8 +262,22 @@ sealed class ReceivingWarning(val message: String) {
  * - validate canonical base-unit integrity;
  * - validate quantity scale and product transaction increment;
  * - validate exact commercial-unit → canonical-unit representability;
- * - validate exact acquisition-cost arithmetic;
+ * - validate acquisition-cost field legality;
  * - validate expiry/tracking constraints.
+ *
+ * COST AUTHORITY
+ * --------------
+ * totalCost on GoodsReceiptItem is the authoritative acquisition cost for
+ * the receipt line.
+ *
+ * unitCost is a supplier/invoice unit-price snapshot or nominal commercial
+ * unit cost. It is NOT required to multiply exactly to totalCost because a
+ * legitimate acquisition total can be indivisible across the received
+ * quantity when represented in currency minor units.
+ *
+ * GoodsReceiptService is responsible for converting the authoritative
+ * totalCost into exact InventoryCostLayer cost tranches whose monetary
+ * values conserve the original receipt-line total exactly.
  *
  * Non-responsibilities:
  * - creating StockBatch records;
@@ -601,19 +605,33 @@ object GoodsReceiptValidation {
     }
 
     /**
-     * Validates the exact relationship between commercial quantity,
-     * unit acquisition cost, and total acquisition cost.
+     * Validates monetary fields at the receiving boundary.
      *
-     * Because Money stores minor currency units and Quantity stores an exact
-     * scaled integer, the relation is checked using integer arithmetic:
+     * totalCost is the authoritative acquisition amount for the receipt line.
      *
-     *     unitCostMinor × receivedStorageUnits
-     *     ------------------------------------
-     *             quantityScale.multiplier
+     * unitCost is retained as the supplier/invoice unit-price snapshot or
+     * nominal commercial unit cost. It is intentionally NOT required to
+     * multiply exactly to totalCost.
      *
-     * must equal totalCostMinor exactly.
+     * This distinction is essential because an acquisition total can be
+     * indivisible across the received quantity in currency minor units.
      *
-     * No floating-point arithmetic and no monetary rounding are permitted.
+     * Example:
+     *
+     *     3 units purchased for KSh 100.00
+     *
+     * The exact total is 10,000 minor units. There is no requirement that
+     * 10,000 / 3 be representable as one finite integer minor-unit unit cost.
+     *
+     * GoodsReceiptService later preserves the exact total by creating
+     * deterministic cost tranches, for example:
+     *
+     *     2 units × 3,333 minor units
+     *     1 unit  × 3,334 minor units
+     *
+     *     total = 10,000 minor units
+     *
+     * No rounding is performed on the authoritative total.
      */
     fun validateMoney(
         item: GoodsReceiptItem
@@ -631,79 +649,6 @@ object GoodsReceiptValidation {
             errors += ReceivingError.InvalidTotalCost(
                 lineIndex = item.lineIndex,
                 amountMinorUnits = item.totalCost.amountMinorUnits
-            )
-        }
-
-        if (
-            item.unitCost.amountMinorUnits < 0L ||
-            item.totalCost.amountMinorUnits < 0L
-        ) {
-            return errors
-        }
-
-        try {
-            val numerator = BigInteger
-                .valueOf(item.unitCost.amountMinorUnits)
-                .multiply(
-                    BigInteger.valueOf(
-                        item.receivedQuantity.storageUnits
-                    )
-                )
-
-            val denominator = BigInteger.valueOf(
-                item.receivedQuantity.scale.multiplier
-            )
-
-            if (denominator.signum() <= 0) {
-                errors += ReceivingError.CostCalculationOverflow(
-                    lineIndex = item.lineIndex,
-                    detail = "Quantity scale multiplier must be positive."
-                )
-                return errors
-            }
-
-            val division = numerator.divideAndRemainder(denominator)
-
-            /*
-             * A total acquisition cost must remain exact. If unit cost ×
-             * quantity cannot produce an integral minor-unit amount, the
-             * receipt representation is internally inconsistent rather than
-             * something that should be silently rounded.
-             */
-            if (division[1].signum() != 0) {
-                errors += ReceivingError.CostCalculationOverflow(
-                    lineIndex = item.lineIndex,
-                    detail =
-                        "Unit cost multiplied by commercial quantity is not exactly " +
-                            "representable in currency minor units."
-                )
-                return errors
-            }
-
-            val expectedTotal = division[0]
-                .toString()
-                .toLongOrNull()
-
-            if (expectedTotal == null) {
-                errors += ReceivingError.CostCalculationOverflow(
-                    lineIndex = item.lineIndex,
-                    detail = "Calculated total acquisition cost exceeds Long minor-unit capacity."
-                )
-                return errors
-            }
-
-            if (expectedTotal != item.totalCost.amountMinorUnits) {
-                errors += ReceivingError.UnitCostTotalMismatch(
-                    lineIndex = item.lineIndex,
-                    expectedMinorUnits = expectedTotal,
-                    actualMinorUnits = item.totalCost.amountMinorUnits
-                )
-            }
-        } catch (e: ArithmeticException) {
-            errors += ReceivingError.CostCalculationOverflow(
-                lineIndex = item.lineIndex,
-                detail = e.message
-                    ?: "Overflow while validating acquisition-cost relationship."
             )
         }
 
