@@ -557,35 +557,35 @@ object GoodsReceiptValidation {
                         scale = product.quantityScale.scale
                     )
                 } else {
-                    try {
-                        val baseStorageUnits = division[0].longValueExact()
+                    val baseStorageUnits = division[0]
+                        .toString()
+                        .toLongOrNull()
 
-                        if (baseStorageUnits <= 0L) {
-                            errors += ReceivingError.NonPositiveQuantity(
-                                lineIndex = item.lineIndex,
-                                rawUnits = baseStorageUnits,
-                                scale = product.quantityScale.scale
-                            )
-                        } else {
-                            val baseQuantity = Quantity(
-                                storageUnits = baseStorageUnits,
-                                scale = product.quantityScale
-                            )
-
-                            if (!baseQuantity.isMultipleOf(minimumIncrement)) {
-                                errors += ReceivingError.QuantityNotMultipleOfIncrement(
-                                    lineIndex = item.lineIndex,
-                                    rawUnits = baseQuantity.storageUnits,
-                                    incrementUnits = minimumIncrement.storageUnits,
-                                    scale = baseQuantity.scale.scale
-                                )
-                            }
-                        }
-                    } catch (e: ArithmeticException) {
+                    if (baseStorageUnits == null) {
                         errors += ReceivingError.QuantityConversionOverflow(
                             lineIndex = item.lineIndex,
                             detail = "Exact converted canonical quantity exceeds Long storage capacity."
                         )
+                    } else if (baseStorageUnits <= 0L) {
+                        errors += ReceivingError.NonPositiveQuantity(
+                            lineIndex = item.lineIndex,
+                            rawUnits = baseStorageUnits,
+                            scale = product.quantityScale.scale
+                        )
+                    } else {
+                        val baseQuantity = Quantity(
+                            storageUnits = baseStorageUnits,
+                            scale = product.quantityScale
+                        )
+
+                        if (!baseQuantity.isMultipleOf(minimumIncrement)) {
+                            errors += ReceivingError.QuantityNotMultipleOfIncrement(
+                                lineIndex = item.lineIndex,
+                                rawUnits = baseQuantity.storageUnits,
+                                incrementUnits = minimumIncrement.storageUnits,
+                                scale = baseQuantity.scale.scale
+                            )
+                        }
                     }
                 }
             }
@@ -680,9 +680,11 @@ object GoodsReceiptValidation {
                 return errors
             }
 
-            val expectedTotal = try {
-                division[0].longValueExact()
-            } catch (e: ArithmeticException) {
+            val expectedTotal = division[0]
+                .toString()
+                .toLongOrNull()
+
+            if (expectedTotal == null) {
                 errors += ReceivingError.CostCalculationOverflow(
                     lineIndex = item.lineIndex,
                     detail = "Calculated total acquisition cost exceeds Long minor-unit capacity."
