@@ -136,12 +136,12 @@ class ConsumptionService(
 
         require(dispensingUnitNumerator > 0L) {
             "ProductUnit conversionNumerator must be strictly positive, " +
-                "got: $dispensingUnitNumerator"
+                "got $dispensingUnitNumerator"
         }
 
         require(dispensingUnitDenominator > 0L) {
             "ProductUnit conversionDenominator must be strictly positive, " +
-                "got: $dispensingUnitDenominator"
+                "got $dispensingUnitDenominator"
         }
 
         val numerator = BigInteger.valueOf(requestedQuantity.storageUnits)
@@ -158,8 +158,14 @@ class ConsumptionService(
                 "$dispensingUnitNumerator/$dispensingUnitDenominator"
         }
 
+        val baseStorageUnits = division[0].toString().toLongOrNull()
+            ?: throw ArithmeticException(
+                "Converted canonical base quantity exceeds Long range: " +
+                    "${division[0]}"
+            )
+
         return Quantity(
-            storageUnits = division[0].longValueExact(),
+            storageUnits = baseStorageUnits,
             scale = requestedQuantity.scale
         )
     }
