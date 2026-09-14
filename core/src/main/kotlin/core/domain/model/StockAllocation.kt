@@ -64,8 +64,8 @@ import java.math.BigInteger
  * COST SEMANTICS
  * ---------------------------------------------------------------------------
  *
- * acquisitionUnitCost is a historical snapshot of the acquisition cost
- * represented by the InventoryCostLayer at allocation time.
+ * acquisitionUnitCost is the exact historical acquisition cost per canonical
+ * quantity represented by the source InventoryCostLayer.
  *
  * allocatedCost is the exact monetary acquisition cost attributed to this
  * allocation.
@@ -73,39 +73,21 @@ import java.math.BigInteger
  * The authoritative invariant is:
  *
  *     allocatedCost =
- *         exact mathematical value of
- *         allocatedQuantity × acquisitionUnitCost
+ *         acquisitionUnitCost × allocatedQuantity
  *
  * Quantity is represented as:
  *
  *     physical quantity = storageUnits / 10^scale
  *
- * Money is represented as integer currency minor units.
- *
- * Therefore the exact allocation cost in minor units is:
- *
- *     storageUnits × acquisitionUnitCost.amountMinorUnits
- *     ---------------------------------------------------
- *                         10^quantityScale
- *
- * The calculation MUST use exact integer arithmetic.
+ * RationalCost represents exact monetary values as rational numbers and
+ * therefore MUST NOT be converted to integer currency minor units merely
+ * to perform authoritative accounting calculations.
  *
  * No Float, Double, truncation, or implicit monetary rounding is permitted.
  *
- * If the mathematical result is not an integral number of currency
- * minor units, the allocation is rejected.
- *
- * This rejection is deliberate. StockAllocation has no independent monetary
- * residual field and therefore cannot safely represent an allocation whose
- * exact monetary value would require rounding.
- *
- * The receiving workflow is responsible for creating acquisition-cost
- * tranches whose monetary values conserve the authoritative receipt total.
- * The consumption workflow is responsible for allocating only quantities
- * whose exact cost can be represented by this immutable allocation record.
- *
- * StockAllocation therefore acts as a final accounting-integrity boundary;
- * it does not invent or discard money to make an allocation fit.
+ * A mathematically fractional allocation cost is valid and MUST be retained
+ * exactly. Display rounding and currency-settlement rounding belong outside
+ * this entity.
  *
  * ---------------------------------------------------------------------------
  * CROSS-ENTITY INVARIANTS
@@ -223,27 +205,33 @@ data class StockAllocation(
     val allocatedQuantity: Quantity,
 
     /**
-     * Historical acquisition cost per canonical quantity represented by
-     * the source InventoryCostLayer.
+     * Exact historical acquisition cost per canonical quantity represented
+     * by the source InventoryCostLayer.
      *
      * This is a snapshot, not a recalculated current cost.
+     *
+     * RationalCost is authoritative and preserves mathematically fractional
+     * monetary values without display or settlement rounding.
      */
     @ColumnInfo(name = "acquisition_unit_cost")
-    val acquisitionUnitCost: Money,
+    val acquisitionUnitCost: RationalCost,
 
     /**
      * Exact acquisition cost attributed to this allocation.
      *
      * It MUST equal the exact mathematical value of:
      *
-     *     allocatedQuantity × acquisitionUnitCost
+     *     acquisitionUnitCost × allocatedQuantity
      *
-     * after applying the QuantityScale denominator.
+     * where:
      *
-     * No rounding is permitted.
+     *     allocatedQuantity =
+     *         storageUnits / 10^quantityScale
+     *
+     * No rounding is permitted here.
      */
     @ColumnInfo(name = "allocated_cost")
-    val allocatedCost: Money,
+    val allocatedCost: RationalCost,
 
     /**
      * Timestamp at which the allocation was created.
@@ -305,14 +293,14 @@ data class StockAllocation(
                 "(> 0), got: $allocatedQuantity"
         }
 
-        require(acquisitionUnitCost.amountMinorUnits >= 0L) {
+        require(acquisitionUnitCost.isNonNegative) {
             "StockAllocation acquisitionUnitCost must not be negative, " +
-                "got: ${acquisitionUnitCost.amountMinorUnits}"
+                "got: $acquisitionUnitCost"
         }
 
-        require(allocatedCost.amountMinorUnits >= 0L) {
+        require(allocatedCost.isNonNegative) {
             "StockAllocation allocatedCost must not be negative, " +
-                "got: ${allocatedCost.amountMinorUnits}"
+                "got: $allocatedCost"
         }
 
         require(allocatedAt > 0L) {
@@ -326,7 +314,7 @@ data class StockAllocation(
         }
 
         /*
-         * The entity is the final immutable guard for the monetary
+         * The entity is the final immutable guard for the exact mathematical
          * relationship between quantity, historical acquisition cost,
          * and recorded allocation cost.
          */
@@ -334,24 +322,24 @@ data class StockAllocation(
     }
 
     /**
-     * Verifies the exact monetary invariant:
+     * Verifies the exact mathematical invariant:
      *
      *     allocatedCost =
-     *         allocatedQuantity × acquisitionUnitCost
+     *         acquisitionUnitCost × allocatedQuantity
      *
      * Quantity uses decimal storage units:
      *
      *     physical quantity = storageUnits / 10^scale
      *
-     * Therefore:
+     * Therefore the expected exact cost is:
      *
-     *     expectedCostMinorUnits =
-     *         storageUnits × unitCostMinorUnits / 10^scale
+     *     acquisitionUnitCost ×
+     *         (storageUnits / 10^scale)
      *
-     * The division MUST have zero remainder.
+     * The resulting value remains a RationalCost.
      *
-     * This method intentionally rejects non-integral monetary results rather
-     * than rounding because StockAllocation has no residual-money authority.
+     * This method deliberately does NOT convert the result to integer
+     * currency minor units and does NOT round.
      */
     private fun requireExactAllocatedCost() {
 
@@ -359,40 +347,19 @@ data class StockAllocation(
             allocatedQuantity.scale.scale
         )
 
-        val numerator =
-            BigInteger.valueOf(allocatedQuantity.storageUnits)
-                .multiply(
-                    BigInteger.valueOf(
-                        acquisitionUnitCost.amountMinorUnits
-                    )
-                )
-
-        val quotientAndRemainder =
-            numerator.divideAndRemainder(scaleFactor)
-
-        val expectedMinorUnits =
-            quotientAndRemainder[0]
-
-        val remainder =
-            quotientAndRemainder[1]
-
-        require(remainder == BigInteger.ZERO) {
-            "StockAllocation allocated cost is not exactly representable " +
-                "in currency minor units: " +
-                "quantity=$allocatedQuantity, " +
-                "acquisitionUnitCost=$acquisitionUnitCost"
-        }
-
-        val actualMinorUnits =
-            BigInteger.valueOf(
-                allocatedCost.amountMinorUnits
+        val expectedAllocatedCost =
+            acquisitionUnitCost.multiply(
+                numerator = BigInteger.valueOf(
+                    allocatedQuantity.storageUnits
+                ),
+                denominator = scaleFactor
             )
 
-        require(expectedMinorUnits == actualMinorUnits) {
+        require(expectedAllocatedCost == allocatedCost) {
             "StockAllocation allocatedCost does not equal exact quantity × " +
                 "acquisitionUnitCost: " +
-                "expected=${expectedMinorUnits} minor units, " +
-                "actual=${actualMinorUnits} minor units"
+                "expected=$expectedAllocatedCost, " +
+                "actual=$allocatedCost"
         }
     }
 }
