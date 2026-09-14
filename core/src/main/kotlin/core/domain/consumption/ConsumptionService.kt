@@ -20,6 +20,7 @@ import core.domain.persistence.StockBatchDao
 import core.domain.persistence.StockMovementDao
 import core.domain.persistence.TransactionRunner
 import core.domain.time.LocalDateValue
+import java.math.BigInteger
 import java.util.UUID
 
 /**
@@ -106,6 +107,64 @@ class ConsumptionService(
     private val transactionLock = Any()
 
     /**
+     * Converts a requested quantity expressed in a commercial ProductUnit
+     * into the product's canonical base quantity.
+     *
+     * ProductUnit owns the exact rational commercial-unit conversion:
+     *
+     *     1 commercial unit =
+     *         conversionNumerator / conversionDenominator
+     *         canonical base units
+     *
+     * The requested Quantity already uses the product's quantity scale.
+     *
+     * Therefore:
+     *
+     *     canonicalStorageUnits =
+     *         requestedStorageUnits
+     *         × conversionNumerator
+     *         ÷ conversionDenominator
+     *
+     * The division must be exact. Silent truncation or rounding would create
+     * an incorrect physical inventory quantity.
+     */
+    private fun convertToBaseQuantity(
+        requestedQuantity: Quantity,
+        dispensingUnitNumerator: Long,
+        dispensingUnitDenominator: Long
+    ): Quantity {
+
+        require(dispensingUnitNumerator > 0L) {
+            "ProductUnit conversionNumerator must be strictly positive, " +
+                "got: $dispensingUnitNumerator"
+        }
+
+        require(dispensingUnitDenominator > 0L) {
+            "ProductUnit conversionDenominator must be strictly positive, " +
+                "got: $dispensingUnitDenominator"
+        }
+
+        val numerator = BigInteger.valueOf(requestedQuantity.storageUnits)
+            .multiply(BigInteger.valueOf(dispensingUnitNumerator))
+
+        val denominator = BigInteger.valueOf(dispensingUnitDenominator)
+
+        val division = numerator.divideAndRemainder(denominator)
+
+        require(division[1] == BigInteger.ZERO) {
+            "Commercial quantity ${requestedQuantity.storageUnits} at scale " +
+                "${requestedQuantity.scale} cannot be represented exactly as " +
+                "canonical base quantity using conversion " +
+                "$dispensingUnitNumerator/$dispensingUnitDenominator"
+        }
+
+        return Quantity(
+            storageUnits = division[0].longValueExact(),
+            scale = requestedQuantity.scale
+        )
+    }
+
+    /**
      * Executes a complete stock consumption transaction.
      */
     fun consumeStock(request: ConsumptionRequest): ConsumptionResult {
@@ -160,23 +219,20 @@ class ConsumptionService(
                     }
 
                     /*
-                     * The requested quantity already carries the quantity scale.
+                     * ProductUnit now owns an exact rational commercial-to-base
+                     * conversion. The obsolete conversionMultiplier API must not
+                     * be reintroduced.
                      *
-                     * ProductMaster does not own a quantityScale field in the
-                     * current model. Therefore this repair deliberately avoids
-                     * reintroducing that obsolete API.
-                     *
-                     * The dispensing unit's conversionMultiplier represents
-                     * scaled canonical base storage units per one dispensing unit.
+                     * The requested quantity remains at the same QuantityScale;
+                     * only its physical unit meaning changes from commercial unit
+                     * to canonical base unit.
                      */
-                    val baseQuantityUnits = Math.multiplyExact(
-                        lineReq.requestedQuantity.storageUnits,
-                        dispensingUnit.conversionMultiplier
-                    )
-
-                    val baseQuantity = Quantity(
-                        storageUnits = baseQuantityUnits,
-                        scale = lineReq.requestedQuantity.scale
+                    val baseQuantity = convertToBaseQuantity(
+                        requestedQuantity = lineReq.requestedQuantity,
+                        dispensingUnitNumerator =
+                            dispensingUnit.normalizedConversionNumerator,
+                        dispensingUnitDenominator =
+                            dispensingUnit.normalizedConversionDenominator
                     )
 
                     // Load physical batches for this product.
