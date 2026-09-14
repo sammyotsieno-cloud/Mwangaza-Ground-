@@ -194,8 +194,14 @@ class TransactionChainTest {
             is ReceivingResult.Success -> result
 
             is ReceivingResult.Failure -> {
+                /*
+                 * The production error contract exposes a human-readable
+                 * message. Do not use toString() here because sealed/data
+                 * error representations are implementation details and do
+                 * not represent the semantic error message.
+                 */
                 val message = result.errors.joinToString("; ") {
-                    it.toString()
+                    it.message
                 }
 
                 throw IllegalStateException(
@@ -466,12 +472,27 @@ class TransactionChainTest {
 
         assertEquals(2, bundle.costLayers.size)
 
+        /*
+         * totalCost is the authoritative acquisition monetary amount.
+         *
+         * The layer unit costs are intentionally allowed to differ by one
+         * minor unit so that the layer quantities conserve the receipt total
+         * exactly. Do not reconstruct the receipt total by assuming:
+         *
+         *     quantity × nominal unitCost
+         *
+         * is necessarily exact.
+         */
         val totalCostSum = bundle.costLayers.sumOf {
             it.initialQuantity.storageUnits *
                 it.acquisitionUnitCost.amountMinorUnits
         }
 
         assertEquals(100L, totalCostSum)
+        assertEquals(
+            item.totalCost.amountMinorUnits,
+            totalCostSum
+        )
     }
 
     @Test
