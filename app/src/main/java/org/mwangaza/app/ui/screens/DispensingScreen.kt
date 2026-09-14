@@ -34,7 +34,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,7 +70,6 @@ import core.domain.model.Money
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.Quantity
-import core.domain.model.QuantityScale
 import core.domain.model.Sale
 import core.domain.model.SaleItem
 import core.domain.model.UnitPriceConfig
@@ -88,10 +86,19 @@ import java.util.UUID
 private data class TempDispenseLine(
     val product: ProductMaster,
     val unit: ProductUnit,
-    val quantity: Long,
+    val quantity: Quantity,
     val unitPriceMinor: Long,
     val lineTotalMinor: Long
 )
+
+private fun formatMoney(minorUnits: Long): String {
+    val major = minorUnits / 100
+    val minor = kotlin.math.abs(minorUnits % 100)
+        .toString()
+        .padStart(2, '0')
+
+    return "KES $major.$minor"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,50 +110,78 @@ fun DispensingScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: New Sale, 1: Sales History
+    var selectedTab by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(false) }
 
-    var registeredProducts by remember { mutableStateOf<List<ProductMaster>>(emptyList()) }
-    var registeredUnits by remember { mutableStateOf<List<ProductUnit>>(emptyList()) }
-    var priceConfigsByUnitId by remember { mutableStateOf<Map<String, UnitPriceConfig>>(emptyMap()) }
-    var pastSales by remember { mutableStateOf<List<Sale>>(emptyList()) }
+    var registeredProducts by remember {
+        mutableStateOf<List<ProductMaster>>(emptyList())
+    }
 
-    // Form State
+    var registeredUnits by remember {
+        mutableStateOf<List<ProductUnit>>(emptyList())
+    }
+
+    var priceConfigsByUnitId by remember {
+        mutableStateOf<Map<String, UnitPriceConfig>>(emptyMap())
+    }
+
+    var pastSales by remember {
+        mutableStateOf<List<Sale>>(emptyList())
+    }
+
     var saleNumber by remember { mutableStateOf("") }
     var customerRef by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
-    val cartLines = remember { mutableStateOf<List<TempDispenseLine>>(emptyList()) }
+
+    val cartLines = remember {
+        mutableStateOf<List<TempDispenseLine>>(emptyList())
+    }
 
     var showAddLineDialog by remember { mutableStateOf(false) }
 
-    // Void / Detail Dialog
-    var selectedSaleForDetail by remember { mutableStateOf<Sale?>(null) }
-    var saleItemsForDetail by remember { mutableStateOf<List<SaleItem>>(emptyList()) }
+    var selectedSaleForDetail by remember {
+        mutableStateOf<Sale?>(null)
+    }
+
+    var saleItemsForDetail by remember {
+        mutableStateOf<List<SaleItem>>(emptyList())
+    }
+
     var showVoidDialog by remember { mutableStateOf(false) }
     var voidReason by remember { mutableStateOf("") }
 
     fun refreshData() {
         scope.launch {
             isLoading = true
+
             withContext(Dispatchers.IO) {
                 registeredProducts =
-                    container.productMasterDao.getAllProducts().filter { it.isActive }
+                    container.productMasterDao
+                        .getAllProducts()
+                        .filter { it.isActive }
 
                 registeredUnits =
-                    container.productMasterDao.getAllUnits().filter { it.isActive }
+                    container.productMasterDao
+                        .getAllUnits()
+                        .filter { it.isActive }
 
-                val prices = container.productMasterDao.getAllPriceConfigs()
-                priceConfigsByUnitId = prices.associateBy { it.productUnitId }
+                val prices =
+                    container.productMasterDao.getAllPriceConfigs()
 
-                pastSales = container.saleDao.getAllSales()
+                priceConfigsByUnitId =
+                    prices.associateBy { it.productUnitId }
+
+                pastSales =
+                    container.saleDao.getAllSales()
             }
 
             if (saleNumber.isBlank()) {
                 saleNumber =
-                    "SALE-" + SimpleDateFormat(
-                        "yyyyMMdd-HHmmss",
-                        Locale.US
-                    ).format(Date())
+                    "SALE-" +
+                        SimpleDateFormat(
+                            "yyyyMMdd-HHmmss",
+                            Locale.US
+                        ).format(Date())
             }
 
             isLoading = false
@@ -223,7 +258,6 @@ fun DispensingScreen(
 
             } else if (selectedTab == 0) {
 
-                // New Dispense Form
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -325,7 +359,8 @@ fun DispensingScreen(
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = MaterialTheme.colorScheme
+                                    .surfaceVariant
                                     .copy(alpha = 0.5f)
                             )
                         ) {
@@ -338,9 +373,13 @@ fun DispensingScreen(
                             ) {
 
                                 Text(
-                                    text = "No items in cart. Tap 'Add Item' to select medication.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text =
+                                        "No items in cart. Tap 'Add Item' to select medication.",
+                                    style =
+                                        MaterialTheme.typography.bodyMedium,
+                                    color =
+                                        MaterialTheme.colorScheme
+                                            .onSurfaceVariant
                                 )
                             }
                         }
@@ -352,7 +391,8 @@ fun DispensingScreen(
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface
+                                    containerColor =
+                                        MaterialTheme.colorScheme.surface
                                 )
                             ) {
 
@@ -360,8 +400,10 @@ fun DispensingScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    horizontalArrangement =
+                                        Arrangement.SpaceBetween,
+                                    verticalAlignment =
+                                        Alignment.CenterVertically
                                 ) {
 
                                     Column(
@@ -371,41 +413,52 @@ fun DispensingScreen(
                                         Text(
                                             text = line.product.displayName,
                                             fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.bodyLarge
+                                            style =
+                                                MaterialTheme.typography.bodyLarge
                                         )
 
                                         Text(
-                                            text = "${line.quantity} ${line.unit.name} @ KES " +
-                                                "${line.unitPriceMinor / 100}." +
-                                                "${(line.unitPriceMinor % 100).toString().padStart(2, '0')}",
-                                            style = MaterialTheme.typography.bodyMedium
+                                            text =
+                                                "${line.quantity.toPlainString()} " +
+                                                    line.unit.name +
+                                                    " @ " +
+                                                    formatMoney(
+                                                        line.unitPriceMinor
+                                                    ),
+                                            style =
+                                                MaterialTheme.typography.bodyMedium
                                         )
 
-                                        val totalStr =
-                                            "KES ${line.lineTotalMinor / 100}." +
-                                                "${(line.lineTotalMinor % 100).toString().padStart(2, '0')}"
-
                                         Text(
-                                            text = "Line Total: $totalStr",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.primary
+                                            text =
+                                                "Line Total: " +
+                                                    formatMoney(
+                                                        line.lineTotalMinor
+                                                    ),
+                                            style =
+                                                MaterialTheme.typography.bodyMedium,
+                                            fontWeight =
+                                                FontWeight.SemiBold,
+                                            color =
+                                                MaterialTheme.colorScheme.primary
                                         )
                                     }
 
                                     IconButton(
                                         onClick = {
                                             cartLines.value =
-                                                cartLines.value.filterIndexed { i, _ ->
-                                                    i != index
-                                                }
+                                                cartLines.value
+                                                    .filterIndexed { i, _ ->
+                                                        i != index
+                                                    }
                                         }
                                     ) {
 
                                         Icon(
                                             Icons.Default.Delete,
                                             contentDescription = "Remove",
-                                            tint = MaterialTheme.colorScheme.error
+                                            tint =
+                                                MaterialTheme.colorScheme.error
                                         )
                                     }
                                 }
@@ -415,7 +468,8 @@ fun DispensingScreen(
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                                containerColor =
+                                    MaterialTheme.colorScheme.primaryContainer
                             )
                         ) {
 
@@ -423,26 +477,33 @@ fun DispensingScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                horizontalArrangement =
+                                    Arrangement.SpaceBetween,
+                                verticalAlignment =
+                                    Alignment.CenterVertically
                             ) {
 
                                 Text(
                                     text = "Grand Total:",
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style =
+                                        MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    color =
+                                        MaterialTheme.colorScheme
+                                            .onPrimaryContainer
                                 )
 
-                                val grandStr =
-                                    "KES ${totalCartSellingMinor / 100}." +
-                                        "${(totalCartSellingMinor % 100).toString().padStart(2, '0')}"
-
                                 Text(
-                                    text = grandStr,
-                                    style = MaterialTheme.typography.titleLarge,
+                                    text =
+                                        formatMoney(
+                                            totalCartSellingMinor
+                                        ),
+                                    style =
+                                        MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    color =
+                                        MaterialTheme.colorScheme
+                                            .onPrimaryContainer
                                 )
                             }
                         }
@@ -477,8 +538,11 @@ fun DispensingScreen(
 
                                 isLoading = true
 
-                                val now = System.currentTimeMillis()
-                                val timeProvider = DefaultTimeProvider()
+                                val now =
+                                    System.currentTimeMillis()
+
+                                val timeProvider =
+                                    DefaultTimeProvider()
 
                                 val facilityDate =
                                     timeProvider.localDate(
@@ -486,72 +550,76 @@ fun DispensingScreen(
                                         now
                                     )
 
-                                /*
-                                 * DispensingScreen currently accepts whole-unit
-                                 * quantities only. Therefore the UI constructs
-                                 * an explicit scale-0 Quantity rather than using
-                                 * a nonexistent Quantity.discrete(...) API.
-                                 *
-                                 * Continuous/fractional dispensing remains a
-                                 * separate domain/UI hardening task.
-                                 */
                                 val consumptionLines =
                                     cartLines.value.map { line ->
 
                                         ConsumptionLineRequest(
-                                            productId = line.product.id,
-                                            dispensingUnitId = line.unit.id,
-                                            requestedQuantity = Quantity.of(
-                                                storageUnits = line.quantity,
-                                                scale = QuantityScale.SCALE_0
-                                            ),
+                                            productId =
+                                                line.product.id,
+                                            dispensingUnitId =
+                                                line.unit.id,
+                                            requestedQuantity =
+                                                line.quantity,
                                             customUnitPrice =
-                                                Money(line.unitPriceMinor)
+                                                Money(
+                                                    line.unitPriceMinor
+                                                )
                                         )
                                     }
 
                                 val request =
                                     ConsumptionRequest(
-                                        saleId = UUID.randomUUID().toString(),
-                                        saleNumber = saleNumber.trim(),
-                                        items = consumptionLines,
+                                        saleId =
+                                            UUID.randomUUID().toString(),
+                                        saleNumber =
+                                            saleNumber.trim(),
+                                        items =
+                                            consumptionLines,
                                         customerRef =
                                             customerRef
                                                 .trim()
                                                 .ifBlank { null },
-                                        initiatedByUserId = "OPERATOR",
+                                        initiatedByUserId =
+                                            "OPERATOR",
                                         notes =
                                             notes
                                                 .trim()
                                                 .ifBlank { null },
-                                        facilityCalendarDate = facilityDate,
-                                        expiryPolicy = ExpiryPolicy.DEFAULT,
-                                        transactionTimestamp = now
+                                        facilityCalendarDate =
+                                            facilityDate,
+                                        expiryPolicy =
+                                            ExpiryPolicy.DEFAULT,
+                                        transactionTimestamp =
+                                            now
                                     )
 
                                 try {
 
                                     val result =
                                         withContext(Dispatchers.IO) {
-                                            container.consumptionService
+                                            container
+                                                .consumptionService
                                                 .consumeStock(request)
                                         }
 
-                                    val cogsStr =
-                                        "KES " +
-                                            "${result.sale.totalCogs.amountMinorUnits / 100}." +
-                                            "${(result.sale.totalCogs.amountMinorUnits % 100)
-                                                .toString()
-                                                .padStart(2, '0')}"
-
                                     snackbarHostState.showSnackbar(
-                                        "Dispense complete! Sale '${result.sale.saleNumber}' " +
-                                            "recorded. Total: KES " +
-                                            "${result.sale.totalSellingAmount.amountMinorUnits / 100} " +
-                                            "(COGS: $cogsStr)"
+                                        "Dispense complete! Sale " +
+                                            "'${result.sale.saleNumber}' " +
+                                            "recorded. Total: " +
+                                            formatMoney(
+                                                result.sale
+                                                    .totalSellingAmount
+                                                    .amountMinorUnits
+                                            ) +
+                                            " (COGS: " +
+                                            formatMoney(
+                                                result.sale
+                                                    .totalCogs
+                                                    .amountMinorUnits
+                                            ) +
+                                            ")"
                                     )
 
-                                    // Reset
                                     saleNumber =
                                         "SALE-" +
                                             SimpleDateFormat(
@@ -566,7 +634,9 @@ fun DispensingScreen(
                                     refreshData()
                                     selectedTab = 1
 
-                                } catch (e: InsufficientStockException) {
+                                } catch (
+                                    e: InsufficientStockException
+                                ) {
 
                                     snackbarHostState.showSnackbar(
                                         "Cannot Dispense: ${e.message}"
@@ -575,7 +645,8 @@ fun DispensingScreen(
                                 } catch (e: Exception) {
 
                                     snackbarHostState.showSnackbar(
-                                        "Error completing dispense: ${e.message}"
+                                        "Error completing dispense: " +
+                                            "${e.message}"
                                     )
 
                                 } finally {
@@ -605,7 +676,6 @@ fun DispensingScreen(
 
             } else {
 
-                // Sales History
                 if (pastSales.isEmpty()) {
 
                     Box(
@@ -614,15 +684,18 @@ fun DispensingScreen(
                     ) {
 
                         Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            horizontalAlignment =
+                                Alignment.CenterHorizontally
                         ) {
 
                             Icon(
                                 Icons.Default.PointOfSale,
                                 contentDescription = null,
                                 modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    .copy(alpha = 0.5f)
+                                tint =
+                                    MaterialTheme.colorScheme
+                                        .onSurfaceVariant
+                                        .copy(alpha = 0.5f)
                             )
 
                             Spacer(
@@ -631,8 +704,11 @@ fun DispensingScreen(
 
                             Text(
                                 "No sales or dispensing transactions found",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                style =
+                                    MaterialTheme.typography.titleMedium,
+                                color =
+                                    MaterialTheme.colorScheme
+                                        .onSurfaceVariant
                             )
 
                             Spacer(
@@ -640,10 +716,14 @@ fun DispensingScreen(
                             )
 
                             Text(
-                                "Transactions confirmed in 'New Dispense' will appear here.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    .copy(alpha = 0.7f)
+                                "Transactions confirmed in 'New Dispense' " +
+                                    "will appear here.",
+                                style =
+                                    MaterialTheme.typography.bodyMedium,
+                                color =
+                                    MaterialTheme.colorScheme
+                                        .onSurfaceVariant
+                                        .copy(alpha = 0.7f)
                             )
                         }
                     }
@@ -654,7 +734,8 @@ fun DispensingScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement =
+                            Arrangement.spacedBy(8.dp)
                     ) {
 
                         items(
@@ -672,19 +753,27 @@ fun DispensingScreen(
                                         scope.launch {
 
                                             val items =
-                                                withContext(Dispatchers.IO) {
+                                                withContext(
+                                                    Dispatchers.IO
+                                                ) {
                                                     container.saleDao
-                                                        .getItemsForSale(sale.id)
+                                                        .getItemsForSale(
+                                                            sale.id
+                                                        )
                                                 }
 
-                                            selectedSaleForDetail = sale
-                                            saleItemsForDetail = items
+                                            selectedSaleForDetail =
+                                                sale
+
+                                            saleItemsForDetail =
+                                                items
                                         }
                                     },
                                 colors = CardDefaults.cardColors(
                                     containerColor =
                                         if (isVoided) {
-                                            MaterialTheme.colorScheme.surfaceVariant
+                                            MaterialTheme.colorScheme
+                                                .surfaceVariant
                                                 .copy(alpha = 0.6f)
                                         } else {
                                             MaterialTheme.colorScheme.surface
@@ -693,11 +782,13 @@ fun DispensingScreen(
                             ) {
 
                                 Column(
-                                    modifier = Modifier.padding(16.dp)
+                                    modifier =
+                                        Modifier.padding(16.dp)
                                 ) {
 
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier =
+                                            Modifier.fillMaxWidth(),
                                         horizontalArrangement =
                                             Arrangement.SpaceBetween,
                                         verticalAlignment =
@@ -706,30 +797,38 @@ fun DispensingScreen(
 
                                         Text(
                                             text = sale.saleNumber,
-                                            fontWeight = FontWeight.Bold,
+                                            fontWeight =
+                                                FontWeight.Bold,
                                             style =
-                                                MaterialTheme.typography.titleMedium
+                                                MaterialTheme.typography
+                                                    .titleMedium
                                         )
 
                                         Surface(
                                             color =
                                                 if (isVoided) {
-                                                    MaterialTheme.colorScheme.errorContainer
+                                                    MaterialTheme.colorScheme
+                                                        .errorContainer
                                                 } else {
-                                                    MaterialTheme.colorScheme.primaryContainer
+                                                    MaterialTheme.colorScheme
+                                                        .primaryContainer
                                                 },
-                                            shape = MaterialTheme.shapes.small
+                                            shape =
+                                                MaterialTheme.shapes.small
                                         ) {
 
                                             Text(
                                                 text = sale.status,
-                                                modifier = Modifier.padding(
-                                                    horizontal = 8.dp,
-                                                    vertical = 2.dp
-                                                ),
+                                                modifier =
+                                                    Modifier.padding(
+                                                        horizontal = 8.dp,
+                                                        vertical = 2.dp
+                                                    ),
                                                 style =
-                                                    MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
+                                                    MaterialTheme.typography
+                                                        .labelSmall,
+                                                fontWeight =
+                                                    FontWeight.Bold,
                                                 color =
                                                     if (isVoided) {
                                                         MaterialTheme.colorScheme
@@ -743,7 +842,8 @@ fun DispensingScreen(
                                     }
 
                                     Spacer(
-                                        modifier = Modifier.height(4.dp)
+                                        modifier =
+                                            Modifier.height(4.dp)
                                     )
 
                                     Text(
@@ -756,59 +856,65 @@ fun DispensingScreen(
                                                     Date(sale.occurredAt)
                                                 )
                                             }",
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style =
+                                            MaterialTheme.typography.bodySmall,
                                         color =
-                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                            MaterialTheme.colorScheme
+                                                .onSurfaceVariant
                                     )
 
                                     if (!sale.customerRef.isNullOrBlank()) {
 
                                         Text(
                                             text =
-                                                "Customer / Patient: ${sale.customerRef}",
+                                                "Customer / Patient: " +
+                                                    sale.customerRef,
                                             style =
-                                                MaterialTheme.typography.bodySmall,
+                                                MaterialTheme.typography
+                                                    .bodySmall,
                                             color =
-                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                                MaterialTheme.colorScheme
+                                                    .onSurfaceVariant
                                         )
                                     }
 
                                     Spacer(
-                                        modifier = Modifier.height(6.dp)
+                                        modifier =
+                                            Modifier.height(6.dp)
                                     )
 
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier =
+                                            Modifier.fillMaxWidth(),
                                         horizontalArrangement =
                                             Arrangement.SpaceBetween
                                     ) {
 
-                                        val revStr =
-                                            "KES " +
-                                                "${sale.totalSellingAmount.amountMinorUnits / 100}." +
-                                                "${(sale.totalSellingAmount.amountMinorUnits % 100)
-                                                    .toString()
-                                                    .padStart(2, '0')}"
-
-                                        val cogsStr =
-                                            "KES " +
-                                                "${sale.totalCogs.amountMinorUnits / 100}." +
-                                                "${(sale.totalCogs.amountMinorUnits % 100)
-                                                    .toString()
-                                                    .padStart(2, '0')}"
-
                                         Text(
-                                            "Revenue: $revStr",
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.primary
+                                            "Revenue: " +
+                                                formatMoney(
+                                                    sale.totalSellingAmount
+                                                        .amountMinorUnits
+                                                ),
+                                            fontWeight =
+                                                FontWeight.SemiBold,
+                                            color =
+                                                MaterialTheme.colorScheme
+                                                    .primary
                                         )
 
                                         Text(
-                                            "COGS: $cogsStr",
+                                            "COGS: " +
+                                                formatMoney(
+                                                    sale.totalCogs
+                                                        .amountMinorUnits
+                                                ),
                                             style =
-                                                MaterialTheme.typography.bodySmall,
+                                                MaterialTheme.typography
+                                                    .bodySmall,
                                             color =
-                                                MaterialTheme.colorScheme.secondary
+                                                MaterialTheme.colorScheme
+                                                    .secondary
                                         )
                                     }
                                 }
@@ -820,7 +926,6 @@ fun DispensingScreen(
         }
     }
 
-    // Add Item Dialog
     if (showAddLineDialog) {
 
         var selectedProduct by remember {
@@ -846,7 +951,6 @@ fun DispensingScreen(
         }
 
         LaunchedEffect(selectedProduct) {
-
             selectedUnit =
                 productUnits.firstOrNull {
                     it.isDispensingUnit
@@ -873,12 +977,12 @@ fun DispensingScreen(
                 }
 
             if (configuredPrice != null) {
-
                 unitPriceMajorStr =
                     String.format(
                         Locale.US,
                         "%.2f",
-                        configuredPrice.sellingPrice.amountMinorUnits / 100.0
+                        configuredPrice.sellingPrice
+                            .amountMinorUnits / 100.0
                     )
             }
         }
@@ -892,7 +996,6 @@ fun DispensingScreen(
         }
 
         AlertDialog(
-
             onDismissRequest = {
                 showAddLineDialog = false
             },
@@ -952,15 +1055,14 @@ fun DispensingScreen(
                             }
                         ) {
 
-                            registeredProducts.forEach { p ->
+                            registeredProducts.forEach { product ->
 
                                 DropdownMenuItem(
                                     text = {
-                                        Text(p.displayName)
+                                        Text(product.displayName)
                                     },
                                     onClick = {
-
-                                        selectedProduct = p
+                                        selectedProduct = product
                                         productMenuExpanded = false
                                     }
                                 )
@@ -989,9 +1091,9 @@ fun DispensingScreen(
                             Text(
                                 text =
                                     selectedUnit?.let {
-                                        "${it.name} (${it.conversionMultiplier} base units)"
-                                    }
-                                        ?: "Choose unit",
+                                        "${it.name} " +
+                                            "(${it.conversionFraction} base units)"
+                                    } ?: "Choose unit",
                                 modifier =
                                     Modifier.weight(1f)
                             )
@@ -1010,23 +1112,39 @@ fun DispensingScreen(
                             }
                         ) {
 
-                            productUnits.forEach { u ->
+                            productUnits.forEach { unit ->
 
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            "${u.name} " +
-                                                "(x${u.conversionMultiplier} base units)"
+                                            "${unit.name} " +
+                                                "(${unit.conversionFraction} " +
+                                                "base units)"
                                         )
                                     },
                                     onClick = {
-
-                                        selectedUnit = u
+                                        selectedUnit = unit
                                         unitMenuExpanded = false
                                     }
                                 )
                             }
                         }
+                    }
+
+                    selectedProduct?.let { product ->
+
+                        Text(
+                            text =
+                                "Quantity precision: " +
+                                    product.quantityScale +
+                                    " • Minimum increment: " +
+                                    product.minimumTransactionIncrement
+                                        .toPlainString(),
+                            style =
+                                MaterialTheme.typography.bodySmall,
+                            color =
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     OutlinedTextField(
@@ -1038,12 +1156,17 @@ fun DispensingScreen(
                             Text("Dispensing Quantity *")
                         },
                         placeholder = {
-                            Text("e.g. 2")
+                            Text(
+                                selectedProduct
+                                    ?.minimumTransactionIncrement
+                                    ?.toPlainString()
+                                    ?: "e.g. 2"
+                            )
                         },
                         keyboardOptions =
                             KeyboardOptions(
                                 keyboardType =
-                                    KeyboardType.Number
+                                    KeyboardType.Decimal
                             ),
                         singleLine = true,
                         modifier =
@@ -1072,7 +1195,6 @@ fun DispensingScreen(
                     )
 
                     dialogError?.let {
-
                         Text(
                             it,
                             color =
@@ -1093,74 +1215,87 @@ fun DispensingScreen(
                         val unit = selectedUnit
 
                         if (product == null || unit == null) {
-
                             dialogError =
                                 "Select product and unit."
-
                             return@Button
                         }
 
-                        val qty =
-                            quantityStr
-                                .trim()
-                                .toLongOrNull()
-
-                        if (qty == null || qty <= 0L) {
-
-                            dialogError =
-                                "Quantity must be a positive integer (> 0)."
-
-                            return@Button
-                        }
-
-                        val priceMajor =
-                            unitPriceMajorStr
-                                .trim()
-                                .toDoubleOrNull()
-
-                        if (priceMajor == null || priceMajor < 0.0) {
-
-                            dialogError =
-                                "Enter a valid unit price."
-
-                            return@Button
-                        }
-
-                        val unitPriceMinor =
-                            Math.round(
-                                priceMajor * 100.0
+                        val quantity = try {
+                            Quantity.fromDecimalString(
+                                quantityStr.trim(),
+                                product.quantityScale
                             )
+                        } catch (e: Exception) {
+                            null
+                        }
 
-                        val lineTotalMinor =
+                        if (quantity == null || !quantity.isPositive) {
+                            dialogError =
+                                "Enter a valid positive quantity at " +
+                                    "the product's configured precision."
+                            return@Button
+                        }
+
+                        if (
+                            !quantity.isMultipleOf(
+                                product.minimumTransactionIncrement
+                            )
+                        ) {
+                            dialogError =
+                                "Quantity must be a multiple of " +
+                                    product.minimumTransactionIncrement
+                                        .toPlainString()
+                            return@Button
+                        }
+
+                        val unitPriceMinor = try {
+                            Money.fromDecimalString(
+                                unitPriceMajorStr.trim()
+                            ).amountMinorUnits
+                        } catch (e: Exception) {
+                            null
+                        }
+
+                        if (
+                            unitPriceMinor == null ||
+                            unitPriceMinor < 0L
+                        ) {
+                            dialogError =
+                                "Enter a valid unit selling price."
+                            return@Button
+                        }
+
+                        val lineTotalMinor = try {
                             Math.multiplyExact(
-                                qty,
+                                quantity.storageUnits,
                                 unitPriceMinor
                             )
-
-                        val line =
-                            TempDispenseLine(
-                                product = product,
-                                unit = unit,
-                                quantity = qty,
-                                unitPriceMinor =
-                                    unitPriceMinor,
-                                lineTotalMinor =
-                                    lineTotalMinor
-                            )
+                        } catch (e: ArithmeticException) {
+                            dialogError =
+                                "Line selling amount is too large."
+                            return@Button
+                        }
 
                         cartLines.value =
-                            cartLines.value + line
+                            cartLines.value +
+                                TempDispenseLine(
+                                    product = product,
+                                    unit = unit,
+                                    quantity = quantity,
+                                    unitPriceMinor =
+                                        unitPriceMinor,
+                                    lineTotalMinor =
+                                        lineTotalMinor
+                                )
 
                         showAddLineDialog = false
                     }
                 ) {
-
                     Text("Add to Cart")
                 }
             },
 
             dismissButton = {
-
                 TextButton(
                     onClick = {
                         showAddLineDialog = false
@@ -1172,13 +1307,10 @@ fun DispensingScreen(
         )
     }
 
-    // Sale Detail & Void Dialog
     selectedSaleForDetail?.let { sale ->
 
         AlertDialog(
-
             onDismissRequest = {
-
                 selectedSaleForDetail = null
                 showVoidDialog = false
             },
@@ -1222,14 +1354,12 @@ fun DispensingScreen(
                     )
 
                     if (!sale.customerRef.isNullOrBlank()) {
-
                         Text(
                             "Customer: ${sale.customerRef}"
                         )
                     }
 
                     if (!sale.notes.isNullOrBlank()) {
-
                         Text(
                             "Notes: ${sale.notes}"
                         )
@@ -1244,7 +1374,7 @@ fun DispensingScreen(
                         fontWeight = FontWeight.Bold
                     )
 
-                    saleItemsForDetail.forEach { itm ->
+                    saleItemsForDetail.forEach { item ->
 
                         Card(
                             modifier =
@@ -1252,7 +1382,8 @@ fun DispensingScreen(
                             colors =
                                 CardDefaults.cardColors(
                                     containerColor =
-                                        MaterialTheme.colorScheme.surfaceVariant
+                                        MaterialTheme.colorScheme
+                                            .surfaceVariant
                                 )
                         ) {
 
@@ -1262,34 +1393,29 @@ fun DispensingScreen(
                             ) {
 
                                 Text(
-                                    "Product ID: ${itm.productId}",
+                                    "Product ID: ${item.productId}",
                                     fontWeight =
                                         FontWeight.SemiBold
                                 )
 
                                 Text(
                                     "Quantity: " +
-                                        "${itm.requestedQuantity.storageUnits} " +
+                                        "${item.requestedQuantity.toPlainString()} " +
                                         "(Base units: " +
-                                        "${itm.baseQuantity.storageUnits})"
+                                        "${item.baseQuantity.toPlainString()})"
                                 )
 
-                                val rev =
-                                    "KES " +
-                                        "${itm.lineTotal.amountMinorUnits / 100}." +
-                                        "${(itm.lineTotal.amountMinorUnits % 100)
-                                            .toString()
-                                            .padStart(2, '0')}"
-
-                                val cogs =
-                                    "KES " +
-                                        "${itm.lineCogs.amountMinorUnits / 100}." +
-                                        "${(itm.lineCogs.amountMinorUnits % 100)
-                                            .toString()
-                                            .padStart(2, '0')}"
-
                                 Text(
-                                    "Line Revenue: $rev | Line COGS: $cogs",
+                                    "Line Revenue: " +
+                                        formatMoney(
+                                            item.lineTotal
+                                                .amountMinorUnits
+                                        ) +
+                                        " | Line COGS: " +
+                                        formatMoney(
+                                            item.lineCogs
+                                                .amountMinorUnits
+                                        ),
                                     style =
                                         MaterialTheme.typography.bodySmall
                                 )
@@ -1301,27 +1427,20 @@ fun DispensingScreen(
                         modifier = Modifier.height(8.dp)
                     )
 
-                    val totRev =
-                        "KES " +
-                            "${sale.totalSellingAmount.amountMinorUnits / 100}." +
-                            "${(sale.totalSellingAmount.amountMinorUnits % 100)
-                                .toString()
-                                .padStart(2, '0')}"
-
-                    val totCogs =
-                        "KES " +
-                            "${sale.totalCogs.amountMinorUnits / 100}." +
-                            "${(sale.totalCogs.amountMinorUnits % 100)
-                                .toString()
-                                .padStart(2, '0')}"
-
                     Text(
-                        "Total Selling Amount: $totRev",
+                        "Total Selling Amount: " +
+                            formatMoney(
+                                sale.totalSellingAmount
+                                    .amountMinorUnits
+                            ),
                         fontWeight = FontWeight.Bold
                     )
 
                     Text(
-                        "Total Acquisition Cost (COGS): $totCogs",
+                        "Total Acquisition Cost (COGS): " +
+                            formatMoney(
+                                sale.totalCogs.amountMinorUnits
+                            ),
                         fontWeight = FontWeight.Medium
                     )
 
@@ -1336,10 +1455,12 @@ fun DispensingScreen(
                                 showVoidDialog = true
                             },
                             colors =
-                                ButtonDefaults.outlinedButtonColors(
-                                    contentColor =
-                                        MaterialTheme.colorScheme.error
-                                ),
+                                ButtonDefaults
+                                    .outlinedButtonColors(
+                                        contentColor =
+                                            MaterialTheme.colorScheme
+                                                .error
+                                    ),
                             modifier =
                                 Modifier.fillMaxWidth()
                         ) {
@@ -1353,9 +1474,7 @@ fun DispensingScreen(
                                 modifier = Modifier.width(6.dp)
                             )
 
-                            Text(
-                                "Void / Reverse This Sale"
-                            )
+                            Text("Void / Reverse This Sale")
                         }
                     }
 
@@ -1399,7 +1518,6 @@ fun DispensingScreen(
                             onClick = {
 
                                 if (voidReason.isBlank()) {
-
                                     scope.launch {
                                         snackbarHostState.showSnackbar(
                                             "Void reason is required"
@@ -1419,12 +1537,13 @@ fun DispensingScreen(
                                             System.currentTimeMillis()
 
                                         withContext(Dispatchers.IO) {
-
-                                            container.consumptionService
+                                            container
+                                                .consumptionService
                                                 .voidSale(
                                                     saleId = sale.id,
                                                     voidTimestamp = now,
-                                                    reason = voidReason.trim()
+                                                    reason =
+                                                        voidReason.trim()
                                                 )
                                         }
 
@@ -1459,10 +1578,7 @@ fun DispensingScreen(
                             modifier =
                                 Modifier.fillMaxWidth()
                         ) {
-
-                            Text(
-                                "Confirm Void & Reverse Inventory"
-                            )
+                            Text("Confirm Void & Reverse Inventory")
                         }
                     }
                 }
@@ -1472,12 +1588,10 @@ fun DispensingScreen(
 
                 TextButton(
                     onClick = {
-
                         selectedSaleForDetail = null
                         showVoidDialog = false
                     }
                 ) {
-
                     Text("Close")
                 }
             }
