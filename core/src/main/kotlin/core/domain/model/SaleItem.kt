@@ -13,8 +13,15 @@ import androidx.room.PrimaryKey
  * Core Concept & Snapshots:
  * - Answers: "Which product was sold, in what dispensing unit, at what selling price, and what was its COGS?"
  * - [unitPriceSnapshot] captures the exact price per commercial dispensing unit at transaction time.
+ * - [lineCogs] preserves the exact mathematical cost of goods sold as a [RationalCost].
  * - Subsequent changes to [UnitPriceConfig] or [ProductMaster] do NOT rewrite historical sale items.
  * - Connects to physical batches and cost layers through one or more [StockAllocation] records.
+ *
+ * Financial precision:
+ * - [unitPriceSnapshot] and [lineTotal] remain [Money] because they represent
+ *   settled monetary values.
+ * - [lineCogs] remains an exact rational value so authoritative COGS calculations
+ *   are never performed from a UI-rounded monetary value.
  */
 @Entity(
     tableName = "sale_items",
@@ -75,7 +82,7 @@ data class SaleItem(
     val lineTotal: Money,
 
     @ColumnInfo(name = "line_cogs")
-    val lineCogs: Money,
+    val lineCogs: RationalCost,
 
     @ColumnInfo(name = "created_at")
     val createdAt: Long,
@@ -111,8 +118,8 @@ data class SaleItem(
         require(lineTotal.amountMinorUnits >= 0L) {
             "SaleItem lineTotal must not be negative, got: ${lineTotal.amountMinorUnits} (id=$id)"
         }
-        require(lineCogs.amountMinorUnits >= 0L) {
-            "SaleItem lineCogs must not be negative, got: ${lineCogs.amountMinorUnits} (id=$id)"
+        require(lineCogs.isNonNegative) {
+            "SaleItem lineCogs must not be negative, got: $lineCogs (id=$id)"
         }
         require(createdAt > 0L) {
             "SaleItem createdAt must be a positive epoch timestamp, got: $createdAt (id=$id)"
