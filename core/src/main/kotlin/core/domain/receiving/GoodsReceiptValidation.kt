@@ -32,6 +32,59 @@ sealed class ReceivingError(val message: String) {
     data class EmptyReceipt(val receiptId: String) :
         ReceivingError("Goods receipt '$receiptId' contains no items to receive.")
 
+    /**
+     * The supplied receipt ID and receipt number resolve to conflicting
+     * persisted receipt identities.
+     */
+    data class ReceiptIdentityConflict(
+        val receiptId: String,
+        val receiptNumber: String,
+        val persistedReceiptId: String
+    ) : ReceivingError(
+        "Goods receipt identity conflict: receipt '$receiptId' with number '$receiptNumber' " +
+            "conflicts with persisted receipt '$persistedReceiptId'."
+    )
+
+    /**
+     * The supplied receipt number is already associated with a different
+     * persisted receipt identity.
+     */
+    data class ReceiptNumberConflict(
+        val receiptNumber: String,
+        val persistedReceiptId: String
+    ) : ReceivingError(
+        "Goods receipt number '$receiptNumber' is already associated with " +
+            "persisted receipt '$persistedReceiptId'."
+    )
+
+    /**
+     * Downstream receiving artefacts already exist for the receipt.
+     *
+     * This protects the atomic receiving workflow from creating duplicate
+     * cost layers or physical stock movements.
+     */
+    data class DuplicateReceivingArtifacts(
+        val receiptId: String,
+        val detail: String
+    ) : ReceivingError(
+        "Duplicate receiving artefacts detected for receipt '$receiptId': $detail"
+    )
+
+    /**
+     * More than one ProductUnit is marked as the canonical base unit for
+     * the same product.
+     *
+     * Receiving cannot safely determine which unit defines the canonical
+     * physical quantity representation in this state.
+     */
+    data class MultipleBaseUnits(
+        val productId: String,
+        val count: Int
+    ) : ReceivingError(
+        "Product '$productId' has $count canonical base units. " +
+            "Exactly one active base unit is required for receiving."
+    )
+
     data class ProductNotFound(val productId: String, val lineIndex: Int) :
         ReceivingError("Product '$productId' on line $lineIndex was not found.")
 
