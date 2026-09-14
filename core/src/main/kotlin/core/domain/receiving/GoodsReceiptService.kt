@@ -249,9 +249,23 @@ object GoodsReceiptService {
             )
         }
 
-        val baseStorageUnits = try {
-            division[0].longValueExact()
-        } catch (e: ArithmeticException) {
+        /*
+         * BigInteger.longValueExact() is API 31+, while Mwangaza supports
+         * API 24. The conversion therefore has to remain exact without
+         * invoking the API-31 method.
+         *
+         * Converting through the decimal representation preserves the
+         * exact-value requirement:
+         *
+         * - an out-of-range BigInteger cannot be parsed as Long;
+         * - an in-range BigInteger is converted without truncation;
+         * - no floating-point representation is introduced.
+         */
+        val baseStorageUnits = division[0]
+            .toString()
+            .toLongOrNull()
+
+        if (baseStorageUnits == null) {
             return Either.Left(
                 ReceivingError.QuantityConversionOverflow(
                     lineIndex = lineIndex,
