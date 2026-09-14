@@ -313,10 +313,27 @@ object CostLayerAllocationService {
                         acquisitionUnitCost = layer.acquisitionUnitCost
                     )
 
+                /*
+                 * BigInteger.longValueExact() is API 31+ on Android.
+                 * Mwangaza supports API 24.
+                 *
+                 * Exactness has already been established by
+                 * calculateExactAllocatedCostMinorUnits(), so converting
+                 * through the decimal representation preserves the same
+                 * overflow semantics without invoking the API-31 method.
+                 */
+                val allocatedCostMinorLong =
+                    layerCogsMinor
+                        .toString()
+                        .toLongOrNull()
+                        ?: throw ArithmeticException(
+                            "Allocated COGS exceeds Long monetary storage " +
+                                "capacity: $layerCogsMinor"
+                        )
+
                 val allocatedCost =
                     Money(
-                        layerCogsMinor
-                            .longValueExact()
+                        allocatedCostMinorLong
                     )
 
                 /*
@@ -396,7 +413,13 @@ object CostLayerAllocationService {
          * -------------------------------------------------------------
          */
         val totalCogsMinorLong =
-            totalCogsMinor.longValueExact()
+            totalCogsMinor
+                .toString()
+                .toLongOrNull()
+                ?: throw ArithmeticException(
+                    "Total COGS exceeds Long monetary storage capacity: " +
+                        totalCogsMinor
+                )
 
         return CostLayerAllocationResult(
             allocations = allocations,
