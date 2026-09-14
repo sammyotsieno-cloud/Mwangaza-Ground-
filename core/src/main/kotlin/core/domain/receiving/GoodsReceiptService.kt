@@ -473,7 +473,7 @@ object GoodsReceiptService {
 
                 StockBatch.TRACKING_SUPPLIER_UNTRACKED -> {
                     generateUntrackedBatchNumber(
-                        receiptId = receiptId,
+                        goodsReceiptId = receiptId,
                         lineIndex = item.lineIndex
                     ) to item.expiryDateInt
                 }
@@ -489,7 +489,7 @@ object GoodsReceiptService {
                             ?.trim()
                             ?.uppercase()
                             ?: generateUntrackedBatchNumber(
-                                receiptId = receiptId,
+                                goodsReceiptId = receiptId,
                                 lineIndex = item.lineIndex
                             )
                     ) to item.expiryDateInt
