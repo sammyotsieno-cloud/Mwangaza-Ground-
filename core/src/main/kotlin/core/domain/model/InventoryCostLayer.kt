@@ -84,18 +84,37 @@ import androidx.room.PrimaryKey
  * COST SEMANTICS
  * ---------------------------------------------------------------------------
  *
- * acquisitionUnitCost is the historical acquisition cost per canonical
+ * acquisitionUnitCost is the exact historical acquisition cost per canonical
  * quantity unit represented by the layer.
  *
- * It is NOT:
+ * RationalCost is used here because an acquisition cost may be mathematically
+ * fractional even though the original receipt total is a finite currency
+ * amount.
+ *
+ * For example:
+ *
+ *     total acquisition cost = KES 100.00
+ *     quantity = 3
+ *
+ *     exact acquisitionUnitCost = 100 / 3
+ *
+ * The exact value must be retained rather than artificially creating:
+ *
+ *     2 units @ KES 33.00
+ *     1 unit  @ KES 34.00
+ *
+ * acquisitionUnitCost is NOT:
  * - the current selling price;
  * - the product's configured selling price;
  * - a recalculated average cost;
- * - a display approximation.
+ * - a display approximation;
+ * - a rounded settlement value.
  *
  * The receiving workflow is responsible for constructing this value.
  * Later COGS logic consumes the layer without rewriting its historical
  * acquisition cost.
+ *
+ * Display/settlement rounding, where required, occurs outside this entity.
  */
 @Entity(
     tableName = "inventory_cost_layers",
@@ -175,13 +194,14 @@ data class InventoryCostLayer(
     val remainingQuantity: Quantity,
 
     /**
-     * Historical acquisition cost per canonical quantity represented by
+     * Exact historical acquisition cost per canonical quantity represented by
      * this layer.
      *
-     * Money is exact; no floating-point representation is permitted.
+     * RationalCost is authoritative for mathematical acquisition-cost
+     * calculations. It must not be converted to a rounded Money value here.
      */
     @ColumnInfo(name = "acquisition_unit_cost")
-    val acquisitionUnitCost: Money,
+    val acquisitionUnitCost: RationalCost,
 
     /**
      * Timestamp at which the acquisition occurred.
@@ -296,16 +316,19 @@ data class InventoryCostLayer(
         }
 
         /*
-         * Acquisition cost is historical monetary value.
+         * Acquisition cost is an exact historical monetary value.
+         *
          * Negative acquisition cost is not valid for this domain.
          *
          * A zero acquisition cost is deliberately permitted because the
          * receiving domain may legitimately represent donated/promotional/
          * zero-cost acquisition.
+         *
+         * No rounding or conversion to Money is performed here.
          */
-        require(acquisitionUnitCost.amountMinorUnits >= 0L) {
+        require(acquisitionUnitCost.isNonNegative) {
             "InventoryCostLayer acquisitionUnitCost must not be negative, " +
-                "got: ${acquisitionUnitCost.amountMinorUnits}"
+                "got: $acquisitionUnitCost"
         }
 
         require(acquiredAt > 0L) {
