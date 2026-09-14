@@ -239,21 +239,25 @@ data class ProductUnit(
 
         require(!isBaseUnit || representsExactlyOneBaseUnit) {
             "A ProductUnit marked as the canonical base unit must represent " +
-                "exactly 1/1 canonical base unit (id=$id, conversion=$conversionNumerator/$conversionDenominator)"
+                "exactly 1/1 canonical base unit " +
+                "(id=$id, conversion=$conversionNumerator/$conversionDenominator)"
         }
     }
 
     /**
      * Exact rational conversion numerator after reduction.
+     *
+     * The inputs are already bounded by Long, so normalization is performed
+     * using an API-independent Long GCD rather than BigInteger conversion.
      */
     val normalizedConversionNumerator: Long
         get() {
-            val gcd = BigInteger.valueOf(conversionNumerator)
-                .gcd(BigInteger.valueOf(conversionDenominator))
+            val gcd = greatestCommonDivisor(
+                conversionNumerator,
+                conversionDenominator
+            )
 
-            return BigInteger.valueOf(conversionNumerator)
-                .divide(gcd)
-                .longValueExact()
+            return conversionNumerator / gcd
         }
 
     /**
@@ -261,12 +265,12 @@ data class ProductUnit(
      */
     val normalizedConversionDenominator: Long
         get() {
-            val gcd = BigInteger.valueOf(conversionNumerator)
-                .gcd(BigInteger.valueOf(conversionDenominator))
+            val gcd = greatestCommonDivisor(
+                conversionNumerator,
+                conversionDenominator
+            )
 
-            return BigInteger.valueOf(conversionDenominator)
-                .divide(gcd)
-                .longValueExact()
+            return conversionDenominator / gcd
         }
 
     /**
@@ -297,6 +301,10 @@ data class ProductUnit(
      * quantity of canonical base units.
      *
      * The result is deliberately rational rather than rounded to Long.
+     *
+     * Any multiplication overflow is rejected explicitly.
+     *
+     * No Android API 31+ BigInteger.longValueExact() call is used here.
      */
     fun convertCommercialUnits(
         commercialUnits: Long
@@ -308,12 +316,13 @@ data class ProductUnit(
         val resultNumerator = BigInteger.valueOf(commercialUnits)
             .multiply(BigInteger.valueOf(normalizedConversionNumerator))
 
-        val resultDenominator =
-            BigInteger.valueOf(normalizedConversionDenominator)
+        val numerator = resultNumerator.toExactLong(
+            "Converted commercial quantity numerator"
+        )
 
         return RationalQuantity(
-            numerator = resultNumerator.longValueExact(),
-            denominator = resultDenominator.longValueExact()
+            numerator = numerator,
+            denominator = normalizedConversionDenominator
         )
     }
 
@@ -342,25 +351,75 @@ data class ProductUnit(
 
         val normalizedNumerator: Long
             get() {
-                val gcd = BigInteger.valueOf(numerator)
-                    .gcd(BigInteger.valueOf(denominator))
+                val gcd = greatestCommonDivisor(
+                    numerator,
+                    denominator
+                )
 
-                return BigInteger.valueOf(numerator)
-                    .divide(gcd)
-                    .longValueExact()
+                return numerator / gcd
             }
 
         val normalizedDenominator: Long
             get() {
-                val gcd = BigInteger.valueOf(numerator)
-                    .gcd(BigInteger.valueOf(denominator))
+                val gcd = greatestCommonDivisor(
+                    numerator,
+                    denominator
+                )
 
-                return BigInteger.valueOf(denominator)
-                    .divide(gcd)
-                    .longValueExact()
+                return denominator / gcd
             }
 
         val isWholeNumber: Boolean
             get() = normalizedDenominator == 1L
+    }
+
+    companion object {
+
+        /**
+         * Greatest common divisor for strictly positive Long values.
+         *
+         * This implementation is API-independent and avoids BigInteger
+         * normalization for values already represented by Long.
+         */
+        private fun greatestCommonDivisor(
+            first: Long,
+            second: Long
+        ): Long {
+            require(first > 0L) {
+                "GCD first value must be positive, got: $first"
+            }
+
+            require(second > 0L) {
+                "GCD second value must be positive, got: $second"
+            }
+
+            var a = first
+            var b = second
+
+            while (b != 0L) {
+                val remainder = a % b
+                a = b
+                b = remainder
+            }
+
+            return a
+        }
+
+        /**
+         * Converts a BigInteger to Long without using
+         * BigInteger.longValueExact(), which is unavailable below API 31
+         * according to Android lint.
+         *
+         * The decimal representation is parsed through the standard
+         * String → Long API, preserving exact overflow detection.
+         */
+        private fun BigInteger.toExactLong(
+            valueDescription: String
+        ): Long {
+            return toString().toLongOrNull()
+                ?: throw ArithmeticException(
+                    "$valueDescription exceeds Long range: $this"
+                )
+        }
     }
 }
