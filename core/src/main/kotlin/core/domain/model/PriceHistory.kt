@@ -7,43 +7,90 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Room entity representing an immutable historical selling-price validity interval for a specific [ProductUnit].
+ * Immutable historical selling-price validity interval for a specific ProductUnit.
  *
- * Interval Semantics — [effectiveFrom, effectiveTo):
- * - [effectiveFrom] is INCLUSIVE: The price becomes valid at exactly this instant.
- * - [effectiveTo] is EXCLUSIVE: The price ceases to be valid at exactly this instant.
- * - If [effectiveTo] == null, the interval is open-ended (valid indefinitely until closed by a successor price).
- * - Represents a non-empty interval: When [effectiveTo] is specified, it must satisfy [effectiveTo] > [effectiveFrom].
+ * INTERVAL SEMANTICS
+ * ------------------
+ * [effectiveFrom, effectiveTo)
  *
- * Future Database / Service Invariants (enforced at service/repository transaction boundary):
- * 1. No Overlaps: For a given [productUnitId], committed PriceHistory intervals must never overlap.
- * 2. No Gaps: Consecutive price intervals meet exactly (previous.effectiveTo == next.effectiveFrom).
- * 3. Single Open-Ended Interval: Only one open-ended interval (effectiveTo == null) can exist per [ProductUnit].
- * 4. Atomic Transition: When a price changes, closing the previous [PriceHistory] interval, opening the new
- *    [PriceHistory] interval, and updating [UnitPriceConfig] must commit atomically.
+ * - effectiveFrom is inclusive.
+ * - effectiveTo is exclusive.
+ * - effectiveTo == null means the interval is open-ended.
+ * - When effectiveTo is present, it must be strictly greater than
+ *   effectiveFrom.
  *
- * Authority & Separation of Concerns:
- * - [UnitPriceConfig] is the authoritative CURRENT selling-price configuration.
- * - [PriceHistory] is the chronological HISTORICAL validity timeline.
- * - [SaleItem] snapshots the actual transaction price charged at checkout.
- * - [GoodsReceipt] and [InventoryCostLayer] record actual purchase/acquisition costs.
- * - [StockAllocation] tracks historical Cost of Goods Sold (COGS).
+ * AUTHORITY
+ * ---------
+ * UnitPriceConfig
+ *     → authoritative CURRENT selling-price configuration.
  *
- * Time & Calendar Architecture:
- * - [effectiveFrom], [effectiveTo], and [createdAt] are epoch milliseconds (Long) representing absolute instants.
- * - Interpretation into facility-local dates and times is governed by [FacilityProfile.facilityTimezone]
- *   (Phase 1 default: "Africa/Nairobi") via a future centralized time provider abstraction.
- * - Does NOT require or use Android Calendar permissions (READ_CALENDAR / WRITE_CALENDAR).
- * - Offline-first: Operates locally using the device clock as the time source without mandatory network time synchronization.
+ * PriceHistory
+ *     → chronological HISTORICAL selling-price validity timeline.
  *
- * Monetary Exactness:
- * - [sellingPrice] is stored as an exact [Money] value object (Phase 1 KES, 2 decimal places).
- * - Persisted via [RoomConverters] as a 64-bit integer ([Money.amountMinorUnits] in Long).
- * - Zero floating-point arithmetic (no Double, Float, or BigDecimal).
- * - Zero prices are permitted for promotional, sample, or free community distribution; negative prices are rejected.
+ * SaleItem
+ *     → actual selling price charged at a completed transaction.
  *
- * Foreign Key Policy:
- * - References [ProductUnit.id] with [ForeignKey.RESTRICT] to protect audit history against accidental deletion.
+ * PriceHistory therefore must never be used as an acquisition-cost,
+ * inventory-valuation, or COGS authority.
+ *
+ * ACQUISITION COST SEPARATION
+ * ---------------------------
+ * Actual purchase/acquisition cost belongs to:
+ *
+ * GoodsReceipt
+ *     +
+ * InventoryCostLayer
+ *
+ * Historical COGS belongs to StockAllocation.
+ *
+ * INTERVAL INTEGRITY
+ * ------------------
+ * The entity enforces the validity of ONE interval.
+ *
+ * Cross-record invariants remain at the pricing transaction boundary:
+ *
+ * 1. No overlapping intervals for the same ProductUnit.
+ * 2. No gaps between consecutive committed intervals.
+ * 3. At most one open-ended interval per ProductUnit.
+ * 4. Closing the previous interval, creating the successor interval,
+ *    and updating UnitPriceConfig must occur atomically.
+ *
+ * These invariants require repository/service context and therefore
+ * must NOT be duplicated inside this entity.
+ *
+ * TIME SEMANTICS
+ * --------------
+ * effectiveFrom, effectiveTo, and createdAt are absolute epoch
+ * millisecond timestamps.
+ *
+ * Facility-local interpretation belongs to the centralized time
+ * architecture and FacilityProfile.
+ *
+ * BACKDATING
+ * ----------
+ * createdAt is deliberately NOT required to be greater than or equal
+ * to effectiveFrom.
+ *
+ * A historical price correction or backdated price interval may be
+ * legitimate, provided the pricing workflow maintains the global
+ * interval invariants.
+ *
+ * MONETARY EXACTNESS
+ * ------------------
+ * sellingPrice uses the exact Money value object.
+ *
+ * - KES in Phase 1.
+ * - Two decimal places.
+ * - No Float or Double.
+ * - No floating-point calculations.
+ * - Negative prices are prohibited.
+ * - Zero prices remain valid for legitimate free/promotional
+ *   distribution.
+ *
+ * FOREIGN KEY POLICY
+ * ------------------
+ * References ProductUnit with RESTRICT deletion so historical pricing
+ * records cannot be orphaned by accidental ProductUnit deletion.
  */
 @Entity(
     tableName = "price_histories",
@@ -81,21 +128,34 @@ data class PriceHistory(
     val createdAt: Long
 ) {
     init {
-        require(id.isNotBlank()) { "PriceHistory id must not be blank" }
-        require(productUnitId.isNotBlank()) { "PriceHistory productUnitId must not be blank" }
+        require(id.isNotBlank() && id.trim() == id) {
+            "PriceHistory id must not be blank or contain leading/trailing whitespace"
+        }
+
+        require(productUnitId.isNotBlank() && productUnitId.trim() == productUnitId) {
+            "PriceHistory productUnitId must not be blank or contain leading/trailing whitespace"
+        }
+
         require(sellingPrice.amountMinorUnits >= 0L) {
-            "PriceHistory sellingPrice must be non-negative (>= 0), got: ${sellingPrice.amountMinorUnits} minor units (id=$id)"
+            "PriceHistory sellingPrice must be non-negative (>= 0), " +
+                "got: ${sellingPrice.amountMinorUnits} minor units (id=$id)"
         }
+
         require(effectiveFrom > 0L) {
-            "PriceHistory effectiveFrom must be a positive epoch timestamp, got: $effectiveFrom (id=$id)"
+            "PriceHistory effectiveFrom must be a positive epoch timestamp, " +
+                "got: $effectiveFrom (id=$id)"
         }
+
         if (effectiveTo != null) {
             require(effectiveTo > effectiveFrom) {
-                "PriceHistory effectiveTo ($effectiveTo) must be strictly greater than effectiveFrom ($effectiveFrom) (id=$id)"
+                "PriceHistory effectiveTo ($effectiveTo) must be strictly greater " +
+                    "than effectiveFrom ($effectiveFrom) (id=$id)"
             }
         }
+
         require(createdAt > 0L) {
-            "PriceHistory createdAt must be a positive epoch timestamp, got: $createdAt (id=$id)"
+            "PriceHistory createdAt must be a positive epoch timestamp, " +
+                "got: $createdAt (id=$id)"
         }
     }
 }
