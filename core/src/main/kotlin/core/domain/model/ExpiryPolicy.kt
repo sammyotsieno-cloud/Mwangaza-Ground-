@@ -1,5 +1,6 @@
 package core.domain.model
 
+import core.domain.time.LocalDateValue
 import java.lang.StringBuilder
 
 /**
@@ -104,33 +105,6 @@ object ExpiryPolicy {
         NOT_ELIGIBLE
     }
 
-    /**
-     * Normalizes flexible user-entered expiry information into the exact
-     * YYYYMMDD representation required by StockBatch.
-     *
-     * Supported examples:
-     *
-     *     20260219 -> 20260219
-     *     2026-02-19 -> 20260219
-     *     2026/02/19 -> 20260219
-     *     2026.02.19 -> 20260219
-     *
-     *     202602 -> 20260201
-     *     2026-02 -> 20260201
-     *     2026/02 -> 20260201
-     *     02/2026 -> 20260201
-     *     02-2026 -> 20260201
-     *
-     *     2026 -> 20260101
-     *
-     * Missing day/month precision is therefore represented by the first day
-     * of the available period.
-     *
-     * An empty value is treated as unknown and returns
-     * StockBatch.EXPIRY_UNKNOWN_OR_NONE.
-     *
-     * Invalid calendar dates are rejected rather than silently corrected.
-     */
     fun normalizeExpiryInput(
         input: String?
     ): Int {
@@ -154,11 +128,6 @@ object ExpiryPolicy {
             .replace('.', '-')
             .replace(Regex("\\s+"), "")
 
-        /*
-         * Full compact date:
-         *
-         * 20260219
-         */
         if (cleaned.matches(Regex("^\\d{8}$"))) {
             return parseAndEncode(
                 year = cleaned.substring(0, 4).toInt(),
@@ -167,11 +136,6 @@ object ExpiryPolicy {
             )
         }
 
-        /*
-         * Compact year + month:
-         *
-         * 202602
-         */
         if (cleaned.matches(Regex("^\\d{6}$"))) {
             return parseAndEncode(
                 year = cleaned.substring(0, 4).toInt(),
@@ -180,13 +144,6 @@ object ExpiryPolicy {
             )
         }
 
-        /*
-         * Year only:
-         *
-         * 2026
-         *
-         * Missing month and day are represented by January 1.
-         */
         if (cleaned.matches(Regex("^\\d{4}$"))) {
             return parseAndEncode(
                 year = cleaned.toInt(),
@@ -195,11 +152,6 @@ object ExpiryPolicy {
             )
         }
 
-        /*
-         * Full separated date:
-         *
-         * 2026-02-19
-         */
         val fullDate =
             Regex("^(\\d{4})-(\\d{1,2})-(\\d{1,2})$")
                 .matchEntire(cleaned)
@@ -212,11 +164,6 @@ object ExpiryPolicy {
             )
         }
 
-        /*
-         * Year-month:
-         *
-         * 2026-02
-         */
         val yearMonth =
             Regex("^(\\d{4})-(\\d{1,2})$")
                 .matchEntire(cleaned)
@@ -229,14 +176,6 @@ object ExpiryPolicy {
             )
         }
 
-        /*
-         * Month-year:
-         *
-         * 02-2026
-         *
-         * This is useful because physical packaging frequently presents
-         * expiry as MM/YYYY.
-         */
         val monthYear =
             Regex("^(\\d{1,2})-(\\d{4})$")
                 .matchEntire(cleaned)
@@ -257,9 +196,6 @@ object ExpiryPolicy {
         )
     }
 
-    /**
-     * Evaluates the expiry status of [batch] against [today].
-     */
     fun status(
         batch: StockBatch,
         today: LocalDateValue
@@ -271,10 +207,6 @@ object ExpiryPolicy {
 
         return when {
 
-            /*
-             * NON_BATCHED_COMMODITY explicitly identifies the -1 sentinel
-             * as non-expiring stock.
-             */
             batch.trackingMode ==
                 StockBatch.TRACKING_NON_BATCHED_COMMODITY &&
                 batch.expiryDateInt ==
@@ -283,22 +215,12 @@ object ExpiryPolicy {
                 Status.NON_EXPIRING
             }
 
-            /*
-             * Explicitly unknown expiry.
-             */
             batch.trackingMode ==
                 StockBatch.TRACKING_BATCH_UNKNOWN_EXPIRY -> {
 
                 Status.UNKNOWN
             }
 
-            /*
-             * STANDARD_BATCHED and SUPPLIER_UNTRACKED may legitimately
-             * contain -1, but the current schema cannot distinguish unknown
-             * expiry from genuinely non-expiring stock.
-             *
-             * Therefore remain conservative.
-             */
             batch.expiryDateInt ==
                 StockBatch.EXPIRY_UNKNOWN_OR_NONE -> {
 
@@ -326,17 +248,6 @@ object ExpiryPolicy {
         }
     }
 
-    /**
-     * Determines whether a batch may participate in stock-exit selection.
-     *
-     * Policy:
-     *
-     * VALID            -> eligible
-     * EXPIRING_TODAY   -> eligible
-     * EXPIRED          -> not eligible
-     * UNKNOWN          -> not eligible
-     * NON_EXPIRING     -> eligible
-     */
     fun eligibility(
         batch: StockBatch,
         today: LocalDateValue
@@ -383,14 +294,6 @@ object ExpiryPolicy {
     ): Boolean =
         status(batch, today) == Status.UNKNOWN
 
-    /**
-     * Creates and validates a LocalDateValue from the flexible expiry input.
-     *
-     * This is useful when a workflow needs the normalized date itself rather
-     * than only the StockBatch YYYYMMDD representation.
-     *
-     * Unknown/empty input returns null.
-     */
     fun parseExpiryInput(
         input: String?
     ): LocalDateValue? {
@@ -407,10 +310,6 @@ object ExpiryPolicy {
         return StockBatch.parseExpiryDateInt(normalized)
     }
 
-    /**
-     * Converts a normalized LocalDateValue into the StockBatch YYYYMMDD
-     * representation.
-     */
     fun toExpiryDateInt(
         date: LocalDateValue
     ): Int =
