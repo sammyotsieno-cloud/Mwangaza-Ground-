@@ -18,8 +18,8 @@ import androidx.room.PrimaryKey
  * - which product was received;
  * - which commercial receiving unit was used;
  * - how much was received;
- * - the actual acquisition price;
- * - the resulting line total;
+ * - the supplier/invoice unit-price snapshot;
+ * - the exact acquisition cost for the line;
  * - physical batch/expiry information;
  * - receiving-line timestamps.
  *
@@ -64,16 +64,35 @@ import androidx.room.PrimaryKey
  * 3. commercial quantity converts exactly to receivedQuantity;
  * 4. receivedQuantity uses ProductMaster.quantityScale;
  * 5. receivedQuantity satisfies ProductMaster's minimum transaction
- *    increment;
- * 6. totalCost exactly agrees with the commercial quantity and unitCost.
+ *    increment.
  *
  * Those cross-entity checks intentionally remain outside this entity.
  *
  * COST SEMANTICS
  * --------------
- * unitCost is the actual acquisition price per receiving commercial unit.
+ * totalCost is the authoritative acquisition cost for this receipt line.
  *
- * totalCost is the exact acquisition cost for this receipt line.
+ * unitCost is retained as a supplier/invoice unit-price snapshot or nominal
+ * commercial-unit cost supplied by the receiving workflow.
+ *
+ * unitCost is NOT the monetary authority for the receipt line and is NOT
+ * required to reconstruct totalCost exactly in currency minor units.
+ *
+ * This distinction is necessary because a legitimate acquisition total may
+ * be indivisible across the received quantity when represented in the
+ * smallest monetary unit.
+ *
+ * Example:
+ *
+ *     quantity = 3
+ *     totalCost = 100 minor units
+ *
+ * The exact acquisition total remains 100 even though 100 / 3 is not an
+ * integral number of minor currency units.
+ *
+ * GoodsReceiptService is responsible for converting the authoritative
+ * totalCost into exact InventoryCostLayer cost tranches whose combined
+ * monetary value equals totalCost exactly.
  *
  * Neither field represents:
  * - selling price;
@@ -190,16 +209,24 @@ data class GoodsReceiptItem(
     val receivedQuantity: Quantity,
 
     /**
-     * Actual acquisition price per receiving commercial unit.
+     * Supplier/invoice unit-price snapshot or nominal acquisition price
+     * expressed per receiving commercial unit.
+     *
+     * This value is retained as acquisition context and is not the
+     * authoritative monetary total of the receipt line.
      */
     @ColumnInfo(name = "unit_cost")
     val unitCost: Money,
 
     /**
-     * Exact acquisition cost represented by this receipt line.
+     * Exact authoritative acquisition cost represented by this receipt line.
      *
-     * The receiving validation workflow must verify the exact relationship
-     * between commercial quantity, unitCost and totalCost.
+     * This value is the monetary source from which the receiving workflow
+     * creates cost-layer tranches.
+     *
+     * It is intentionally not required to equal commercial quantity multiplied
+     * by unitCost exactly in currency minor units because legitimate
+     * acquisition totals may be indivisible across the received quantity.
      */
     @ColumnInfo(name = "total_cost")
     val totalCost: Money,
