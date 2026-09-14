@@ -20,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
@@ -61,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import core.domain.model.Money
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
+import core.domain.model.QuantityScale
 import core.domain.model.UnitPriceConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -91,11 +91,14 @@ fun ProductsScreen(
     var showAddProductDialog by remember { mutableStateOf(false) }
     var selectedProductForDetails by remember { mutableStateOf<ProductWithDetails?>(null) }
     var showAddUnitDialogForProduct by remember { mutableStateOf<ProductMaster?>(null) }
-    var showEditPriceDialogForUnit by remember { mutableStateOf<Pair<ProductUnit, UnitPriceConfig?>?>(null) }
+    var showEditPriceDialogForUnit by remember {
+        mutableStateOf<Pair<ProductUnit, UnitPriceConfig?>?>(null)
+    }
 
     fun refreshProducts() {
         scope.launch {
             isLoading = true
+
             val loaded = withContext(Dispatchers.IO) {
                 val products = container.productMasterDao.getAllProducts()
                 val allUnits = container.productMasterDao.getAllUnits()
@@ -104,14 +107,15 @@ fun ProductsScreen(
                 val unitsByProductId = allUnits.groupBy { it.productId }
                 val pricesByUnitId = allPrices.associateBy { it.productUnitId }
 
-                products.map { p ->
+                products.map { product ->
                     ProductWithDetails(
-                        product = p,
-                        units = unitsByProductId[p.id] ?: emptyList(),
+                        product = product,
+                        units = unitsByProductId[product.id] ?: emptyList(),
                         priceConfigsByUnitId = pricesByUnitId
                     )
                 }
             }
+
             productsWithDetails = loaded
             isLoading = false
         }
@@ -126,6 +130,7 @@ fun ProductsScreen(
             productsWithDetails
         } else {
             val q = searchQuery.trim().lowercase()
+
             productsWithDetails.filter {
                 it.product.brandName?.lowercase()?.contains(q) == true ||
                     it.product.genericName?.lowercase()?.contains(q) == true ||
@@ -137,44 +142,74 @@ fun ProductsScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(snackbarHostState)
+        },
         topBar = {
             TopAppBar(
-                title = { Text("Products") },
+                title = {
+                    Text("Products")
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
                     }
                 }
             )
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddProductDialog = true },
+                onClick = {
+                    showAddProductDialog = true
+                },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Product")
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "Add Product"
+                )
             }
         }
     ) { innerPadding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
+
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { searchQuery = it },
+                onValueChange = {
+                    searchQuery = it
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                placeholder = { Text("Search by brand, generic name, type...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                placeholder = {
+                    Text("Search by brand, generic name, type...")
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null
+                    )
+                },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                        IconButton(
+                            onClick = {
+                                searchQuery = ""
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Clear"
+                            )
                         }
                     }
                 },
@@ -182,73 +217,127 @@ fun ProductsScreen(
             )
 
             if (isLoading) {
+
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
                 }
+
             } else if (filteredProducts.isEmpty()) {
+
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Medication,
                             contentDescription = null,
                             modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = 0.5f
+                            )
                         )
+
                         Spacer(modifier = Modifier.height(16.dp))
+
                         Text(
-                            text = if (searchQuery.isBlank()) "No products registered yet" else "No matching products found",
+                            text = if (searchQuery.isBlank()) {
+                                "No products registered yet"
+                            } else {
+                                "No matching products found"
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
                         Spacer(modifier = Modifier.height(8.dp))
+
                         Text(
-                            text = if (searchQuery.isBlank()) "Tap the + button to register your first product." else "Try a different search query.",
+                            text = if (searchQuery.isBlank()) {
+                                "Tap the + button to register your first product."
+                            } else {
+                                "Try a different search query."
+                            },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = 0.7f
+                            )
                         )
                     }
                 }
+
             } else {
+
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredProducts, key = { it.product.id }) { item ->
+                    items(
+                        filteredProducts,
+                        key = { it.product.id }
+                    ) { item ->
+
                         val product = item.product
                         val baseUnit = item.units.firstOrNull { it.isBaseUnit }
-                        val basePrice = baseUnit?.let { item.priceConfigsByUnitId[it.id] }
+                        val basePrice = baseUnit?.let {
+                            item.priceConfigsByUnitId[it.id]
+                        }
 
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedProductForDetails = item },
+                                .clickable {
+                                    selectedProductForDetails = item
+                                },
                             colors = CardDefaults.cardColors(
-                                containerColor = if (product.isActive) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                containerColor = if (product.isActive) {
+                                    MaterialTheme.colorScheme.surface
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(
+                                        alpha = 0.6f
+                                    )
+                                }
                             ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                            elevation = CardDefaults.cardElevation(
+                                defaultElevation = 1.dp
+                            )
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
+
+                                    Column(
+                                        modifier = Modifier.weight(1f)
+                                    ) {
                                         Text(
                                             text = product.displayName,
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.SemiBold
                                         )
-                                        if (!product.productType.isNullOrBlank() || !product.manufacturer.isNullOrBlank()) {
-                                            val subtitle = listOfNotNull(product.productType, product.manufacturer).joinToString(" • ")
+
+                                        if (
+                                            !product.productType.isNullOrBlank() ||
+                                            !product.manufacturer.isNullOrBlank()
+                                        ) {
+                                            val subtitle = listOfNotNull(
+                                                product.productType,
+                                                product.manufacturer
+                                            ).joinToString(" • ")
+
                                             Text(
                                                 text = subtitle,
                                                 style = MaterialTheme.typography.bodySmall,
@@ -256,36 +345,73 @@ fun ProductsScreen(
                                             )
                                         }
                                     }
+
                                     Surface(
-                                        color = if (product.isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+                                        color = if (product.isActive) {
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.errorContainer
+                                        },
                                         shape = MaterialTheme.shapes.small
                                     ) {
                                         Text(
-                                            text = if (product.isActive) "Active" else "Retired",
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            text = if (product.isActive) {
+                                                "Active"
+                                            } else {
+                                                "Retired"
+                                            },
+                                            modifier = Modifier.padding(
+                                                horizontal = 8.dp,
+                                                vertical = 2.dp
+                                            ),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = if (product.isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                                            color = if (product.isActive) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onErrorContainer
+                                            }
                                         )
                                     }
                                 }
 
                                 Spacer(modifier = Modifier.height(8.dp))
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(
+                                        alpha = 0.5f
+                                    )
+                                )
+
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text(
-                                        text = "Units: ${item.units.size} configured",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+
+                                    Column {
+                                        Text(
+                                            text = "Units: ${item.units.size} configured",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+
+                                        Text(
+                                            text = "Precision: ${product.quantityScale.decimalPlaces} decimal place(s)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
                                     if (baseUnit != null) {
+
                                         val priceStr = basePrice?.sellingPrice?.let {
-                                            "KES ${(it.amountMinorUnits / 100)}.${(it.amountMinorUnits % 100).toString().padStart(2, '0')}"
+                                            "KES ${(it.amountMinorUnits / 100)}." +
+                                                (it.amountMinorUnits % 100)
+                                                    .toString()
+                                                    .padStart(2, '0')
                                         } ?: "Price not set"
+
                                         Text(
                                             text = "Base (${baseUnit.name}): $priceStr",
                                             style = MaterialTheme.typography.bodySmall,
@@ -302,12 +428,21 @@ fun ProductsScreen(
         }
     }
 
-    // Detail Dialog
+    // -------------------------------------------------------------------------
+    // PRODUCT DETAILS
+    // -------------------------------------------------------------------------
+
     selectedProductForDetails?.let { details ->
+
         val product = details.product
+
         AlertDialog(
-            onDismissRequest = { selectedProductForDetails = null },
-            title = { Text(product.displayName) },
+            onDismissRequest = {
+                selectedProductForDetails = null
+            },
+            title = {
+                Text(product.displayName)
+            },
             text = {
                 Column(
                     modifier = Modifier
@@ -315,23 +450,66 @@ fun ProductsScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+
                     if (!product.brandName.isNullOrBlank()) {
-                        Text("Brand: ${product.brandName}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (!product.genericName.isNullOrBlank()) {
-                        Text("Generic: ${product.genericName}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (!product.productType.isNullOrBlank()) {
-                        Text("Type: ${product.productType}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (!product.manufacturer.isNullOrBlank()) {
-                        Text("Manufacturer: ${product.manufacturer}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (!product.description.isNullOrBlank()) {
-                        Text("Description: ${product.description}", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Brand: ${product.brandName}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
 
+                    if (!product.genericName.isNullOrBlank()) {
+                        Text(
+                            "Generic: ${product.genericName}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    if (!product.productType.isNullOrBlank()) {
+                        Text(
+                            "Type: ${product.productType}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    if (!product.manufacturer.isNullOrBlank()) {
+                        Text(
+                            "Manufacturer: ${product.manufacturer}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    if (!product.description.isNullOrBlank()) {
+                        Text(
+                            "Description: ${product.description}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "Quantity Policy",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "Precision: ${product.quantityScale.decimalPlaces} decimal place(s)",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Text(
+                        text = "Minimum transaction increment: ${
+                            product.quantityScale.fromStorageUnits(
+                                product.minimumTransactionIncrementStorageUnits
+                            )
+                        } ${details.units.firstOrNull { it.isBaseUnit }?.name ?: "base units"}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
                     Spacer(modifier = Modifier.height(8.dp))
+
                     Text(
                         text = "Configured Commercial Units",
                         style = MaterialTheme.typography.titleSmall,
@@ -339,15 +517,24 @@ fun ProductsScreen(
                     )
 
                     details.units.forEach { unit ->
-                        val priceConfig = details.priceConfigsByUnitId[unit.id]
+
+                        val priceConfig =
+                            details.priceConfigsByUnitId[unit.id]
+
                         val priceStr = priceConfig?.sellingPrice?.let {
-                            "KES ${(it.amountMinorUnits / 100)}.${(it.amountMinorUnits % 100).toString().padStart(2, '0')}"
+                            "KES ${(it.amountMinorUnits / 100)}." +
+                                (it.amountMinorUnits % 100)
+                                    .toString()
+                                    .padStart(2, '0')
                         } ?: "No price"
 
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
                         ) {
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -355,13 +542,24 @@ fun ProductsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+
                                         Text(
-                                            text = unit.name + (unit.abbreviation?.let { " ($it)" } ?: ""),
+                                            text = unit.name +
+                                                (unit.abbreviation?.let {
+                                                    " ($it)"
+                                                } ?: ""),
                                             fontWeight = FontWeight.SemiBold,
                                             style = MaterialTheme.typography.bodyMedium
                                         )
+
                                         if (unit.isBaseUnit) {
                                             Text(
                                                 text = " [BASE]",
@@ -370,11 +568,17 @@ fun ProductsScreen(
                                             )
                                         }
                                     }
+
                                     Text(
-                                        text = "1 ${unit.name} = ${unit.conversionMultiplier} base storage units",
+                                        text = if (unit.isBaseUnit) {
+                                            "Canonical conversion: 1/1 base unit"
+                                        } else {
+                                            "Conversion: ${unit.conversionFraction} base units"
+                                        },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+
                                     Text(
                                         text = "Selling Price: $priceStr",
                                         style = MaterialTheme.typography.bodySmall,
@@ -382,33 +586,48 @@ fun ProductsScreen(
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
+
                                 IconButton(
                                     onClick = {
-                                        showEditPriceDialogForUnit = Pair(unit, priceConfig)
+                                        showEditPriceDialogForUnit =
+                                            Pair(unit, priceConfig)
                                     }
                                 ) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Edit Price", modifier = Modifier.size(18.dp))
+                                    Icon(
+                                        Icons.Default.Edit,
+                                        contentDescription = "Edit Price",
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedButton(
                         onClick = {
                             showAddUnitDialogForProduct = product
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+
                         Spacer(modifier = Modifier.width(4.dp))
+
                         Text("Add Commercial Unit")
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
+
                     OutlinedButton(
                         onClick = {
                             scope.launch {
+
                                 withContext(Dispatchers.IO) {
                                     container.productMasterDao.updateProduct(
                                         product.copy(
@@ -417,40 +636,70 @@ fun ProductsScreen(
                                         )
                                     )
                                 }
+
                                 selectedProductForDetails = null
                                 refreshProducts()
-                                snackbarHostState.showSnackbar("Product status updated")
+
+                                snackbarHostState.showSnackbar(
+                                    "Product status updated"
+                                )
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (product.isActive) "Retire Product" else "Reactivate Product")
+                        Text(
+                            if (product.isActive) {
+                                "Retire Product"
+                            } else {
+                                "Reactivate Product"
+                            }
+                        )
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { selectedProductForDetails = null }) {
+                TextButton(
+                    onClick = {
+                        selectedProductForDetails = null
+                    }
+                ) {
                     Text("Close")
                 }
             }
         )
     }
 
-    // Add Product Dialog
+    // -------------------------------------------------------------------------
+    // ADD PRODUCT
+    // -------------------------------------------------------------------------
+
     if (showAddProductDialog) {
+
         var brandName by remember { mutableStateOf("") }
         var genericName by remember { mutableStateOf("") }
         var productType by remember { mutableStateOf("") }
         var manufacturer by remember { mutableStateOf("") }
         var description by remember { mutableStateOf("") }
+
         var baseUnitName by remember { mutableStateOf("") }
         var baseUnitAbbr by remember { mutableStateOf("") }
+
+        var quantityScaleInput by remember { mutableStateOf("0") }
+        var minimumIncrementInput by remember { mutableStateOf("1") }
+
         var initialPriceMajor by remember { mutableStateOf("") }
-        var errorMessage by remember { mutableStateOf<String?>(null) }
+
+        var errorMessage by remember {
+            mutableStateOf<String?>(null)
+        }
 
         AlertDialog(
-            onDismissRequest = { showAddProductDialog = false },
-            title = { Text("Register New Product") },
+            onDismissRequest = {
+                showAddProductDialog = false
+            },
+            title = {
+                Text("Register New Product")
+            },
             text = {
                 Column(
                     modifier = Modifier
@@ -458,73 +707,180 @@ fun ProductsScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+
                     OutlinedTextField(
                         value = brandName,
-                        onValueChange = { brandName = it },
-                        label = { Text("Brand / Trade Name") },
-                        placeholder = { Text("e.g. Panadol, Amoxil") },
+                        onValueChange = {
+                            brandName = it
+                        },
+                        label = {
+                            Text("Brand / Trade Name")
+                        },
+                        placeholder = {
+                            Text("e.g. Panadol, Amoxil")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     OutlinedTextField(
                         value = genericName,
-                        onValueChange = { genericName = it },
-                        label = { Text("Generic / INN Name") },
-                        placeholder = { Text("e.g. Paracetamol 500mg") },
+                        onValueChange = {
+                            genericName = it
+                        },
+                        label = {
+                            Text("Generic / INN Name")
+                        },
+                        placeholder = {
+                            Text("e.g. Paracetamol 500mg")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     OutlinedTextField(
                         value = productType,
-                        onValueChange = { productType = it },
-                        label = { Text("Product Type") },
-                        placeholder = { Text("e.g. Tablet, Capsule, Syrup, Vial") },
+                        onValueChange = {
+                            productType = it
+                        },
+                        label = {
+                            Text("Product Type")
+                        },
+                        placeholder = {
+                            Text("e.g. Tablet, Capsule, Syrup, Vial")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     OutlinedTextField(
                         value = manufacturer,
-                        onValueChange = { manufacturer = it },
-                        label = { Text("Manufacturer") },
-                        placeholder = { Text("e.g. GSK, Dawa Ltd") },
+                        onValueChange = {
+                            manufacturer = it
+                        },
+                        label = {
+                            Text("Manufacturer")
+                        },
+                        placeholder = {
+                            Text("e.g. GSK, Dawa Ltd")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     OutlinedTextField(
                         value = description,
-                        onValueChange = { description = it },
-                        label = { Text("Description / Notes (Optional)") },
+                        onValueChange = {
+                            description = it
+                        },
+                        label = {
+                            Text("Description / Notes (Optional)")
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
+
                     Text(
                         text = "Canonical Base Unit",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
+
                     OutlinedTextField(
                         value = baseUnitName,
-                        onValueChange = { baseUnitName = it },
-                        label = { Text("Base Unit Name *") },
-                        placeholder = { Text("e.g. Tablet, Capsule, mL, Piece") },
+                        onValueChange = {
+                            baseUnitName = it
+                        },
+                        label = {
+                            Text("Base Unit Name *")
+                        },
+                        placeholder = {
+                            Text("e.g. Tablet, Capsule, mL, Piece")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     OutlinedTextField(
                         value = baseUnitAbbr,
-                        onValueChange = { baseUnitAbbr = it },
-                        label = { Text("Abbreviation (Optional)") },
-                        placeholder = { Text("e.g. tab, cap, mL") },
+                        onValueChange = {
+                            baseUnitAbbr = it
+                        },
+                        label = {
+                            Text("Abbreviation (Optional)")
+                        },
+                        placeholder = {
+                            Text("e.g. tab, cap, mL")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Quantity Policy",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "Quantity scale controls decimal precision. It is separate from packaging conversions.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = quantityScaleInput,
+                        onValueChange = {
+                            quantityScaleInput = it
+                        },
+                        label = {
+                            Text("Quantity Scale (0–6) *")
+                        },
+                        placeholder = {
+                            Text("0 = whole units, 3 = 0.001 precision")
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = minimumIncrementInput,
+                        onValueChange = {
+                            minimumIncrementInput = it
+                        },
+                        label = {
+                            Text("Minimum Transaction Increment (storage units) *")
+                        },
+                        placeholder = {
+                            Text("e.g. 1 at scale 0, 500 at scale 3 for 0.5")
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     OutlinedTextField(
                         value = initialPriceMajor,
-                        onValueChange = { initialPriceMajor = it },
-                        label = { Text("Selling Price per Base Unit (KES) *") },
-                        placeholder = { Text("e.g. 5 or 10.50") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        onValueChange = {
+                            initialPriceMajor = it
+                        },
+                        label = {
+                            Text("Selling Price per Base Unit (KES) *")
+                        },
+                        placeholder = {
+                            Text("e.g. 5 or 10.50")
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal
+                        ),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -539,37 +895,96 @@ fun ProductsScreen(
                 }
             },
             confirmButton = {
+
                 Button(
                     onClick = {
-                        if (brandName.isBlank() && genericName.isBlank()) {
-                            errorMessage = "Provide at least a brand name or a generic name."
-                            return@Button
-                        }
-                        if (baseUnitName.isBlank()) {
-                            errorMessage = "Base unit name is required."
-                            return@Button
-                        }
-                        val priceParsed = initialPriceMajor.trim().toDoubleOrNull()
-                        if (priceParsed == null || priceParsed < 0.0) {
-                            errorMessage = "Enter a valid non-negative selling price."
+
+                        if (
+                            brandName.isBlank() &&
+                            genericName.isBlank()
+                        ) {
+                            errorMessage =
+                                "Provide at least a brand name or a generic name."
                             return@Button
                         }
 
-                        val priceMinor = Math.round(priceParsed * 100.0)
+                        if (baseUnitName.isBlank()) {
+                            errorMessage =
+                                "Base unit name is required."
+                            return@Button
+                        }
+
+                        val quantityScale = try {
+                            QuantityScale.fromInt(
+                                quantityScaleInput.trim().toInt()
+                            )
+                        } catch (_: Exception) {
+                            errorMessage =
+                                "Quantity scale must be an integer from 0 to 6."
+                            return@Button
+                        }
+
+                        val minimumIncrement =
+                            minimumIncrementInput.trim().toLongOrNull()
+
+                        if (
+                            minimumIncrement == null ||
+                            minimumIncrement <= 0L
+                        ) {
+                            errorMessage =
+                                "Minimum transaction increment must be a positive whole number."
+                            return@Button
+                        }
+
+                        val priceParsed =
+                            initialPriceMajor.trim().toDoubleOrNull()
+
+                        if (
+                            priceParsed == null ||
+                            priceParsed < 0.0
+                        ) {
+                            errorMessage =
+                                "Enter a valid non-negative selling price."
+                            return@Button
+                        }
+
+                        val priceMinor =
+                            Math.round(priceParsed * 100.0)
 
                         scope.launch {
-                            val now = System.currentTimeMillis()
-                            val productId = UUID.randomUUID().toString()
-                            val unitId = UUID.randomUUID().toString()
-                            val priceConfigId = UUID.randomUUID().toString()
+
+                            val now =
+                                System.currentTimeMillis()
+
+                            val productId =
+                                UUID.randomUUID().toString()
+
+                            val unitId =
+                                UUID.randomUUID().toString()
+
+                            val priceConfigId =
+                                UUID.randomUUID().toString()
 
                             val product = ProductMaster(
                                 id = productId,
-                                brandName = brandName.trim().ifBlank { null },
-                                genericName = genericName.trim().ifBlank { null },
-                                productType = productType.trim().ifBlank { null },
-                                manufacturer = manufacturer.trim().ifBlank { null },
-                                description = description.trim().ifBlank { null },
+                                brandName = brandName
+                                    .trim()
+                                    .ifBlank { null },
+                                genericName = genericName
+                                    .trim()
+                                    .ifBlank { null },
+                                productType = productType
+                                    .trim()
+                                    .ifBlank { null },
+                                manufacturer = manufacturer
+                                    .trim()
+                                    .ifBlank { null },
+                                description = description
+                                    .trim()
+                                    .ifBlank { null },
+                                quantityScale = quantityScale,
+                                minimumTransactionIncrementStorageUnits =
+                                    minimumIncrement,
                                 isActive = true,
                                 createdAt = now,
                                 updatedAt = now
@@ -579,8 +994,15 @@ fun ProductsScreen(
                                 id = unitId,
                                 productId = productId,
                                 name = baseUnitName.trim(),
-                                abbreviation = baseUnitAbbr.trim().ifBlank { null },
-                                conversionMultiplier = 1L,
+                                abbreviation = baseUnitAbbr
+                                    .trim()
+                                    .ifBlank { null },
+
+                                // The canonical base unit is always exactly
+                                // one base unit.
+                                conversionNumerator = 1L,
+                                conversionDenominator = 1L,
+
                                 isBaseUnit = true,
                                 isPurchaseUnit = true,
                                 isDispensingUnit = true,
@@ -601,14 +1023,24 @@ fun ProductsScreen(
                             )
 
                             withContext(Dispatchers.IO) {
-                                container.productMasterDao.insertProduct(product)
-                                container.productMasterDao.insertUnit(baseUnit)
-                                container.productMasterDao.savePriceConfig(priceConfig)
+
+                                container.productMasterDao
+                                    .insertProduct(product)
+
+                                container.productMasterDao
+                                    .insertUnit(baseUnit)
+
+                                container.productMasterDao
+                                    .savePriceConfig(priceConfig)
                             }
 
                             showAddProductDialog = false
+
                             refreshProducts()
-                            snackbarHostState.showSnackbar("Product '${product.displayName}' registered")
+
+                            snackbarHostState.showSnackbar(
+                                "Product '${product.displayName}' registered"
+                            )
                         }
                     }
                 ) {
@@ -616,114 +1048,270 @@ fun ProductsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddProductDialog = false }) {
+                TextButton(
+                    onClick = {
+                        showAddProductDialog = false
+                    }
+                ) {
                     Text("Cancel")
                 }
             }
         )
     }
 
-    // Add Commercial Unit Dialog
+    // -------------------------------------------------------------------------
+    // ADD COMMERCIAL UNIT
+    // -------------------------------------------------------------------------
+
     showAddUnitDialogForProduct?.let { product ->
+
         var unitName by remember { mutableStateOf("") }
         var unitAbbr by remember { mutableStateOf("") }
-        var multiplierStr by remember { mutableStateOf("") }
+
+        var numeratorStr by remember { mutableStateOf("") }
+        var denominatorStr by remember { mutableStateOf("1") }
+
         var priceStr by remember { mutableStateOf("") }
+
         var isPurchase by remember { mutableStateOf(true) }
         var isDispensing by remember { mutableStateOf(true) }
-        var unitError by remember { mutableStateOf<String?>(null) }
+
+        var unitError by remember {
+            mutableStateOf<String?>(null)
+        }
 
         AlertDialog(
-            onDismissRequest = { showAddUnitDialogForProduct = null },
-            title = { Text("Add Commercial Unit") },
+            onDismissRequest = {
+                showAddUnitDialogForProduct = null
+            },
+            title = {
+                Text("Add Commercial Unit")
+            },
             text = {
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+
                     Text(
                         text = "For: ${product.displayName}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
                     OutlinedTextField(
                         value = unitName,
-                        onValueChange = { unitName = it },
-                        label = { Text("Unit Name *") },
-                        placeholder = { Text("e.g. Box of 100, Blister of 10, Pack of 50") },
+                        onValueChange = {
+                            unitName = it
+                        },
+                        label = {
+                            Text("Unit Name *")
+                        },
+                        placeholder = {
+                            Text("e.g. Box of 100, Blister of 10")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     OutlinedTextField(
                         value = unitAbbr,
-                        onValueChange = { unitAbbr = it },
-                        label = { Text("Abbreviation (Optional)") },
-                        placeholder = { Text("e.g. box100, blist") },
+                        onValueChange = {
+                            unitAbbr = it
+                        },
+                        label = {
+                            Text("Abbreviation (Optional)")
+                        },
+                        placeholder = {
+                            Text("e.g. box100, blist")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    Text(
+                        text = "Exact Commercial Conversion",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "1 commercial unit = numerator / denominator canonical base units.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                     OutlinedTextField(
-                        value = multiplierStr,
-                        onValueChange = { multiplierStr = it },
-                        label = { Text("Conversion Multiplier (Base Units) *") },
-                        placeholder = { Text("e.g. 100 (for box of 100 tablets)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        value = numeratorStr,
+                        onValueChange = {
+                            numeratorStr = it
+                        },
+                        label = {
+                            Text("Conversion Numerator *")
+                        },
+                        placeholder = {
+                            Text("100 for a box containing 100 tablets")
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    OutlinedTextField(
+                        value = denominatorStr,
+                        onValueChange = {
+                            denominatorStr = it
+                        },
+                        label = {
+                            Text("Conversion Denominator *")
+                        },
+                        placeholder = {
+                            Text("1 for whole-base-unit packaging")
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     OutlinedTextField(
                         value = priceStr,
-                        onValueChange = { priceStr = it },
-                        label = { Text("Selling Price for this Unit (KES)") },
-                        placeholder = { Text("e.g. 500") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        onValueChange = {
+                            priceStr = it
+                        },
+                        label = {
+                            Text("Selling Price for this Unit (KES)")
+                        },
+                        placeholder = {
+                            Text("e.g. 500")
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal
+                        ),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = isPurchase, onCheckedChange = { isPurchase = it })
-                        Text("Available for Goods Receiving (Purchase Unit)")
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = isPurchase,
+                            onCheckedChange = {
+                                isPurchase = it
+                            }
+                        )
+
+                        Text(
+                            "Available for Goods Receiving (Purchase Unit)"
+                        )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = isDispensing, onCheckedChange = { isDispensing = it })
-                        Text("Available for Dispensing (Sale Unit)")
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = isDispensing,
+                            onCheckedChange = {
+                                isDispensing = it
+                            }
+                        )
+
+                        Text(
+                            "Available for Dispensing (Sale Unit)"
+                        )
                     }
 
                     unitError?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             },
             confirmButton = {
+
                 Button(
                     onClick = {
+
                         if (unitName.isBlank()) {
-                            unitError = "Unit name is required"
-                            return@Button
-                        }
-                        val multiplier = multiplierStr.trim().toLongOrNull()
-                        if (multiplier == null || multiplier <= 0L) {
-                            unitError = "Multiplier must be a positive whole number (> 0)"
+                            unitError =
+                                "Unit name is required."
                             return@Button
                         }
 
-                        val parsedPrice = priceStr.trim().toDoubleOrNull()
-                        val priceMinor = if (parsedPrice != null && parsedPrice >= 0.0) {
-                            Math.round(parsedPrice * 100.0)
-                        } else null
+                        val numerator =
+                            numeratorStr.trim().toLongOrNull()
+
+                        if (
+                            numerator == null ||
+                            numerator <= 0L
+                        ) {
+                            unitError =
+                                "Conversion numerator must be a positive whole number."
+                            return@Button
+                        }
+
+                        val denominator =
+                            denominatorStr.trim().toLongOrNull()
+
+                        if (
+                            denominator == null ||
+                            denominator <= 0L
+                        ) {
+                            unitError =
+                                "Conversion denominator must be a positive whole number."
+                            return@Button
+                        }
+
+                        if (
+                            numerator == 1L &&
+                            denominator != 1L
+                        ) {
+                            unitError =
+                                "A conversion of 1/n must be intentional. Verify that this commercial unit really represents a fractional base quantity."
+                        }
+
+                        val parsedPrice =
+                            priceStr.trim().toDoubleOrNull()
+
+                        val priceMinor =
+                            if (
+                                parsedPrice != null &&
+                                parsedPrice >= 0.0
+                            ) {
+                                Math.round(parsedPrice * 100.0)
+                            } else {
+                                null
+                            }
 
                         scope.launch {
-                            val now = System.currentTimeMillis()
-                            val unitId = UUID.randomUUID().toString()
+
+                            val now =
+                                System.currentTimeMillis()
+
+                            val unitId =
+                                UUID.randomUUID().toString()
 
                             val unit = ProductUnit(
                                 id = unitId,
                                 productId = product.id,
                                 name = unitName.trim(),
-                                abbreviation = unitAbbr.trim().ifBlank { null },
-                                conversionMultiplier = multiplier,
+                                abbreviation = unitAbbr
+                                    .trim()
+                                    .ifBlank { null },
+
+                                conversionNumerator = numerator,
+                                conversionDenominator = denominator,
+
                                 isBaseUnit = false,
                                 isPurchaseUnit = isPurchase,
                                 isDispensingUnit = isDispensing,
@@ -735,24 +1323,38 @@ fun ProductsScreen(
                             )
 
                             withContext(Dispatchers.IO) {
-                                container.productMasterDao.insertUnit(unit)
+
+                                container.productMasterDao
+                                    .insertUnit(unit)
+
                                 if (priceMinor != null) {
-                                    val priceConfig = UnitPriceConfig(
-                                        id = UUID.randomUUID().toString(),
-                                        productUnitId = unitId,
-                                        sellingPrice = Money(priceMinor),
-                                        isActive = true,
-                                        createdAt = now,
-                                        updatedAt = now
-                                    )
-                                    container.productMasterDao.savePriceConfig(priceConfig)
+
+                                    val priceConfig =
+                                        UnitPriceConfig(
+                                            id = UUID.randomUUID()
+                                                .toString(),
+                                            productUnitId = unitId,
+                                            sellingPrice = Money(
+                                                priceMinor
+                                            ),
+                                            isActive = true,
+                                            createdAt = now,
+                                            updatedAt = now
+                                        )
+
+                                    container.productMasterDao
+                                        .savePriceConfig(priceConfig)
                                 }
                             }
 
                             showAddUnitDialogForProduct = null
                             selectedProductForDetails = null
+
                             refreshProducts()
-                            snackbarHostState.showSnackbar("Added unit '${unit.name}' for ${product.displayName}")
+
+                            snackbarHostState.showSnackbar(
+                                "Added unit '${unit.name}' for ${product.displayName}"
+                            )
                         }
                     }
                 ) {
@@ -760,71 +1362,134 @@ fun ProductsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddUnitDialogForProduct = null }) {
+                TextButton(
+                    onClick = {
+                        showAddUnitDialogForProduct = null
+                    }
+                ) {
                     Text("Cancel")
                 }
             }
         )
     }
 
-    // Edit Price Dialog
-    showEditPriceDialogForUnit?.let { (unit, existingConfig) ->
-        val currentPriceMajor = existingConfig?.sellingPrice?.let {
-            "${it.amountMinorUnits / 100}.${(it.amountMinorUnits % 100).toString().padStart(2, '0')}"
-        } ?: ""
+    // -------------------------------------------------------------------------
+    // EDIT PRICE
+    // -------------------------------------------------------------------------
 
-        var newPriceMajor by remember { mutableStateOf(currentPriceMajor) }
-        var priceError by remember { mutableStateOf<String?>(null) }
+    showEditPriceDialogForUnit?.let { (unit, existingConfig) ->
+
+        val currentPriceMajor =
+            existingConfig?.sellingPrice?.let {
+                "${it.amountMinorUnits / 100}." +
+                    (it.amountMinorUnits % 100)
+                        .toString()
+                        .padStart(2, '0')
+            } ?: ""
+
+        var newPriceMajor by remember {
+            mutableStateOf(currentPriceMajor)
+        }
+
+        var priceError by remember {
+            mutableStateOf<String?>(null)
+        }
 
         AlertDialog(
-            onDismissRequest = { showEditPriceDialogForUnit = null },
-            title = { Text("Configure Selling Price") },
+            onDismissRequest = {
+                showEditPriceDialogForUnit = null
+            },
+            title = {
+                Text("Configure Selling Price")
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Unit: ${unit.name} (${unit.conversionMultiplier} base units)")
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+
+                    Text(
+                        "Unit: ${unit.name} " +
+                            "(${unit.conversionFraction} base units)"
+                    )
+
                     OutlinedTextField(
                         value = newPriceMajor,
-                        onValueChange = { newPriceMajor = it },
-                        label = { Text("Selling Price (KES) *") },
-                        placeholder = { Text("e.g. 50.00") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        onValueChange = {
+                            newPriceMajor = it
+                        },
+                        label = {
+                            Text("Selling Price (KES) *")
+                        },
+                        placeholder = {
+                            Text("e.g. 50.00")
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal
+                        ),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
                     priceError?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             },
             confirmButton = {
+
                 Button(
                     onClick = {
-                        val parsed = newPriceMajor.trim().toDoubleOrNull()
-                        if (parsed == null || parsed < 0.0) {
-                            priceError = "Enter a valid non-negative price"
+
+                        val parsed =
+                            newPriceMajor.trim().toDoubleOrNull()
+
+                        if (
+                            parsed == null ||
+                            parsed < 0.0
+                        ) {
+                            priceError =
+                                "Enter a valid non-negative price."
                             return@Button
                         }
-                        val minor = Math.round(parsed * 100.0)
+
+                        val minor =
+                            Math.round(parsed * 100.0)
 
                         scope.launch {
-                            val now = System.currentTimeMillis()
+
+                            val now =
+                                System.currentTimeMillis()
+
                             val config = UnitPriceConfig(
-                                id = existingConfig?.id ?: UUID.randomUUID().toString(),
+                                id = existingConfig?.id
+                                    ?: UUID.randomUUID().toString(),
                                 productUnitId = unit.id,
                                 sellingPrice = Money(minor),
                                 isActive = true,
-                                createdAt = existingConfig?.createdAt ?: now,
+                                createdAt = existingConfig?.createdAt
+                                    ?: now,
                                 updatedAt = now
                             )
 
                             withContext(Dispatchers.IO) {
-                                container.productMasterDao.savePriceConfig(config)
+
+                                container.productMasterDao
+                                    .savePriceConfig(config)
                             }
 
                             showEditPriceDialogForUnit = null
                             selectedProductForDetails = null
+
                             refreshProducts()
-                            snackbarHostState.showSnackbar("Updated price for ${unit.name}")
+
+                            snackbarHostState.showSnackbar(
+                                "Updated price for ${unit.name}"
+                            )
                         }
                     }
                 ) {
@@ -832,7 +1497,11 @@ fun ProductsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showEditPriceDialogForUnit = null }) {
+                TextButton(
+                    onClick = {
+                        showEditPriceDialogForUnit = null
+                    }
+                ) {
                     Text("Cancel")
                 }
             }
