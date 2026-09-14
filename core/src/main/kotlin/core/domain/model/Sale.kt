@@ -16,7 +16,13 @@ import androidx.room.PrimaryKey
  *     * [STATUS_COMPLETED]: Transaction successfully posted, stock movements appended, cost layers depleted.
  *     * [STATUS_VOIDED]: Transaction voided via compensating movements and cost restoration; original record preserved.
  * - Immutability: Once committed, historical sales figures, prices, and line items must NEVER be overwritten.
+ * - [totalCogs] preserves the exact mathematical aggregate COGS as a [RationalCost].
+ * - [totalSellingAmount] remains [Money] because selling amounts are settled monetary values.
  * - Contains zero clinical/EMR patient record details.
+ *
+ * Financial precision:
+ * - Authoritative COGS calculations must never depend on UI-rounded monetary values.
+ * - Exact COGS is retained until a reporting or settlement boundary explicitly requires rounding.
  */
 @Entity(
     tableName = "sales",
@@ -45,7 +51,7 @@ data class Sale(
     val totalSellingAmount: Money,
 
     @ColumnInfo(name = "total_cogs")
-    val totalCogs: Money,
+    val totalCogs: RationalCost,
 
     @ColumnInfo(name = "occurred_at")
     val occurredAt: Long,
@@ -75,8 +81,8 @@ data class Sale(
         require(totalSellingAmount.amountMinorUnits >= 0L) {
             "Sale totalSellingAmount must not be negative, got: ${totalSellingAmount.amountMinorUnits} (id=$id)"
         }
-        require(totalCogs.amountMinorUnits >= 0L) {
-            "Sale totalCogs must not be negative, got: ${totalCogs.amountMinorUnits} (id=$id)"
+        require(totalCogs.isNonNegative) {
+            "Sale totalCogs must not be negative, got: $totalCogs (id=$id)"
         }
         require(occurredAt > 0L) {
             "Sale occurredAt must be a positive epoch timestamp, got: $occurredAt (id=$id)"
