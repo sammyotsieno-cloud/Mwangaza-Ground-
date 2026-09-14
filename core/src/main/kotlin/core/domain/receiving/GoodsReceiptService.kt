@@ -9,6 +9,7 @@ import core.domain.model.ProductUnit
 import core.domain.model.Quantity
 import core.domain.model.StockBatch
 import core.domain.model.StockMovement
+import core.domain.model.RationalCost
 import java.math.BigInteger
 import java.util.UUID
 
@@ -256,69 +257,47 @@ object GoodsReceiptService {
     }
 
     /**
-     * Calculates exact acquisition-cost tranches.
+     * Calculates the exact acquisition-cost layer for a receipt line.
      *
      * totalCost is the sole monetary authority for the receipt line.
      *
-     * acquisitionUnitCost stored on each InventoryCostLayer is the historical
-     * acquisition cost per one canonical quantity unit represented by that
-     * layer.
-     *
-     * Quantity storage units are therefore NOT themselves monetary units.
+     * acquisitionUnitCost is stored as a RationalCost because the mathematical
+     * unit cost does not necessarily have an integral number of currency minor
+     * units.
      *
      * If:
      *
      *     quantity = storageUnits / 10^scale
      *
+     * and:
+     *
+     *     totalCost = T
+     *
      * then:
      *
-     *     totalCost
-     *         = quantity × acquisitionUnitCost
+     *     acquisitionUnitCost
+     *         = T / quantity
+     *         = T × 10^scale / storageUnits
      *
-     *         = storageUnits × acquisitionUnitCost / 10^scale
+     * Example:
      *
-     * The algorithm works entirely with integers and BigInteger.
+     *     total cost = 100
+     *     quantity   = 3
      *
-     * Example, scale 0:
+     *     unit cost = 100 / 3
      *
-     *     3 tablets
-     *     total = 100 minor units
+     * The result is one homogeneous InventoryCostLayer whose exact unit cost
+     * is 100/3.
      *
-     *     floor(100 / 3) = 33
-     *     remainder = 1
+     * No artificial cost tranches are created.
+     * No integer division is used for authoritative cost.
+     * No monetary rounding is performed.
      *
-     *     2 tablets @ 33
-     *     1 tablet  @ 34
+     * This preserves the fundamental conservation law:
      *
-     *     66 + 34 = 100
+     *     quantity × exactUnitCost = exactReceiptCost
      *
-     * Example, scale 2:
-     *
-     *     1.50 canonical units
-     *     storageUnits = 150
-     *     total = 10,000 minor units
-     *     scale multiplier = 100
-     *
-     *     scaled total = 10,000 × 100
-     *                  = 1,000,000
-     *
-     *     1,000,000 / 150
-     *         = 6,666 remainder 100
-     *
-     *     Therefore:
-     *
-     *         0.50 units @ 6,666
-     *         1.00 units @ 6,667
-     *
-     *         3,333 + 6,667 = 10,000
-     *
-     * No floating-point arithmetic or rounding of the authoritative total
-     * occurs.
-     *
-     * IMPORTANT:
-     * This function guarantees conservation of the receipt-line acquisition
-     * total across the generated layers. It does not redefine COGS allocation;
-     * CostLayerAllocationService remains responsible for later stock exit.
+     * Display rounding is deliberately outside this service.
      */
     fun calculateCostLayerTranches(
         totalCost: Money,
@@ -343,173 +322,77 @@ object GoodsReceiptService {
                 totalCost.amountMinorUnits
         }
 
-        val storageUnits = BigInteger.valueOf(
-            baseQuantity.storageUnits
-        )
-
-        val quantityScaleMultiplier = BigInteger.valueOf(
-            baseQuantity.scale.multiplier
-        )
-
         /*
-         * Convert the total monetary amount into the same mathematical
-         * denominator used by Quantity.
+         * Quantity:
          *
-         * scaledTotal represents:
+         *     storageUnits / 10^scale
          *
-         *     totalCost × 10^scale
+         * Therefore:
          *
-         * so that division by storageUnits produces the exact per-unit
-         * acquisition cost floor.
+         *     unitCost =
+         *         totalCost × 10^scale / storageUnits
+         *
+         * RationalCost retains this exact fraction without converting it to
+         * an integer currency value.
          */
-        val scaledTotal = BigInteger.valueOf(
-            totalCost.amountMinorUnits
-        ).multiply(quantityScaleMultiplier)
+        val unitCostNumerator =
+            BigInteger.valueOf(totalCost.amountMinorUnits)
+                .multiply(
+                    BigInteger.valueOf(baseQuantity.scale.multiplier)
+                )
 
-        val division = scaledTotal.divideAndRemainder(
-            storageUnits
+        val unitCostDenominator =
+            BigInteger.valueOf(baseQuantity.storageUnits)
+
+        val acquisitionUnitCost = RationalCost(
+            numerator = unitCostNumerator,
+            denominator = unitCostDenominator
         )
 
-        val unitCostMinor = division[0]
-        val remainderStorageUnits = division[1]
-
-        val unitCostMinorLong = unitCostMinor
-            .toString()
-            .toLongOrNull()
-            ?: throw ArithmeticException(
-                "Acquisition unit cost exceeds Long monetary storage capacity: " +
-                    unitCostMinor
-            )
-
-        /*
-         * The remainder is strictly less than storageUnits, therefore it is
-         * safe to convert after the division has established the bound.
-         */
-        val remainderUnits = remainderStorageUnits
-            .toString()
-            .toLong()
-
-        if (remainderUnits == 0L) {
-            val layer = InventoryCostLayer(
-                id = idGenerator(0),
-                productId = productId,
-                stockBatchId = stockBatchId,
-                supplierId = supplierId,
-                initialQuantity = baseQuantity,
-                remainingQuantity = baseQuantity,
-                acquisitionUnitCost = Money(unitCostMinorLong),
-                acquiredAt = acquiredAt,
-                sourceReceiptRef = sourceReceiptRef,
-                createdAt = createdAt,
-                updatedAt = createdAt
-            )
-
-            verifyCostConservation(
-                totalCost = totalCost,
-                layers = listOf(layer)
-            )
-
-            return listOf(layer)
+        require(acquisitionUnitCost.isNonNegative) {
+            "Calculated acquisition unit cost must not be negative: " +
+                acquisitionUnitCost
         }
 
-        /*
-         * The remainder receives one additional minor currency unit per
-         * canonical quantity unit.
-         *
-         * If:
-         *
-         *     total × scaleMultiplier
-         *         = storageUnits × floorCost + remainder
-         *
-         * then:
-         *
-         *     (storageUnits - remainder) × floorCost
-         *       + remainder × (floorCost + 1)
-         *
-         * divided by scaleMultiplier
-         *
-         * reconstructs the exact original total.
-         */
-        val primaryStorageUnits =
-            baseQuantity.storageUnits - remainderUnits
-
-        require(primaryStorageUnits > 0L) {
-            "Cost-layer primary quantity must remain positive: " +
-                "primaryStorageUnits=$primaryStorageUnits"
-        }
-
-        val remainderUnitCostMinor = try {
-            Math.addExact(unitCostMinorLong, 1L)
-        } catch (e: ArithmeticException) {
-            throw ArithmeticException(
-                "Acquisition unit-cost remainder allocation overflow: " +
-                    "baseCost=$unitCostMinorLong"
-            )
-        }
-
-        val primaryQuantity = Quantity(
-            storageUnits = primaryStorageUnits,
-            scale = baseQuantity.scale
-        )
-
-        val remainderQuantity = Quantity(
-            storageUnits = remainderUnits,
-            scale = baseQuantity.scale
-        )
-
-        val primaryLayer = InventoryCostLayer(
+        val layer = InventoryCostLayer(
             id = idGenerator(0),
             productId = productId,
             stockBatchId = stockBatchId,
             supplierId = supplierId,
-            initialQuantity = primaryQuantity,
-            remainingQuantity = primaryQuantity,
-            acquisitionUnitCost = Money(unitCostMinorLong),
+            initialQuantity = baseQuantity,
+            remainingQuantity = baseQuantity,
+            acquisitionUnitCost = acquisitionUnitCost,
             acquiredAt = acquiredAt,
             sourceReceiptRef = sourceReceiptRef,
             createdAt = createdAt,
             updatedAt = createdAt
-        )
-
-        val remainderLayer = InventoryCostLayer(
-            id = idGenerator(1),
-            productId = productId,
-            stockBatchId = stockBatchId,
-            supplierId = supplierId,
-            initialQuantity = remainderQuantity,
-            remainingQuantity = remainderQuantity,
-            acquisitionUnitCost = Money(remainderUnitCostMinor),
-            acquiredAt = acquiredAt,
-            sourceReceiptRef = sourceReceiptRef,
-            createdAt = createdAt,
-            updatedAt = createdAt
-        )
-
-        val layers = listOf(
-            primaryLayer,
-            remainderLayer
         )
 
         verifyCostConservation(
             totalCost = totalCost,
-            layers = layers
+            layers = listOf(layer)
         )
 
-        return layers
+        return listOf(layer)
     }
 
     /**
-     * Verifies that the monetary value represented by every generated
-     * InventoryCostLayer reconstructs the authoritative receipt-line total
-     * exactly.
+     * Verifies exact monetary conservation represented by the generated
+     * InventoryCostLayer records.
      *
-     * Formula:
+     * For every layer:
      *
      *     layerCost =
-     *         storageUnits × unitCost / 10^scale
+     *         acquisitionUnitCost × quantity
      *
-     * Every layer must therefore produce an integral number of monetary
-     * minor units.
+     * The result remains a RationalCost.
+     *
+     * It is then compared against the receipt total represented as the exact
+     * rational value:
+     *
+     *     totalCost / 1
+     *
+     * No conversion to integer minor units is performed during verification.
      */
     private fun verifyCostConservation(
         totalCost: Money,
@@ -519,7 +402,11 @@ object GoodsReceiptService {
             "At least one cost layer is required."
         }
 
-        var reconstructedNumerator = BigInteger.ZERO
+        var reconstructedCost =
+            RationalCost(
+                numerator = BigInteger.ZERO,
+                denominator = BigInteger.ONE
+            )
 
         for (layer in layers) {
             require(
@@ -529,44 +416,30 @@ object GoodsReceiptService {
                 "Cost layer '${layer.id}' quantity scales must match."
             }
 
-            val scaleMultiplier = BigInteger.TEN.pow(
-                layer.initialQuantity.scale.scale
-            )
-
-            val layerNumerator = BigInteger.valueOf(
-                layer.initialQuantity.storageUnits
-            ).multiply(
-                BigInteger.valueOf(
-                    layer.acquisitionUnitCost.amountMinorUnits
+            val layerCost = layer.acquisitionUnitCost.multiply(
+                numerator = BigInteger.valueOf(
+                    layer.initialQuantity.storageUnits
+                ),
+                denominator = BigInteger.valueOf(
+                    layer.initialQuantity.scale.multiplier
                 )
             )
 
-            val division = layerNumerator.divideAndRemainder(
-                scaleMultiplier
-            )
-
-            require(division[1] == BigInteger.ZERO) {
-                "Cost layer '${layer.id}' acquisition value is not exactly " +
-                    "representable in monetary minor units."
-            }
-
-            reconstructedNumerator =
-                reconstructedNumerator.add(layerNumerator)
+            reconstructedCost =
+                reconstructedCost.add(layerCost)
         }
 
-        val expectedNumerator =
-            BigInteger.valueOf(totalCost.amountMinorUnits)
-                .multiply(
-                    BigInteger.TEN.pow(
-                        layers.first().initialQuantity.scale.scale
-                    )
-                )
+        val expectedCost = RationalCost(
+            numerator = BigInteger.valueOf(
+                totalCost.amountMinorUnits
+            ),
+            denominator = BigInteger.ONE
+        )
 
-        require(reconstructedNumerator == expectedNumerator) {
+        require(reconstructedCost == expectedCost) {
             "Cost-layer monetary conservation failure: " +
-                "expectedTotal=${totalCost.amountMinorUnits}, " +
-                "reconstructedNumerator=$reconstructedNumerator, " +
-                "expectedNumerator=$expectedNumerator"
+                "expectedTotal=$expectedCost, " +
+                "reconstructedTotal=$reconstructedCost"
         }
     }
 
@@ -866,10 +739,10 @@ object GoodsReceiptService {
             /*
              * totalCost is the authoritative monetary acquisition amount.
              *
-             * The receiving unitCost is intentionally not used to construct
-             * historical cost layers. This prevents an indivisible invoice
-             * total from being rejected or silently altered merely because
-             * one finite integer minor-unit unit price cannot represent it.
+             * The exact unit cost is represented as RationalCost.
+             *
+             * No artificial cost tranches are created merely because the
+             * exact unit cost is fractional.
              */
             val costLayers = calculateCostLayerTranches(
                 totalCost = item.totalCost,
