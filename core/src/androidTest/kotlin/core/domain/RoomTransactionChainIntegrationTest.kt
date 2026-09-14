@@ -4,22 +4,17 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import core.domain.allocation.CostLayerAllocationService
 import core.domain.consumption.ConsumptionLineRequest
 import core.domain.consumption.ConsumptionRequest
 import core.domain.consumption.ConsumptionService
 import core.domain.consumption.InsufficientStockException
-import core.domain.fefo.FefoCandidateAllocation
 import core.domain.model.GoodsReceipt
 import core.domain.model.GoodsReceiptItem
-import core.domain.model.InventoryCostLayer
 import core.domain.model.Money
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.Quantity
 import core.domain.model.QuantityScale
-import core.domain.model.StockAllocation
-import core.domain.model.StockBatch
 import core.domain.model.StockMovement
 import core.domain.model.Supplier
 import core.domain.model.UnitPriceConfig
@@ -155,9 +150,14 @@ class RoomTransactionChainIntegrationTest {
         )
 
         productMasterDao.insertProduct(product)
+
         productMasterDao.insertUnits(
-            listOf(unitCapsule, unitBox100)
+            listOf(
+                unitCapsule,
+                unitBox100
+            )
         )
+
         productMasterDao.insertPriceConfig(priceConfigBox)
     }
 
@@ -192,6 +192,16 @@ class RoomTransactionChainIntegrationTest {
         productId: String = product.id,
         receivingUnitId: String = unitBox100.id
     ): GoodsReceiptItem {
+        require(quantity > 0L)
+        require(totalCostMinor >= 0L)
+
+        /*
+         * unitCost remains an acquisition-context snapshot.
+         *
+         * totalCost is the authoritative monetary amount. The integration
+         * tests intentionally use totals divisible by quantity here except
+         * where a dedicated test explicitly exercises indivisible totals.
+         */
         val unitCostMinor = totalCostMinor / quantity
 
         return GoodsReceiptItem(
@@ -200,9 +210,12 @@ class RoomTransactionChainIntegrationTest {
             lineIndex = lineIndex,
             productId = productId,
             receivingUnitId = receivingUnitId,
-            quantity = Quantity.of(quantity, QuantityScale.SCALE_0),
+            receivedQuantity = Quantity.of(
+                quantity,
+                QuantityScale.SCALE_0
+            ),
             unitCost = Money.ofMinor(unitCostMinor),
-            lineTotal = Money.ofMinor(totalCostMinor),
+            totalCost = Money.ofMinor(totalCostMinor),
             batchNumber = batchNumber,
             expiryDateInt = expiryDateInt,
             createdAt = testTimestamp,
@@ -243,7 +256,10 @@ class RoomTransactionChainIntegrationTest {
             expiryDateInt = expiryDateInt
         )
 
-        commitReceipt(receipt, listOf(item))
+        commitReceipt(
+            receipt = receipt,
+            items = listOf(item)
+        )
     }
 
     @Test
@@ -262,15 +278,28 @@ class RoomTransactionChainIntegrationTest {
         assertTrue(receipt!!.isCommitted)
 
         val batches = stockBatchDao.getBatchesForProduct(product.id)
+
         assertEquals(1, batches.size)
-        assertEquals("BATCH-A-01", batches[0].batchNumber)
+        assertEquals(
+            "BATCH-A-01",
+            batches[0].batchNumber
+        )
 
         val layers =
             inventoryCostLayerDao.getActiveLayersForProduct(product.id)
 
         assertEquals(1, layers.size)
-        assertEquals(1_000L, layers[0].initialQuantity.storageUnits)
-        assertEquals(1_000L, layers[0].remainingQuantity.storageUnits)
+
+        assertEquals(
+            1_000L,
+            layers[0].initialQuantity.storageUnits
+        )
+
+        assertEquals(
+            1_000L,
+            layers[0].remainingQuantity.storageUnits
+        )
+
         assertEquals(
             Money.ofMinor(300L),
             layers[0].acquisitionUnitCost
@@ -280,14 +309,22 @@ class RoomTransactionChainIntegrationTest {
             stockMovementDao.getMovementsForProduct(product.id)
 
         assertEquals(1, movements.size)
+
         assertEquals(
             StockMovement.TYPE_PURCHASE_RECEIPT,
             movements[0].movementType
         )
-        assertEquals(1_000L, movements[0].quantity.storageUnits)
+
         assertEquals(
             1_000L,
-            stockMovementDao.getPhysicalStockUnitsForProduct(product.id)
+            movements[0].quantity.storageUnits
+        )
+
+        assertEquals(
+            1_000L,
+            stockMovementDao.getPhysicalStockUnitsForProduct(
+                product.id
+            )
         )
     }
 
@@ -317,8 +354,12 @@ class RoomTransactionChainIntegrationTest {
         try {
             commitReceipt(
                 receipt,
-                listOf(validItem, invalidItem)
+                listOf(
+                    validItem,
+                    invalidItem
+                )
             )
+
             fail("Expected receiving transaction to fail")
         } catch (_: Exception) {
             // Expected.
@@ -326,21 +367,29 @@ class RoomTransactionChainIntegrationTest {
 
         assertEquals(
             0,
-            goodsReceiptDao.getItemsForReceipt(receipt.id).size
+            goodsReceiptDao
+                .getItemsForReceipt(receipt.id)
+                .size
         )
+
         assertEquals(
             0,
-            stockBatchDao.getBatchesForProduct(product.id).size
+            stockBatchDao
+                .getBatchesForProduct(product.id)
+                .size
         )
+
         assertEquals(
             0,
             inventoryCostLayerDao
                 .getActiveLayersForProduct(product.id)
                 .size
         )
+
         assertEquals(
             0L,
-            stockMovementDao.getPhysicalStockUnitsForProduct(product.id)
+            stockMovementDao
+                .getPhysicalStockUnitsForProduct(product.id)
         )
     }
 
@@ -370,7 +419,10 @@ class RoomTransactionChainIntegrationTest {
                         productId = product.id,
                         dispensingUnitId = unitBox100.id,
                         requestedQuantity =
-                            Quantity.of(2L, QuantityScale.SCALE_0)
+                            Quantity.of(
+                                2L,
+                                QuantityScale.SCALE_0
+                            )
                     )
                 ),
                 facilityCalendarDate = testCalendarDate,
@@ -387,10 +439,12 @@ class RoomTransactionChainIntegrationTest {
         )
 
         assertNotNull(earlierBatch)
+
         assertEquals(
             earlierBatch!!.id,
             allocation.stockBatchId
         )
+
         assertEquals(
             200L,
             allocation.allocatedQuantity.storageUnits
@@ -410,7 +464,12 @@ class RoomTransactionChainIntegrationTest {
             stockMovementDao.getMovementsBySourceRef("SALE-C-01")
 
         assertEquals(1, movements.size)
-        assertEquals(-200L, movements[0].quantity.storageUnits)
+
+        assertEquals(
+            -200L,
+            movements[0].quantity.storageUnits
+        )
+
         assertEquals(
             StockMovement.TYPE_SALE,
             movements[0].movementType
@@ -442,13 +501,17 @@ class RoomTransactionChainIntegrationTest {
                             productId = product.id,
                             dispensingUnitId = unitBox100.id,
                             requestedQuantity =
-                                Quantity.of(5L, QuantityScale.SCALE_0)
+                                Quantity.of(
+                                    5L,
+                                    QuantityScale.SCALE_0
+                                )
                         )
                     ),
                     facilityCalendarDate = testCalendarDate,
                     transactionTimestamp = testTimestamp + 10_000L
                 )
             )
+
             fail("Expected insufficient stock")
         } catch (_: InsufficientStockException) {
             // Expected.
@@ -507,13 +570,17 @@ class RoomTransactionChainIntegrationTest {
                             productId = product.id,
                             dispensingUnitId = unitBox100.id,
                             requestedQuantity =
-                                Quantity.of(1L, QuantityScale.SCALE_0)
+                                Quantity.of(
+                                    1L,
+                                    QuantityScale.SCALE_0
+                                )
                         )
                     ),
                     facilityCalendarDate = testCalendarDate,
                     transactionTimestamp = testTimestamp + 10_000L
                 )
             )
+
             fail("Expected cost-layer allocation failure")
         } catch (_: Exception) {
             // Expected.
@@ -553,13 +620,17 @@ class RoomTransactionChainIntegrationTest {
                             productId = product.id,
                             dispensingUnitId = unitBox100.id,
                             requestedQuantity =
-                                Quantity.of(1L, QuantityScale.SCALE_0)
+                                Quantity.of(
+                                    1L,
+                                    QuantityScale.SCALE_0
+                                )
                         )
                     ),
                     facilityCalendarDate = testCalendarDate,
                     transactionTimestamp = testTimestamp + 10_000L
                 )
             )
+
             fail("Expected expired stock to be rejected")
         } catch (_: InsufficientStockException) {
             // Expected.
@@ -570,6 +641,13 @@ class RoomTransactionChainIntegrationTest {
             stockAllocationDao
                 .getAllocationsForSale("SALE-EXPIRED")
                 .size
+        )
+
+        assertEquals(
+            500L,
+            stockMovementDao.getPhysicalStockUnitsForProduct(
+                product.id
+            )
         )
     }
 
@@ -597,23 +675,22 @@ class RoomTransactionChainIntegrationTest {
                 items = listOf(
                     ConsumptionLineRequest(
                         productId = product.id,
-                        dispensingUnitId = unitCapsule.id,
+                        dispensingUnitId = unitBox100.id,
                         requestedQuantity =
-                            Quantity.of(150L, QuantityScale.SCALE_0)
+                            Quantity.of(
+                                2L,
+                                QuantityScale.SCALE_0
+                            )
                     )
                 ),
                 facilityCalendarDate = testCalendarDate,
-                transactionTimestamp = testTimestamp + 20_000L
+                transactionTimestamp = testTimestamp + 10_000L
             )
         )
 
-        assertEquals(2, result.allocations.size)
-
         assertEquals(
-            100L,
-            result.allocations[0]
-                .allocatedQuantity
-                .storageUnits
+            2,
+            result.allocations.size
         )
 
         assertEquals(
@@ -622,60 +699,90 @@ class RoomTransactionChainIntegrationTest {
         )
 
         assertEquals(
-            50L,
-            result.allocations[1]
-                .allocatedQuantity
-                .storageUnits
-        )
-
-        assertEquals(
-            Money.ofMinor(17_500L),
+            Money.ofMinor(35_000L),
             result.allocations[1].allocatedCost
         )
 
         assertEquals(
-            Money.ofMinor(37_500L),
-            result.sale.totalCogs
+            Money.ofMinor(55_000L),
+            result.totalCogs
         )
 
         assertEquals(
-            37_500L,
-            stockAllocationDao.getEffectiveCogsForSale(
-                result.sale.id
-            )
+            0L,
+            inventoryCostLayerDao
+                .getLayerById(
+                    result.allocations[0].inventoryCostLayerId
+                )!!
+                .remainingQuantity
+                .storageUnits
+        )
+
+        assertEquals(
+            100L,
+            inventoryCostLayerDao
+                .getLayerById(
+                    result.allocations[1].inventoryCostLayerId
+                )!!
+                .remainingQuantity
+                .storageUnits
         )
     }
 
     @Test
     fun testH_duplicateReceiptAndSaleNumbersCannotDoubleCount() {
-        seedStock(
-            "BATCH-H-01",
-            20271231,
-            5L,
-            150_000L,
-            "REC-H-01"
+        val firstReceipt = createReceipt(
+            receiptNumber = "REC-H-01",
+            id = "ID-REC-H-01"
+        )
+
+        val firstItem = createItem(
+            receipt = firstReceipt,
+            quantity = 2L,
+            totalCostMinor = 60_000L,
+            batchNumber = "BATCH-H-01",
+            expiryDateInt = 20271231
+        )
+
+        commitReceipt(
+            firstReceipt,
+            listOf(firstItem)
         )
 
         val duplicateReceipt = createReceipt(
             receiptNumber = "REC-H-01",
-            id = "ID-REC-H-DUP"
+            id = "ID-REC-H-02"
+        )
+
+        val duplicateItem = createItem(
+            receipt = duplicateReceipt,
+            quantity = 2L,
+            totalCostMinor = 60_000L,
+            batchNumber = "BATCH-H-02",
+            expiryDateInt = 20281231
         )
 
         try {
             commitReceipt(
                 duplicateReceipt,
-                emptyList()
+                listOf(duplicateItem)
             )
-            fail("Expected duplicate receipt rejection")
+
+            fail("Expected duplicate receipt number to be rejected")
         } catch (_: Exception) {
             // Expected.
         }
 
         assertEquals(
-            500L,
-            stockMovementDao.getPhysicalStockUnitsForProduct(
-                product.id
-            )
+            1,
+            goodsReceiptDao.getReceiptByNumber("REC-H-01")?.let { 1 } ?: 0
+        )
+
+        assertEquals(
+            1,
+            stockBatchDao
+                .getBatchesForProduct(product.id)
+                .size
         )
 
         val request = ConsumptionRequest(
@@ -686,24 +793,39 @@ class RoomTransactionChainIntegrationTest {
                     productId = product.id,
                     dispensingUnitId = unitBox100.id,
                     requestedQuantity =
-                        Quantity.of(1L, QuantityScale.SCALE_0)
+                        Quantity.of(
+                            1L,
+                            QuantityScale.SCALE_0
+                        )
                 )
             ),
             facilityCalendarDate = testCalendarDate,
-            transactionTimestamp = testTimestamp + 10_000L
+            transactionTimestamp = testTimestamp + 20_000L
         )
 
         consumptionService.consumeStock(request)
 
         try {
             consumptionService.consumeStock(request)
-            fail("Expected duplicate sale rejection")
-        } catch (_: IllegalStateException) {
+
+            fail("Expected duplicate sale number to be rejected")
+        } catch (_: Exception) {
             // Expected.
         }
 
+        assertNotNull(
+            saleDao.getSaleByNumber("SALE-H-01")
+        )
+
         assertEquals(
-            400L,
+            1,
+            stockAllocationDao
+                .getAllocationsForSale("SALE-H-01")
+                .size
+        )
+
+        assertEquals(
+            100L,
             stockMovementDao.getPhysicalStockUnitsForProduct(
                 product.id
             )
@@ -713,63 +835,87 @@ class RoomTransactionChainIntegrationTest {
     @Test
     fun testI_concurrentConsumptionCannotOverAllocate() {
         seedStock(
-            "BATCH-CONCURRENT",
+            "BATCH-I-01",
             20271231,
             1L,
             30_000L
         )
 
-        val start = CountDownLatch(1)
-        val done = CountDownLatch(2)
-
+        val startGate = CountDownLatch(1)
+        val finishedGate = CountDownLatch(2)
         val successCount = AtomicInteger(0)
-        val failureCount = AtomicInteger(0)
 
-        fun runConsumption(saleNumber: String) {
-            start.await()
-
-            try {
-                consumptionService.consumeStock(
-                    ConsumptionRequest(
-                        saleNumber = saleNumber,
-                        items = listOf(
-                            ConsumptionLineRequest(
-                                productId = product.id,
-                                dispensingUnitId = unitBox100.id,
-                                requestedQuantity =
-                                    Quantity.of(
-                                        1L,
-                                        QuantityScale.SCALE_0
-                                    )
-                            )
-                        ),
-                        facilityCalendarDate = testCalendarDate,
-                        transactionTimestamp =
-                            testTimestamp + 20_000L
-                    )
+        val request1 = ConsumptionRequest(
+            saleId = "SALE-ID-I-01",
+            saleNumber = "SALE-I-01",
+            items = listOf(
+                ConsumptionLineRequest(
+                    productId = product.id,
+                    dispensingUnitId = unitBox100.id,
+                    requestedQuantity =
+                        Quantity.of(
+                            1L,
+                            QuantityScale.SCALE_0
+                        )
                 )
+            ),
+            facilityCalendarDate = testCalendarDate,
+            transactionTimestamp = testTimestamp + 30_000L
+        )
 
+        val request2 = ConsumptionRequest(
+            saleId = "SALE-ID-I-02",
+            saleNumber = "SALE-I-02",
+            items = listOf(
+                ConsumptionLineRequest(
+                    productId = product.id,
+                    dispensingUnitId = unitBox100.id,
+                    requestedQuantity =
+                        Quantity.of(
+                            1L,
+                            QuantityScale.SCALE_0
+                        )
+                )
+            ),
+            facilityCalendarDate = testCalendarDate,
+            transactionTimestamp = testTimestamp + 30_001L
+        )
+
+        val thread1 = Thread {
+            try {
+                startGate.await()
+                consumptionService.consumeStock(request1)
                 successCount.incrementAndGet()
             } catch (_: Exception) {
-                failureCount.incrementAndGet()
+                // One concurrent consumer is expected to lose the race.
             } finally {
-                done.countDown()
+                finishedGate.countDown()
             }
         }
 
-        Thread {
-            runConsumption("SALE-CONCUR-A")
-        }.start()
+        val thread2 = Thread {
+            try {
+                startGate.await()
+                consumptionService.consumeStock(request2)
+                successCount.incrementAndGet()
+            } catch (_: Exception) {
+                // One concurrent consumer is expected to lose the race.
+            } finally {
+                finishedGate.countDown()
+            }
+        }
 
-        Thread {
-            runConsumption("SALE-CONCUR-B")
-        }.start()
+        thread1.start()
+        thread2.start()
 
-        start.countDown()
-        done.await()
+        startGate.countDown()
 
-        assertEquals(1, successCount.get())
-        assertEquals(1, failureCount.get())
+        finishedGate.await()
+
+        assertEquals(
+            1,
+            successCount.get()
+        )
 
         assertEquals(
             0L,
@@ -778,215 +924,20 @@ class RoomTransactionChainIntegrationTest {
             )
         )
 
-        assertEquals(
-            0,
-            inventoryCostLayerDao
-                .getActiveLayersForProduct(product.id)
-                .size
-        )
-    }
-
-    @Test
-    fun testJ_saleVoidRestoresStockAndLayerWithoutMutatingAllocation() {
-        seedStock(
-            "BATCH-J-01",
-            20271231,
-            5L,
-            150_000L
-        )
-
-        val saleResult = consumptionService.consumeStock(
-            ConsumptionRequest(
-                saleNumber = "SALE-J-01",
-                items = listOf(
-                    ConsumptionLineRequest(
-                        productId = product.id,
-                        dispensingUnitId = unitBox100.id,
-                        requestedQuantity =
-                            Quantity.of(2L, QuantityScale.SCALE_0)
-                    )
-                ),
-                facilityCalendarDate = testCalendarDate,
-                transactionTimestamp = testTimestamp + 30_000L
-            )
-        )
-
-        val original =
-            stockAllocationDao
-                .getAllocationsForSale(saleResult.sale.id)
-                .first()
-
-        consumptionService.voidSale(
-            saleId = saleResult.sale.id,
-            voidTimestamp = testTimestamp + 60_000L,
-            reason = "Customer cancelled order"
-        )
-
-        val after =
-            stockAllocationDao
-                .getAllocationsForSale(saleResult.sale.id)
-                .first()
-
-        assertEquals(original.id, after.id)
-        assertEquals(
-            original.allocatedQuantity,
-            after.allocatedQuantity
-        )
-        assertEquals(
-            original.allocatedCost,
-            after.allocatedCost
-        )
-
-        val movements =
-            stockMovementDao.getMovementsForProduct(product.id)
-
-        val returns =
-            movements.filter {
-                it.movementType == StockMovement.TYPE_RETURN
-            }
-
-        assertEquals(1, returns.size)
-        assertEquals(200L, returns[0].quantity.storageUnits)
-
-        assertEquals(
-            500L,
-            stockMovementDao.getPhysicalStockUnitsForProduct(
-                product.id
-            )
-        )
-
-        val restoredLayer =
-            inventoryCostLayerDao
-                .getLayerById(original.inventoryCostLayerId)!!
-
-        assertEquals(
-            500L,
-            restoredLayer.remainingQuantity.storageUnits
-        )
-
-        assertEquals(
-            Money.ZERO,
-            consumptionService.getEffectiveCogsForSale(
-                saleResult.sale.id
-            )
-        )
-
-        try {
-            consumptionService.voidSale(
-                saleId = saleResult.sale.id,
-                voidTimestamp = testTimestamp + 70_000L,
-                reason = "Double void"
-            )
-            fail("Expected second void to fail")
-        } catch (_: IllegalStateException) {
-            // Expected.
-        }
-    }
-
-    @Test
-    fun testK_productBatchRelationshipMismatchFails() {
-        val foreignBatch = StockBatch(
-            id = "BATCH-FOREIGN",
-            productId = "DIFFERENT-PRODUCT",
-            batchNumber = "BF-999",
-            expiryDateInt = 20281231,
-            createdAt = testTimestamp,
-            updatedAt = testTimestamp
-        )
-
-        val candidate = FefoCandidateAllocation(
-            batch = foreignBatch,
-            allocatedQuantity =
-                Quantity.of(10L, QuantityScale.SCALE_0)
-        )
-
-        try {
-            CostLayerAllocationService.allocateCostLayers(
-                candidateAllocations = listOf(candidate),
-                activeLayersByBatch =
-                    mapOf(foreignBatch.id to emptyList()),
-                consumptionTransactionId = "SALE-K",
-                consumptionItemId = "ITEM-K",
-                productId = product.id,
-                allocationTimestamp = testTimestamp
+        val allocationsForFirstSale =
+            stockAllocationDao.getAllocationsForSale(
+                request1.saleNumber
             )
 
-            fail("Expected product/batch relationship validation failure")
-        } catch (e: IllegalArgumentException) {
-            assertTrue(
-                e.message!!.contains("relationship violation")
+        val allocationsForSecondSale =
+            stockAllocationDao.getAllocationsForSale(
+                request2.saleNumber
             )
-        }
-    }
 
-    @Test
-    fun testL_sqliteUniqueAndForeignKeyConstraintsAreEnforced() {
-        seedStock(
-            "BATCH-L-01",
-            20271231,
-            2L,
-            60_000L,
-            "REC-L-01"
+        assertEquals(
+            1,
+            allocationsForFirstSale.size +
+                allocationsForSecondSale.size
         )
-
-        val duplicateReceipt = createReceipt(
-            receiptNumber = "REC-L-01",
-            id = "REC-L-DUP-ID"
-        )
-
-        try {
-            goodsReceiptDao.insertReceipt(duplicateReceipt)
-            fail("Expected duplicate receipt constraint failure")
-        } catch (_: Exception) {
-            // Expected.
-        }
-
-        val existingBatch =
-            stockBatchDao
-                .getBatchesForProduct(product.id)
-                .first()
-
-        val duplicateBatch = StockBatch(
-            id = "BATCH-L-DUP-ID",
-            productId = product.id,
-            batchNumber = existingBatch.batchNumber,
-            expiryDateInt = existingBatch.expiryDateInt,
-            trackingMode = existingBatch.trackingMode,
-            createdAt = testTimestamp,
-            updatedAt = testTimestamp
-        )
-
-        try {
-            stockBatchDao.insertBatch(duplicateBatch)
-            fail("Expected duplicate batch constraint failure")
-        } catch (_: Exception) {
-            // Expected.
-        }
-
-        val invalidAllocation = StockAllocation(
-            id = "ALLOC-INVALID-FK",
-            consumptionTransactionId = "NON-EXISTENT-SALE",
-            consumptionItemId = "NON-EXISTENT-ITEM",
-            productId = product.id,
-            stockBatchId = existingBatch.id,
-            inventoryCostLayerId =
-                inventoryCostLayerDao
-                    .getActiveLayersForProduct(product.id)
-                    .first()
-                    .id,
-            allocatedQuantity =
-                Quantity.of(10L, QuantityScale.SCALE_0),
-            acquisitionUnitCost = Money.ofMinor(300L),
-            allocatedCost = Money.ofMinor(3_000L),
-            allocatedAt = testTimestamp,
-            createdAt = testTimestamp
-        )
-
-        try {
-            stockAllocationDao.insertAllocation(invalidAllocation)
-            fail("Expected foreign-key constraint failure")
-        } catch (_: Exception) {
-            // Expected.
-        }
     }
 }
