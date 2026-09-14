@@ -5,6 +5,7 @@ import core.domain.model.GoodsReceiptItem
 import core.domain.model.InventoryCostLayer
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
+import core.domain.model.RationalCost
 import core.domain.model.Sale
 import core.domain.model.SaleItem
 import core.domain.model.StockAllocation
@@ -19,6 +20,7 @@ import core.domain.persistence.StockAllocationDao
 import core.domain.persistence.StockBatchDao
 import core.domain.persistence.StockMovementDao
 import core.domain.persistence.TransactionRunner
+import java.math.BigInteger
 
 /**
  * In-memory transactional test fixture implementing all DAO contracts and [TransactionRunner]
@@ -84,16 +86,24 @@ class FakeCoreDatabase : TransactionRunner {
 
     val goodsReceiptDao = object : GoodsReceiptDao {
         override fun insertReceipt(receipt: GoodsReceipt) {
-            if (receipts.containsKey(receipt.id)) throw IllegalStateException("Duplicate receipt id: ${receipt.id}")
-            if (receipts.values.any { it.receiptNumber == receipt.receiptNumber }) {
-                throw IllegalStateException("Duplicate receipt number constraint violation: ${receipt.receiptNumber}")
+            if (receipts.containsKey(receipt.id)) {
+                throw IllegalStateException("Duplicate receipt id: ${receipt.id}")
             }
+
+            if (receipts.values.any { it.receiptNumber == receipt.receiptNumber }) {
+                throw IllegalStateException(
+                    "Duplicate receipt number constraint violation: ${receipt.receiptNumber}"
+                )
+            }
+
             receipts[receipt.id] = receipt
         }
 
         override fun insertReceiptItems(items: List<GoodsReceiptItem>) {
             for (item in items) {
-                receiptItems.getOrPut(item.goodsReceiptId) { mutableListOf() }.add(item)
+                receiptItems
+                    .getOrPut(item.goodsReceiptId) { mutableListOf() }
+                    .add(item)
             }
         }
 
@@ -104,7 +114,8 @@ class FakeCoreDatabase : TransactionRunner {
         override fun getAllReceipts(): List<GoodsReceipt> =
             receipts.values.sortedByDescending { it.receivedAt }
 
-        override fun getReceiptById(id: String): GoodsReceipt? = receipts[id]
+        override fun getReceiptById(id: String): GoodsReceipt? =
+            receipts[id]
 
         override fun getReceiptByNumber(receiptNumber: String): GoodsReceipt? =
             receipts.values.firstOrNull { it.receiptNumber == receiptNumber }
@@ -115,10 +126,22 @@ class FakeCoreDatabase : TransactionRunner {
 
     val stockBatchDao = object : StockBatchDao {
         override fun insertBatch(batch: StockBatch) {
-            if (batches.containsKey(batch.id)) throw IllegalStateException("Duplicate batch id: ${batch.id}")
-            if (batches.values.any { it.productId == batch.productId && it.batchNumber == batch.batchNumber && it.expiryDateInt == batch.expiryDateInt }) {
-                throw IllegalStateException("Duplicate batch constraint violation: ${batch.batchNumber}")
+            if (batches.containsKey(batch.id)) {
+                throw IllegalStateException("Duplicate batch id: ${batch.id}")
             }
+
+            if (
+                batches.values.any {
+                    it.productId == batch.productId &&
+                        it.batchNumber == batch.batchNumber &&
+                        it.expiryDateInt == batch.expiryDateInt
+                }
+            ) {
+                throw IllegalStateException(
+                    "Duplicate batch constraint violation: ${batch.batchNumber}"
+                )
+            }
+
             batches[batch.id] = batch
         }
 
@@ -127,23 +150,40 @@ class FakeCoreDatabase : TransactionRunner {
         }
 
         override fun getAllBatches(): List<StockBatch> =
-            batches.values.sortedWith(compareBy<StockBatch> { it.expiryDateInt }.thenBy { it.createdAt })
+            batches.values.sortedWith(
+                compareBy<StockBatch> { it.expiryDateInt }
+                    .thenBy { it.createdAt }
+            )
 
-        override fun getBatchById(id: String): StockBatch? = batches[id]
+        override fun getBatchById(id: String): StockBatch? =
+            batches[id]
 
         override fun getBatchesForProduct(productId: String): List<StockBatch> =
-            batches.values.filter { it.productId == productId }
-                .sortedWith(compareBy<StockBatch> { it.expiryDateInt }.thenBy { it.createdAt })
+            batches.values
+                .filter { it.productId == productId }
+                .sortedWith(
+                    compareBy<StockBatch> { it.expiryDateInt }
+                        .thenBy { it.createdAt }
+                )
 
-        override fun findMatchingBatch(productId: String, batchNumber: String, expiryDateInt: Int): StockBatch? =
+        override fun findMatchingBatch(
+            productId: String,
+            batchNumber: String,
+            expiryDateInt: Int
+        ): StockBatch? =
             batches.values.firstOrNull {
-                it.productId == productId && it.batchNumber == batchNumber && it.expiryDateInt == expiryDateInt
+                it.productId == productId &&
+                    it.batchNumber == batchNumber &&
+                    it.expiryDateInt == expiryDateInt
             }
     }
 
     val inventoryCostLayerDao = object : InventoryCostLayerDao {
         override fun insertLayer(layer: InventoryCostLayer) {
-            if (costLayers.containsKey(layer.id)) throw IllegalStateException("Duplicate cost layer id: ${layer.id}")
+            if (costLayers.containsKey(layer.id)) {
+                throw IllegalStateException("Duplicate cost layer id: ${layer.id}")
+            }
+
             costLayers[layer.id] = layer
         }
 
@@ -159,36 +199,86 @@ class FakeCoreDatabase : TransactionRunner {
             layers.forEach { updateLayer(it) }
         }
 
-        override fun getLayerById(id: String): InventoryCostLayer? = costLayers[id]
+        override fun getLayerById(id: String): InventoryCostLayer? =
+            costLayers[id]
 
         override fun getActiveLayersForBatch(batchId: String): List<InventoryCostLayer> =
-            costLayers.values.filter { it.stockBatchId == batchId && it.remainingQuantity.isPositive }
-                .sortedWith(compareBy<InventoryCostLayer> { it.acquiredAt }.thenBy { it.createdAt }.thenBy { it.id })
+            costLayers.values
+                .filter {
+                    it.stockBatchId == batchId &&
+                        it.remainingQuantity.isPositive
+                }
+                .sortedWith(
+                    compareBy<InventoryCostLayer> { it.acquiredAt }
+                        .thenBy { it.createdAt }
+                        .thenBy { it.id }
+                )
 
         override fun getActiveLayersForProduct(productId: String): List<InventoryCostLayer> =
-            costLayers.values.filter { it.productId == productId && it.remainingQuantity.isPositive }
-                .sortedWith(compareBy<InventoryCostLayer> { it.acquiredAt }.thenBy { it.createdAt }.thenBy { it.id })
+            costLayers.values
+                .filter {
+                    it.productId == productId &&
+                        it.remainingQuantity.isPositive
+                }
+                .sortedWith(
+                    compareBy<InventoryCostLayer> { it.acquiredAt }
+                        .thenBy { it.createdAt }
+                        .thenBy { it.id }
+                )
 
-        override fun getLayersForReceiptRef(receiptRef: String): List<InventoryCostLayer> =
+        override fun getLayersForReceiptRef(
+            receiptRef: String
+        ): List<InventoryCostLayer> =
             costLayers.values.filter { it.sourceReceiptRef == receiptRef }
 
-        override fun decrementRemainingQuantity(layerId: String, decrementUnits: Long, updatedAt: Long): Int {
+        override fun decrementRemainingQuantity(
+            layerId: String,
+            decrementUnits: Long,
+            updatedAt: Long
+        ): Int {
             val layer = costLayers[layerId] ?: return 0
+
             if (layer.remainingQuantity.storageUnits < decrementUnits) {
                 return 0
             }
-            val newQty = layer.remainingQuantity.copy(storageUnits = layer.remainingQuantity.storageUnits - decrementUnits)
-            costLayers[layerId] = layer.copy(remainingQuantity = newQty, updatedAt = updatedAt)
+
+            val newQty = layer.remainingQuantity.copy(
+                storageUnits =
+                    layer.remainingQuantity.storageUnits - decrementUnits
+            )
+
+            costLayers[layerId] = layer.copy(
+                remainingQuantity = newQty,
+                updatedAt = updatedAt
+            )
+
             return 1
         }
 
-        override fun incrementRemainingQuantity(layerId: String, incrementUnits: Long, updatedAt: Long): Int {
+        override fun incrementRemainingQuantity(
+            layerId: String,
+            incrementUnits: Long,
+            updatedAt: Long
+        ): Int {
             val layer = costLayers[layerId] ?: return 0
-            if (layer.remainingQuantity.storageUnits + incrementUnits > layer.initialQuantity.storageUnits) {
+
+            if (
+                layer.remainingQuantity.storageUnits + incrementUnits >
+                    layer.initialQuantity.storageUnits
+            ) {
                 return 0
             }
-            val newQty = layer.remainingQuantity.copy(storageUnits = layer.remainingQuantity.storageUnits + incrementUnits)
-            costLayers[layerId] = layer.copy(remainingQuantity = newQty, updatedAt = updatedAt)
+
+            val newQty = layer.remainingQuantity.copy(
+                storageUnits =
+                    layer.remainingQuantity.storageUnits + incrementUnits
+            )
+
+            costLayers[layerId] = layer.copy(
+                remainingQuantity = newQty,
+                updatedAt = updatedAt
+            )
+
             return 1
         }
     }
@@ -205,19 +295,37 @@ class FakeCoreDatabase : TransactionRunner {
         override fun getAllMovements(): List<StockMovement> =
             movements.sortedByDescending { it.occurredAt }
 
-        override fun getMovementsForProduct(productId: String): List<StockMovement> =
-            movements.filter { it.productId == productId }.sortedBy { it.occurredAt }
+        override fun getMovementsForProduct(
+            productId: String
+        ): List<StockMovement> =
+            movements
+                .filter { it.productId == productId }
+                .sortedBy { it.occurredAt }
 
-        override fun getMovementsForBatch(batchId: String): List<StockMovement> =
-            movements.filter { it.stockBatchId == batchId }.sortedBy { it.occurredAt }
+        override fun getMovementsForBatch(
+            batchId: String
+        ): List<StockMovement> =
+            movements
+                .filter { it.stockBatchId == batchId }
+                .sortedBy { it.occurredAt }
 
-        override fun getPhysicalStockUnitsForProduct(productId: String): Long =
-            movements.filter { it.productId == productId }.sumOf { it.quantity.storageUnits }
+        override fun getPhysicalStockUnitsForProduct(
+            productId: String
+        ): Long =
+            movements
+                .filter { it.productId == productId }
+                .sumOf { it.quantity.storageUnits }
 
-        override fun getPhysicalStockUnitsForBatch(batchId: String): Long =
-            movements.filter { it.stockBatchId == batchId }.sumOf { it.quantity.storageUnits }
+        override fun getPhysicalStockUnitsForBatch(
+            batchId: String
+        ): Long =
+            movements
+                .filter { it.stockBatchId == batchId }
+                .sumOf { it.quantity.storageUnits }
 
-        override fun getMovementsBySourceRef(ref: String): List<StockMovement> =
+        override fun getMovementsBySourceRef(
+            ref: String
+        ): List<StockMovement> =
             movements.filter { it.sourceTransactionRef == ref }
     }
 
@@ -226,48 +334,95 @@ class FakeCoreDatabase : TransactionRunner {
             allocations.add(allocation)
         }
 
-        override fun insertAllocations(newAllocations: List<StockAllocation>) {
+        override fun insertAllocations(
+            newAllocations: List<StockAllocation>
+        ) {
             allocations.addAll(newAllocations)
         }
 
-        override fun getAllocationsForSale(saleId: String): List<StockAllocation> =
-            allocations.filter { it.consumptionTransactionId == saleId }.sortedBy { it.allocatedAt }
+        override fun getAllocationsForSale(
+            saleId: String
+        ): List<StockAllocation> =
+            allocations
+                .filter { it.consumptionTransactionId == saleId }
+                .sortedBy { it.allocatedAt }
 
-        override fun getAllocationsForSaleItem(saleItemId: String): List<StockAllocation> =
-            allocations.filter { it.consumptionItemId == saleItemId }.sortedBy { it.allocatedAt }
+        override fun getAllocationsForSaleItem(
+            saleItemId: String
+        ): List<StockAllocation> =
+            allocations
+                .filter { it.consumptionItemId == saleItemId }
+                .sortedBy { it.allocatedAt }
 
-        override fun getAllocationsForCostLayer(layerId: String): List<StockAllocation> =
-            allocations.filter { it.inventoryCostLayerId == layerId }.sortedBy { it.allocatedAt }
+        override fun getAllocationsForCostLayer(
+            layerId: String
+        ): List<StockAllocation> =
+            allocations
+                .filter { it.inventoryCostLayerId == layerId }
+                .sortedBy { it.allocatedAt }
 
-        override fun getEffectiveCogsForProduct(productId: String): Long {
+        override fun getEffectiveCogsForProduct(
+            productId: String
+        ): RationalCost {
             return allocations
-                .filter { alloc ->
-                    alloc.productId == productId &&
-                        sales[alloc.consumptionTransactionId]?.status == Sale.STATUS_COMPLETED
+                .filter { allocation ->
+                    allocation.productId == productId &&
+                        sales[allocation.consumptionTransactionId]?.status ==
+                        Sale.STATUS_COMPLETED
                 }
-                .sumOf { it.allocatedCost.amountMinorUnits }
+                .fold(
+                    RationalCost(
+                        numerator = BigInteger.ZERO,
+                        denominator = BigInteger.ONE
+                    )
+                ) { total, allocation ->
+                    total.add(allocation.allocatedCost)
+                }
         }
 
-        override fun getEffectiveCogsForSale(saleId: String): Long {
-            if (sales[saleId]?.status != Sale.STATUS_COMPLETED) return 0L
+        override fun getEffectiveCogsForSale(
+            saleId: String
+        ): RationalCost {
+            if (sales[saleId]?.status != Sale.STATUS_COMPLETED) {
+                return RationalCost(
+                    numerator = BigInteger.ZERO,
+                    denominator = BigInteger.ONE
+                )
+            }
+
             return allocations
                 .filter { it.consumptionTransactionId == saleId }
-                .sumOf { it.allocatedCost.amountMinorUnits }
+                .fold(
+                    RationalCost(
+                        numerator = BigInteger.ZERO,
+                        denominator = BigInteger.ONE
+                    )
+                ) { total, allocation ->
+                    total.add(allocation.allocatedCost)
+                }
         }
     }
 
     val saleDao = object : SaleDao {
         override fun insertSale(sale: Sale) {
-            if (sales.containsKey(sale.id)) throw IllegalStateException("Duplicate sale id: ${sale.id}")
-            if (sales.values.any { it.saleNumber == sale.saleNumber }) {
-                throw IllegalStateException("Duplicate sale number constraint violation: ${sale.saleNumber}")
+            if (sales.containsKey(sale.id)) {
+                throw IllegalStateException("Duplicate sale id: ${sale.id}")
             }
+
+            if (sales.values.any { it.saleNumber == sale.saleNumber }) {
+                throw IllegalStateException(
+                    "Duplicate sale number constraint violation: ${sale.saleNumber}"
+                )
+            }
+
             sales[sale.id] = sale
         }
 
         override fun insertSaleItems(items: List<SaleItem>) {
             for (item in items) {
-                saleItems.getOrPut(item.saleId) { mutableListOf() }.add(item)
+                saleItems
+                    .getOrPut(item.saleId) { mutableListOf() }
+                    .add(item)
             }
         }
 
@@ -278,12 +433,15 @@ class FakeCoreDatabase : TransactionRunner {
         override fun getAllSales(): List<Sale> =
             sales.values.sortedByDescending { it.occurredAt }
 
-        override fun getSaleById(id: String): Sale? = sales[id]
+        override fun getSaleById(id: String): Sale? =
+            sales[id]
 
         override fun getSaleByNumber(saleNumber: String): Sale? =
             sales.values.firstOrNull { it.saleNumber == saleNumber }
 
-        override fun getItemsForSale(saleId: String): List<SaleItem> =
+        override fun getItemsForSale(
+            saleId: String
+        ): List<SaleItem> =
             saleItems[saleId]?.sortedBy { it.lineIndex } ?: emptyList()
     }
 
@@ -312,23 +470,36 @@ class FakeCoreDatabase : TransactionRunner {
             priceConfigs[config.productUnitId] = config
         }
 
-        override fun getProductById(id: String): ProductMaster? = products[id]
+        override fun getProductById(id: String): ProductMaster? =
+            products[id]
 
         override fun getAllProducts(): List<ProductMaster> =
-            products.values.sortedWith(compareByDescending<ProductMaster> { it.isActive }.thenBy { it.displayName })
+            products.values.sortedWith(
+                compareByDescending<ProductMaster> { it.isActive }
+                    .thenBy { it.displayName }
+            )
 
-        override fun getBaseUnitForProduct(productId: String): ProductUnit? =
-            units.values.firstOrNull { it.productId == productId && it.isBaseUnit }
+        override fun getBaseUnitForProduct(
+            productId: String
+        ): ProductUnit? =
+            units.values.firstOrNull {
+                it.productId == productId && it.isBaseUnit
+            }
 
-        override fun getUnitById(unitId: String): ProductUnit? = units[unitId]
+        override fun getUnitById(unitId: String): ProductUnit? =
+            units[unitId]
 
-        override fun getUnitsForProduct(productId: String): List<ProductUnit> =
+        override fun getUnitsForProduct(
+            productId: String
+        ): List<ProductUnit> =
             units.values.filter { it.productId == productId }
 
         override fun getAllUnits(): List<ProductUnit> =
             units.values.toList()
 
-        override fun getActivePriceConfigForUnit(unitId: String): UnitPriceConfig? =
+        override fun getActivePriceConfigForUnit(
+            unitId: String
+        ): UnitPriceConfig? =
             priceConfigs[unitId]?.takeIf { it.isActive }
 
         override fun getAllPriceConfigs(): List<UnitPriceConfig> =
