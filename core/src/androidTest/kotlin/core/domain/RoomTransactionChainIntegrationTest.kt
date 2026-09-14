@@ -15,6 +15,7 @@ import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.Quantity
 import core.domain.model.QuantityScale
+import core.domain.model.RationalCost
 import core.domain.model.StockMovement
 import core.domain.model.Supplier
 import core.domain.model.UnitPriceConfig
@@ -36,6 +37,7 @@ import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.math.BigInteger
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -301,7 +303,10 @@ class RoomTransactionChainIntegrationTest {
         )
 
         assertEquals(
-            Money.ofMinor(300L),
+            RationalCost(
+                BigInteger.valueOf(300L),
+                BigInteger.ONE
+            ),
             layers[0].acquisitionUnitCost
         )
 
@@ -694,17 +699,26 @@ class RoomTransactionChainIntegrationTest {
         )
 
         assertEquals(
-            Money.ofMinor(20_000L),
+            RationalCost(
+                BigInteger.valueOf(20_000L),
+                BigInteger.ONE
+            ),
             result.allocations[0].allocatedCost
         )
 
         assertEquals(
-            Money.ofMinor(35_000L),
+            RationalCost(
+                BigInteger.valueOf(35_000L),
+                BigInteger.ONE
+            ),
             result.allocations[1].allocatedCost
         )
 
         assertEquals(
-            Money.ofMinor(55_000L),
+            RationalCost(
+                BigInteger.valueOf(55_000L),
+                BigInteger.ONE
+            ),
             result.totalCogs
         )
 
@@ -938,6 +952,50 @@ class RoomTransactionChainIntegrationTest {
             1,
             allocationsForFirstSale.size +
                 allocationsForSecondSale.size
+        )
+    }
+
+    @Test
+    fun testJ_roomPersistsIndivisibleAcquisitionCostExactly() {
+        seedStock(
+            batchNumber = "BATCH-J-01",
+            expiryDateInt = 20271231,
+            boxes = 3L,
+            totalCostMinor = 100L,
+            receiptNumber = "REC-J-01"
+        )
+
+        val layers =
+            inventoryCostLayerDao.getActiveLayersForProduct(product.id)
+
+        assertEquals(1, layers.size)
+
+        val expectedUnitCost =
+            RationalCost(
+                BigInteger.valueOf(100L),
+                BigInteger.valueOf(3L)
+            )
+
+        assertEquals(
+            expectedUnitCost,
+            layers[0].acquisitionUnitCost
+        )
+
+        assertEquals(
+            expectedUnitCost,
+            inventoryCostLayerDao
+                .getLayerById(layers[0].id)!!
+                .acquisitionUnitCost
+        )
+
+        assertEquals(
+            300L,
+            layers[0].initialQuantity.storageUnits
+        )
+
+        assertEquals(
+            300L,
+            layers[0].remainingQuantity.storageUnits
         )
     }
 }
