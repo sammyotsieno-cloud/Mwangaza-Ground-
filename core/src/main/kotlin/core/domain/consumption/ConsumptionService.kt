@@ -6,6 +6,7 @@ import core.domain.fefo.FefoService
 import core.domain.model.InventoryCostLayer
 import core.domain.model.Money
 import core.domain.model.Quantity
+import core.domain.model.RationalCost
 import core.domain.model.Sale
 import core.domain.model.SaleItem
 import core.domain.model.StockAllocation
@@ -73,7 +74,7 @@ class InsufficientStockException(message: String) : IllegalStateException(messag
  * Invariants Enforced:
  * 1. Atomicity: Everything commits in a single database transaction, or nothing commits.
  * 2. Idempotency: Duplicate sale numbers are rejected.
- * 3. Exactness: Float/Double strictly prohibited. Money and Quantity calculations are integer-exact.
+ * 3. Exactness: Float/Double strictly prohibited. Exact COGS is retained as RationalCost.
  * 4. Immutability: StockMovement is append-only. Committed sales, items, and allocations are never rewritten.
  * 5. Cost Layer FIFO: Earlier acquired tranches within selected physical batches are depleted first.
  */
@@ -110,7 +111,7 @@ class ConsumptionService(
      * Converts a requested quantity expressed in a commercial ProductUnit
      * into the product's canonical base quantity.
      *
-     * ProductUnit owns the exact rational commercial-unit conversion:
+     * ProductUnit owns the exact rational commercial-to-base conversion:
      *
      *     1 commercial unit =
      *         conversionNumerator / conversionDenominator
@@ -198,7 +199,10 @@ class ConsumptionService(
                 val allUpdatedLayers = mutableListOf<InventoryCostLayer>()
 
                 var totalSaleSellingAmountMinor = 0L
-                var totalSaleCogsMinor = 0L
+                var totalSaleCogs = RationalCost(
+                    numerator = BigInteger.ZERO,
+                    denominator = BigInteger.ONE
+                )
 
                 // 2. Process each requested line item.
                 request.items.forEachIndexed { lineIndex, lineReq ->
@@ -373,10 +377,7 @@ class ConsumptionService(
                         lineSellingTotalMinor
                     )
 
-                    totalSaleCogsMinor = Math.addExact(
-                        totalSaleCogsMinor,
-                        lineCogs.amountMinorUnits
-                    )
+                    totalSaleCogs = totalSaleCogs.add(lineCogs)
 
                     // Create negative stock movements for each consumed batch.
                     for (candidate in fefoPlan.allocations) {
@@ -407,7 +408,7 @@ class ConsumptionService(
                     status = Sale.STATUS_COMPLETED,
                     customerRef = request.customerRef,
                     totalSellingAmount = Money(totalSaleSellingAmountMinor),
-                    totalCogs = Money(totalSaleCogsMinor),
+                    totalCogs = totalSaleCogs,
                     occurredAt = request.transactionTimestamp,
                     initiatedByUserId = request.initiatedByUserId,
                     notes = request.notes,
@@ -608,8 +609,11 @@ class ConsumptionService(
      *
      * A voided sale has zero effective COGS because its original inventory
      * consumption has been physically and financially reversed.
+     *
+     * The result remains a RationalCost so callers never lose precision by
+     * converting historical COGS into a rounded Money value.
      */
-    fun getEffectiveCogsForSale(saleId: String): Money {
+    fun getEffectiveCogsForSale(saleId: String): RationalCost {
 
         val sale =
             saleDao.getSaleById(saleId)
@@ -619,7 +623,10 @@ class ConsumptionService(
                 )
 
         return if (sale.isVoided) {
-            Money.ZERO
+            RationalCost(
+                numerator = BigInteger.ZERO,
+                denominator = BigInteger.ONE
+            )
         } else {
             sale.totalCogs
         }
