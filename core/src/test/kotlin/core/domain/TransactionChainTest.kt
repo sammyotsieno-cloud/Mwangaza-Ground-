@@ -16,6 +16,7 @@ import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.Quantity
 import core.domain.model.QuantityScale
+import core.domain.model.RationalCost
 import core.domain.model.StockBatch
 import core.domain.model.StockMovement
 import core.domain.model.UnitPriceConfig
@@ -29,6 +30,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import java.math.BigInteger
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -119,6 +121,13 @@ class TransactionChainTest {
         )
 
         db.productMasterDao.insertPriceConfig(priceConfigBox)
+    }
+
+    private fun exactMinor(amountMinor: Long): RationalCost {
+        return RationalCost(
+            BigInteger.valueOf(amountMinor),
+            BigInteger.ONE
+        )
     }
 
     private fun receipt(
@@ -435,8 +444,8 @@ class TransactionChainTest {
         )
 
         assertEquals(
-            300L,
-            layer.acquisitionUnitCost.amountMinorUnits
+            exactMinor(300L),
+            layer.acquisitionUnitCost
         )
 
         assertEquals(
@@ -470,28 +479,38 @@ class TransactionChainTest {
 
         val bundle = commitReceipt(receipt, item)
 
-        assertEquals(2, bundle.costLayers.size)
-
         /*
-         * totalCost is the authoritative acquisition monetary amount.
+         * The receipt line has a total acquisition cost of KSh 100
+         * distributed across 3 tablets. The authoritative acquisition
+         * unit cost must therefore remain the exact rational value:
          *
-         * The layer unit costs are intentionally allowed to differ by one
-         * minor unit so that the layer quantities conserve the receipt total
-         * exactly. Do not reconstruct the receipt total by assuming:
+         *     100 / 3
          *
-         *     quantity × nominal unitCost
-         *
-         * is necessarily exact.
+         * No artificial 33/34 minor-unit tranche split is permitted.
          */
-        val totalCostSum = bundle.costLayers.sumOf {
-            it.initialQuantity.storageUnits *
-                it.acquisitionUnitCost.amountMinorUnits
-        }
+        assertEquals(1, bundle.costLayers.size)
 
-        assertEquals(100L, totalCostSum)
+        val layer = bundle.costLayers.first()
+
         assertEquals(
-            item.totalCost.amountMinorUnits,
-            totalCostSum
+            exactMinor(100L).multiply(
+                BigInteger.ONE,
+                BigInteger.valueOf(3L)
+            ),
+            layer.acquisitionUnitCost
+        )
+
+        val reconstructedTotal =
+            layer.acquisitionUnitCost.multiply(
+                BigInteger.valueOf(
+                    layer.initialQuantity.storageUnits
+                ),
+                BigInteger.ONE
+            )
+
+        assertEquals(
+            exactMinor(item.totalCost.amountMinorUnits),
+            reconstructedTotal
         )
     }
 
@@ -770,7 +789,7 @@ class TransactionChainTest {
             stockBatchId = batch.id,
             initialQuantity = Quantity.of(100L, QuantityScale.SCALE_0),
             remainingQuantity = Quantity.of(100L, QuantityScale.SCALE_0),
-            acquisitionUnitCost = Money.ofMinor(1_000L),
+            acquisitionUnitCost = exactMinor(1_000L),
             acquiredAt = testTimestamp,
             createdAt = testTimestamp,
             updatedAt = testTimestamp
@@ -798,7 +817,7 @@ class TransactionChainTest {
             result.allocations.first().allocatedQuantity.storageUnits
         )
         assertEquals(
-            Money.ofMinor(40_000L),
+            exactMinor(40_000L),
             result.allocations.first().allocatedCost
         )
         assertEquals(
@@ -806,7 +825,7 @@ class TransactionChainTest {
             result.updatedCostLayers.first().remainingQuantity.storageUnits
         )
         assertEquals(
-            Money.ofMinor(40_000L),
+            exactMinor(40_000L),
             result.totalCogs
         )
     }
@@ -828,7 +847,7 @@ class TransactionChainTest {
             stockBatchId = batchA.id,
             initialQuantity = Quantity.of(50L, QuantityScale.SCALE_0),
             remainingQuantity = Quantity.of(50L, QuantityScale.SCALE_0),
-            acquisitionUnitCost = Money.ofMinor(1_000L),
+            acquisitionUnitCost = exactMinor(1_000L),
             acquiredAt = testTimestamp,
             createdAt = testTimestamp,
             updatedAt = testTimestamp
@@ -840,7 +859,7 @@ class TransactionChainTest {
             stockBatchId = batchA.id,
             initialQuantity = Quantity.of(30L, QuantityScale.SCALE_0),
             remainingQuantity = Quantity.of(30L, QuantityScale.SCALE_0),
-            acquisitionUnitCost = Money.ofMinor(1_200L),
+            acquisitionUnitCost = exactMinor(1_200L),
             acquiredAt = testTimestamp + 1_000L,
             createdAt = testTimestamp + 1_000L,
             updatedAt = testTimestamp + 1_000L
@@ -871,13 +890,13 @@ class TransactionChainTest {
             result.allocations.first { it.inventoryCostLayerId == "L2" }
 
         assertEquals(50L, alloc1.allocatedQuantity.storageUnits)
-        assertEquals(Money.ofMinor(50_000L), alloc1.allocatedCost)
+        assertEquals(exactMinor(50_000L), alloc1.allocatedCost)
 
         assertEquals(10L, alloc2.allocatedQuantity.storageUnits)
-        assertEquals(Money.ofMinor(12_000L), alloc2.allocatedCost)
+        assertEquals(exactMinor(12_000L), alloc2.allocatedCost)
 
         assertEquals(
-            Money.ofMinor(62_000L),
+            exactMinor(62_000L),
             result.totalCogs
         )
 
@@ -924,7 +943,7 @@ class TransactionChainTest {
             stockBatchId = batch1.id,
             initialQuantity = Quantity.of(40L, QuantityScale.SCALE_0),
             remainingQuantity = Quantity.of(40L, QuantityScale.SCALE_0),
-            acquisitionUnitCost = Money.ofMinor(500L),
+            acquisitionUnitCost = exactMinor(500L),
             acquiredAt = testTimestamp,
             createdAt = testTimestamp,
             updatedAt = testTimestamp
@@ -936,7 +955,7 @@ class TransactionChainTest {
             stockBatchId = batch2.id,
             initialQuantity = Quantity.of(30L, QuantityScale.SCALE_0),
             remainingQuantity = Quantity.of(30L, QuantityScale.SCALE_0),
-            acquisitionUnitCost = Money.ofMinor(600L),
+            acquisitionUnitCost = exactMinor(600L),
             acquiredAt = testTimestamp,
             createdAt = testTimestamp,
             updatedAt = testTimestamp
@@ -965,7 +984,7 @@ class TransactionChainTest {
 
         assertEquals(2, result.allocations.size)
         assertEquals(
-            Money.ofMinor(32_000L),
+            exactMinor(32_000L),
             result.totalCogs
         )
     }
@@ -987,7 +1006,7 @@ class TransactionChainTest {
             stockBatchId = batch.id,
             initialQuantity = Quantity.of(7L, QuantityScale.SCALE_0),
             remainingQuantity = Quantity.of(7L, QuantityScale.SCALE_0),
-            acquisitionUnitCost = Money.ofMinor(333L),
+            acquisitionUnitCost = exactMinor(333L),
             acquiredAt = testTimestamp,
             createdAt = testTimestamp,
             updatedAt = testTimestamp
@@ -1010,7 +1029,7 @@ class TransactionChainTest {
         )
 
         assertEquals(
-            Money.ofMinor(2_331L),
+            exactMinor(2_331L),
             result.totalCogs
         )
     }
@@ -1032,7 +1051,7 @@ class TransactionChainTest {
             stockBatchId = batch.id,
             initialQuantity = Quantity.of(100L, QuantityScale.SCALE_0),
             remainingQuantity = Quantity.of(100L, QuantityScale.SCALE_0),
-            acquisitionUnitCost = Money.ofMinor(100L),
+            acquisitionUnitCost = exactMinor(100L),
             acquiredAt = testTimestamp,
             createdAt = testTimestamp,
             updatedAt = testTimestamp
@@ -1145,7 +1164,7 @@ class TransactionChainTest {
             result.sale.totalSellingAmount
         )
         assertEquals(
-            Money.ofMinor(60_000L),
+            exactMinor(60_000L),
             result.sale.totalCogs
         )
     }
@@ -1250,12 +1269,12 @@ class TransactionChainTest {
         )
 
         assertEquals(
-            Money.ofMinor(300L),
+            exactMinor(300L),
             alloc.acquisitionUnitCost
         )
 
         assertEquals(
-            Money.ofMinor(60_000L),
+            exactMinor(60_000L),
             alloc.allocatedCost
         )
     }
@@ -1712,14 +1731,14 @@ class TransactionChainTest {
         )
 
         assertEquals(
-            Money.ofMinor(30_000L),
+            exactMinor(30_000L),
             consumptionService.getEffectiveCogsForSale(
                 saleResult.sale.id
             )
         )
 
         assertEquals(
-            30_000L,
+            exactMinor(30_000L),
             db.stockAllocationDao.getEffectiveCogsForSale(
                 saleResult.sale.id
             )
@@ -1738,14 +1757,20 @@ class TransactionChainTest {
         )
 
         assertEquals(
-            Money.ZERO,
+            RationalCost(
+                BigInteger.ZERO,
+                BigInteger.ONE
+            ),
             consumptionService.getEffectiveCogsForSale(
                 saleResult.sale.id
             )
         )
 
         assertEquals(
-            0L,
+            RationalCost(
+                BigInteger.ZERO,
+                BigInteger.ONE
+            ),
             db.stockAllocationDao.getEffectiveCogsForSale(
                 saleResult.sale.id
             )
