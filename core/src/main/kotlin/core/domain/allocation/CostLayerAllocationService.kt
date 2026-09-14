@@ -2,8 +2,8 @@ package core.domain.allocation
 
 import core.domain.fefo.FefoCandidateAllocation
 import core.domain.model.InventoryCostLayer
-import core.domain.model.Money
 import core.domain.model.Quantity
+import core.domain.model.RationalCost
 import core.domain.model.StockAllocation
 import java.math.BigInteger
 import java.util.UUID
@@ -11,16 +11,21 @@ import java.util.UUID
 /**
  * Result of allocating physical consumption across financial acquisition
  * cost layers.
+ *
+ * totalCogs is retained as an exact RationalCost.
+ *
+ * It MUST NOT be rounded merely because the value is later displayed as
+ * currency with two decimal places.
  */
 data class CostLayerAllocationResult(
     val allocations: List<StockAllocation>,
     val updatedCostLayers: List<InventoryCostLayer>,
-    val totalCogs: Money
+    val totalCogs: RationalCost
 )
 
 /**
  * Domain service responsible for allocating consumed physical quantities
- * across discrete InventoryCostLayer tranches and computing COGS.
+ * across discrete InventoryCostLayer balances and computing exact COGS.
  *
  * RESPONSIBILITY
  * --------------
@@ -34,7 +39,8 @@ data class CostLayerAllocationResult(
  * - maintain a second inventory ledger;
  * - calculate selling prices;
  * - rewrite historical acquisition costs;
- * - create or modify cost-layer identities.
+ * - create or modify cost-layer identities;
+ * - round authoritative financial values for display.
  *
  * FEFO selects physical stock.
  * InventoryCostLayer represents historical acquisition-cost pools.
@@ -48,22 +54,27 @@ data class CostLayerAllocationResult(
  *     physical quantity =
  *         storageUnits / 10^scale
  *
- * Money is represented as integer minor currency units.
+ * acquisitionUnitCost is an exact RationalCost per canonical quantity unit.
  *
- * Therefore, when acquisitionUnitCost is expressed per canonical quantity
- * unit, the exact monetary value represented by a quantity allocation is:
+ * Therefore the exact monetary value represented by a quantity allocation is:
  *
- *     storageUnits × acquisitionUnitCost
- *     ---------------------------------
- *              10^scale
+ *     allocatedCost =
+ *         acquisitionUnitCost
+ *             × storageUnits
+ *             × 1 / 10^scale
  *
- * The calculation MUST use exact integer arithmetic.
+ * Equivalently:
  *
- * No Double, Float, or implicit rounding is permitted.
+ *     allocatedCost =
+ *         acquisitionUnitCost ×
+ *             (storageUnits / 10^scale)
  *
- * If the resulting monetary amount cannot be represented exactly in the
- * smallest currency unit, the allocation is rejected rather than silently
- * rounded.
+ * All authoritative calculations remain rational and exact.
+ *
+ * No Double, Float, integer monetary division, truncation, or display
+ * rounding is permitted here.
+ *
+ * Display rounding belongs at the presentation boundary.
  */
 object CostLayerAllocationService {
 
@@ -112,7 +123,11 @@ object CostLayerAllocationService {
         val allocations = mutableListOf<StockAllocation>()
         val updatedLayers = mutableListOf<InventoryCostLayer>()
 
-        var totalCogsMinor = BigInteger.ZERO
+        var totalCogs =
+            RationalCost(
+                numerator = BigInteger.ZERO,
+                denominator = BigInteger.ONE
+            )
 
         for (candidate in candidateAllocations) {
 
@@ -194,12 +209,10 @@ object CostLayerAllocationService {
                         "(${layer.initialQuantity.storageUnits})"
                 }
 
-                require(
-                    layer.acquisitionUnitCost.amountMinorUnits >= 0L
-                ) {
+                require(layer.acquisitionUnitCost.isNonNegative) {
                     "Cost layer '${layer.id}' acquisition unit cost cannot " +
                         "be negative, got: " +
-                        "${layer.acquisitionUnitCost.amountMinorUnits}"
+                        "${layer.acquisitionUnitCost}"
                 }
             }
 
@@ -285,64 +298,50 @@ object CostLayerAllocationService {
                  * ---------------------------------------------------------
                  * 7. Calculate exact COGS.
                  *
-                 * IMPORTANT:
+                 * acquisitionUnitCost is an exact RationalCost per
+                 * canonical quantity unit.
                  *
-                 * acquisitionUnitCost is per canonical quantity unit,
-                 * while Quantity stores scaled integer storage units.
+                 * allocatedQuantity represents:
                  *
-                 * Therefore we MUST divide by 10^scale.
+                 *     storageUnits / 10^scale
                  *
-                 * Example:
+                 * Therefore:
                  *
-                 * scale = 2
-                 * quantity = 1.50
-                 * storageUnits = 150
-                 * unit cost = 6,666 minor units
+                 *     allocatedCost =
+                 *         acquisitionUnitCost ×
+                 *             storageUnits / 10^scale
                  *
-                 * exact mathematical cost:
+                 * The result remains RationalCost.
                  *
-                 *     150 × 6,666 / 100
-                 *     = 9,999 minor units
-                 *
-                 * No raw-storage-unit multiplication is allowed.
+                 * There is deliberately NO conversion to Money here.
+                 * There is deliberately NO requirement that the result
+                 * be an integral number of currency minor units.
                  * ---------------------------------------------------------
                  */
-                val layerCogsMinor =
-                    calculateExactAllocatedCostMinorUnits(
-                        quantity = allocatedQuantity,
-                        acquisitionUnitCost = layer.acquisitionUnitCost
-                    )
-
-                /*
-                 * BigInteger.longValueExact() is API 31+ on Android.
-                 * Mwangaza supports API 24.
-                 *
-                 * Exactness has already been established by
-                 * calculateExactAllocatedCostMinorUnits(), so converting
-                 * through the decimal representation preserves the same
-                 * overflow semantics without invoking the API-31 method.
-                 */
-                val allocatedCostMinorLong =
-                    layerCogsMinor
-                        .toString()
-                        .toLongOrNull()
-                        ?: throw ArithmeticException(
-                            "Allocated COGS exceeds Long monetary storage " +
-                                "capacity: $layerCogsMinor"
-                        )
-
                 val allocatedCost =
-                    Money(
-                        allocatedCostMinorLong
+                    calculateExactAllocatedCost(
+                        quantity = allocatedQuantity,
+                        acquisitionUnitCost =
+                            layer.acquisitionUnitCost
                     )
+
+                require(allocatedCost.isNonNegative) {
+                    "Calculated allocation cost cannot be negative: " +
+                        "layer=${layer.id}, " +
+                        "quantity=$allocatedQuantity, " +
+                        "unitCost=${layer.acquisitionUnitCost}"
+                }
 
                 /*
                  * ---------------------------------------------------------
                  * 8. Create the immutable financial bridge record.
                  *
-                 * StockAllocation itself verifies that its quantity,
-                 * historical acquisition unit cost, and allocated monetary
-                 * value agree exactly.
+                 * StockAllocation verifies that:
+                 *
+                 *     allocatedCost =
+                 *         acquisitionUnitCost × allocatedQuantity
+                 *
+                 * exactly.
                  * ---------------------------------------------------------
                  */
                 val allocation =
@@ -390,8 +389,13 @@ object CostLayerAllocationService {
 
                 unitsRemainingToCover -= unitsFromThisLayer
 
-                totalCogsMinor =
-                    totalCogsMinor.add(layerCogsMinor)
+                /*
+                 * Exact aggregate COGS.
+                 *
+                 * No display rounding occurs here.
+                 */
+                totalCogs =
+                    totalCogs.add(allocatedCost)
             }
 
             /*
@@ -407,24 +411,10 @@ object CostLayerAllocationService {
             }
         }
 
-        /*
-         * -------------------------------------------------------------
-         * 11. Ensure the aggregate COGS fits the Money representation.
-         * -------------------------------------------------------------
-         */
-        val totalCogsMinorLong =
-            totalCogsMinor
-                .toString()
-                .toLongOrNull()
-                ?: throw ArithmeticException(
-                    "Total COGS exceeds Long monetary storage capacity: " +
-                        totalCogsMinor
-                )
-
         return CostLayerAllocationResult(
             allocations = allocations,
             updatedCostLayers = updatedLayers,
-            totalCogs = Money(totalCogsMinorLong)
+            totalCogs = totalCogs
         )
     }
 
@@ -434,55 +424,44 @@ object CostLayerAllocationService {
      *
      * Formula:
      *
-     *     storageUnits × unitCostMinorUnits
-     *     ---------------------------------
-     *                10^scale
+     *     allocatedCost =
+     *         acquisitionUnitCost ×
+     *             storageUnits / 10^scale
      *
-     * The result MUST be an integer number of currency minor units.
+     * RationalCost performs the multiplication and division without
+     * converting the result to integer currency minor units.
      *
-     * BigInteger is used so intermediate multiplication cannot overflow
-     * Long before exactness is established.
+     * Example:
+     *
+     *     acquisitionUnitCost = 100/3
+     *     quantity            = 1
+     *
+     *     allocatedCost       = 100/3
+     *
+     * Another example:
+     *
+     *     acquisitionUnitCost = 100/3
+     *     quantity            = 3
+     *
+     *     allocatedCost       = 100
+     *
+     * The mathematical value is retained exactly in both cases.
      */
-    private fun calculateExactAllocatedCostMinorUnits(
+    private fun calculateExactAllocatedCost(
         quantity: Quantity,
-        acquisitionUnitCost: Money
-    ): BigInteger {
+        acquisitionUnitCost: RationalCost
+    ): RationalCost {
 
         val scaleFactor =
             BigInteger.TEN.pow(
                 quantity.scale.scale
             )
 
-        val numerator =
-            BigInteger.valueOf(
+        return acquisitionUnitCost.multiply(
+            numerator = BigInteger.valueOf(
                 quantity.storageUnits
-            ).multiply(
-                BigInteger.valueOf(
-                    acquisitionUnitCost.amountMinorUnits
-                )
-            )
-
-        val quotientAndRemainder =
-            numerator.divideAndRemainder(
-                scaleFactor
-            )
-
-        require(
-            quotientAndRemainder[1] == BigInteger.ZERO
-        ) {
-            "Exact COGS allocation is not representable in currency " +
-                "minor units: quantity=$quantity, " +
-                "acquisitionUnitCost=$acquisitionUnitCost"
-        }
-
-        require(
-            quotientAndRemainder[0] >= BigInteger.ZERO
-        ) {
-            "Calculated COGS cannot be negative: " +
-                "quantity=$quantity, " +
-                "acquisitionUnitCost=$acquisitionUnitCost"
-        }
-
-        return quotientAndRemainder[0]
+            ),
+            denominator = scaleFactor
+        )
     }
 }
