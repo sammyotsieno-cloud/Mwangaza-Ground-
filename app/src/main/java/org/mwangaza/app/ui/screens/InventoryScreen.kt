@@ -58,7 +58,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
 import java.math.BigDecimal
-import java.math.BigInteger
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -168,15 +167,17 @@ fun InventoryScreen(
                                 }
 
                             /*
-                             * Financial valuation comes from active
-                             * InventoryCostLayer records.
+                             * Financial valuation remains product-scoped
+                             * because this screen displays one product at a
+                             * time.
                              *
-                             * acquisitionUnitCost is an exact RationalCost.
-                             * The remaining quantity and initial quantity
-                             * share the same quantity scale, so their ratio
-                             * can be applied directly to the exact unit cost.
+                             * The InventoryValuationService is now the
+                             * authority for the actual layer valuation
+                             * calculation. The DAO remains responsible for
+                             * retrieving the active layers for this product.
                              *
-                             * No integer division or rounding occurs here.
+                             * No integer division or UI rounding occurs
+                             * during this calculation.
                              */
                             val activeLayers =
                                 container.inventoryCostLayerDao
@@ -184,35 +185,17 @@ fun InventoryScreen(
 
                             val totalValuation =
                                 activeLayers.fold(
-                                    zeroRationalCost()
+                                    RationalCost(
+                                        numerator = java.math.BigInteger.ZERO,
+                                        denominator = java.math.BigInteger.ONE
+                                    )
                                 ) { total, layer ->
 
-                                    val initialQuantity =
-                                        layer.initialQuantity.storageUnits
+                                    val layerValuation =
+                                        container.inventoryValuationService
+                                            .calculateLayerValuation(layer)
 
-                                    val remainingQuantity =
-                                        layer.remainingQuantity.storageUnits
-
-                                    if (
-                                        initialQuantity > 0L &&
-                                        remainingQuantity > 0L
-                                    ) {
-                                        val layerValuation =
-                                            layer.acquisitionUnitCost.multiply(
-                                                numerator =
-                                                    BigInteger.valueOf(
-                                                        remainingQuantity
-                                                    ),
-                                                denominator =
-                                                    BigInteger.valueOf(
-                                                        initialQuantity
-                                                    )
-                                            )
-
-                                        total.add(layerValuation)
-                                    } else {
-                                        total
-                                    }
+                                    total.add(layerValuation)
                                 }
 
                             val productBatches =
@@ -967,16 +950,6 @@ fun InventoryScreen(
             }
         )
     }
-}
-
-/**
- * Canonical exact zero used for RationalCost aggregation.
- */
-private fun zeroRationalCost(): RationalCost {
-    return RationalCost(
-        numerator = BigInteger.ZERO,
-        denominator = BigInteger.ONE
-    )
 }
 
 /**
