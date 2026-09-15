@@ -70,6 +70,7 @@ import core.domain.model.Money
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.Quantity
+import core.domain.model.RationalCost
 import core.domain.model.Sale
 import core.domain.model.SaleItem
 import core.domain.model.UnitPriceConfig
@@ -78,6 +79,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -98,6 +101,17 @@ private fun formatMoney(minorUnits: Long): String {
         .padStart(2, '0')
 
     return "KES $major.$minor"
+}
+
+private fun formatRationalCost(cost: RationalCost): String {
+    val value = BigDecimal(cost.numerator)
+        .divide(
+            BigDecimal(cost.denominator),
+            2,
+            RoundingMode.HALF_UP
+        )
+
+    return "KES ${value.setScale(2, RoundingMode.HALF_UP).toPlainString()}"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -612,10 +626,8 @@ fun DispensingScreen(
                                                     .amountMinorUnits
                                             ) +
                                             " (COGS: " +
-                                            formatMoney(
-                                                result.sale
-                                                    .totalCogs
-                                                    .amountMinorUnits
+                                            formatRationalCost(
+                                                result.sale.totalCogs
                                             ) +
                                             ")"
                                     )
@@ -905,9 +917,8 @@ fun DispensingScreen(
 
                                         Text(
                                             "COGS: " +
-                                                formatMoney(
+                                                formatRationalCost(
                                                     sale.totalCogs
-                                                        .amountMinorUnits
                                                 ),
                                             style =
                                                 MaterialTheme.typography
@@ -1412,9 +1423,8 @@ fun DispensingScreen(
                                                 .amountMinorUnits
                                         ) +
                                         " | Line COGS: " +
-                                        formatMoney(
+                                        formatRationalCost(
                                             item.lineCogs
-                                                .amountMinorUnits
                                         ),
                                     style =
                                         MaterialTheme.typography.bodySmall
@@ -1438,8 +1448,8 @@ fun DispensingScreen(
 
                     Text(
                         "Total Acquisition Cost (COGS): " +
-                            formatMoney(
-                                sale.totalCogs.amountMinorUnits
+                            formatRationalCost(
+                                sale.totalCogs
                             ),
                         fontWeight = FontWeight.Medium
                     )
