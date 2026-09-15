@@ -13,20 +13,27 @@ import java.math.BigInteger
  *
  *     KES 100 / 3 units = 100/3
  *
- * The value is always normalized:
+ * Every RationalCost instance is canonical:
  *
  * - denominator must be non-zero;
  * - denominator is always positive;
  * - numerator and denominator are reduced by their greatest common divisor;
- * - zero is represented canonically as 0/1.
+ * - zero is represented as 0/1.
+ *
+ * This means mathematically equivalent values are equal:
+ *
+ *     100/3 == 200/6
  *
  * No floating-point arithmetic, currency rounding, or UI formatting belongs
  * in this class.
  */
-data class RationalCost(
-    val numerator: BigInteger,
-    val denominator: BigInteger
+class RationalCost(
+    numerator: BigInteger,
+    denominator: BigInteger
 ) {
+
+    val numerator: BigInteger
+    val denominator: BigInteger
 
     init {
         require(denominator != BigInteger.ZERO) {
@@ -36,32 +43,15 @@ data class RationalCost(
         require(denominator > BigInteger.ZERO) {
             "RationalCost denominator must be positive"
         }
-    }
 
-    /**
-     * Returns the canonical mathematical representation of this value.
-     *
-     * Because the primary constructor is intentionally kept compatible with
-     * the existing repository call sites, normalization is performed through
-     * this factory before constructing derived values.
-     */
-    private fun normalized(): RationalCost {
         if (numerator == BigInteger.ZERO) {
-            return RationalCost(
-                numerator = BigInteger.ZERO,
-                denominator = BigInteger.ONE
-            )
-        }
-
-        val gcd = numerator.abs().gcd(denominator)
-
-        return if (gcd == BigInteger.ONE) {
-            this
+            this.numerator = BigInteger.ZERO
+            this.denominator = BigInteger.ONE
         } else {
-            RationalCost(
-                numerator = numerator.divide(gcd),
-                denominator = denominator.divide(gcd)
-            )
+            val gcd = numerator.abs().gcd(denominator)
+
+            this.numerator = numerator.divide(gcd)
+            this.denominator = denominator.divide(gcd)
         }
     }
 
@@ -90,7 +80,7 @@ data class RationalCost(
         val resultDenominator =
             denominator.multiply(other.denominator)
 
-        return canonical(
+        return RationalCost(
             numerator = resultNumerator,
             denominator = resultDenominator
         )
@@ -113,7 +103,7 @@ data class RationalCost(
         val resultDenominator =
             denominator.multiply(other.denominator)
 
-        return canonical(
+        return RationalCost(
             numerator = resultNumerator,
             denominator = resultDenominator
         )
@@ -125,7 +115,7 @@ data class RationalCost(
      * No rounding is performed.
      */
     fun multiply(multiplier: BigInteger): RationalCost {
-        return canonical(
+        return RationalCost(
             numerator = numerator.multiply(multiplier),
             denominator = denominator
         )
@@ -137,8 +127,8 @@ data class RationalCost(
      *
      * No rounding is performed.
      *
-     * This overload is intentionally named and shaped to match the existing
-     * repository callers, which calculate quantities such as:
+     * This overload is intentionally shaped to match the existing repository
+     * callers, which calculate quantities such as:
      *
      *     acquisitionUnitCost *
      *         remainingQuantity /
@@ -152,71 +142,51 @@ data class RationalCost(
             "RationalCost multiplication denominator must not be zero"
         }
 
-        return canonical(
+        return RationalCost(
             numerator = this.numerator.multiply(numerator),
             denominator = this.denominator.multiply(denominator)
         )
     }
 
     /**
-     * Returns a canonical RationalCost.
+     * Mathematical value equality.
      *
-     * The canonical form guarantees:
-     *
-     *     denominator > 0
-     *
-     * and:
-     *
-     *     gcd(abs(numerator), denominator) == 1
-     *
-     * with zero represented as:
-     *
-     *     0/1
+     * Because every instance is canonicalized at construction time,
+     * equivalent fractions compare equal by their normalized numerator and
+     * denominator.
      */
-    private fun canonical(
-        numerator: BigInteger,
-        denominator: BigInteger
-    ): RationalCost {
-        require(denominator != BigInteger.ZERO) {
-            "RationalCost denominator must not be zero"
+    override fun equals(other: Any?): Boolean {
+        if (this === other) {
+            return true
         }
 
-        if (numerator == BigInteger.ZERO) {
-            return RationalCost(
-                numerator = BigInteger.ZERO,
-                denominator = BigInteger.ONE
-            )
+        if (other !is RationalCost) {
+            return false
         }
 
-        val positiveNumerator =
-            if (denominator < BigInteger.ZERO) {
-                numerator.negate()
-            } else {
-                numerator
-            }
+        return numerator == other.numerator &&
+            denominator == other.denominator
+    }
 
-        val positiveDenominator =
-            denominator.abs()
-
-        val gcd =
-            positiveNumerator.abs().gcd(positiveDenominator)
-
-        return RationalCost(
-            numerator = positiveNumerator.divide(gcd),
-            denominator = positiveDenominator.divide(gcd)
-        )
+    /**
+     * Hash code consistent with mathematical value equality.
+     */
+    override fun hashCode(): Int {
+        var result = numerator.hashCode()
+        result = 31 * result + denominator.hashCode()
+        return result
     }
 
     /**
      * Returns the canonical textual representation used by RoomConverters.
      *
-     * Example:
+     * Examples:
      *
      *     RationalCost(100, 3) -> "100/3"
+     *     RationalCost(200, 6) -> "100/3"
+     *     RationalCost(0, 50)  -> "0/1"
      */
     override fun toString(): String {
-        val canonicalValue = normalized()
-
-        return "${canonicalValue.numerator}/${canonicalValue.denominator}"
+        return "$numerator/$denominator"
     }
 }
