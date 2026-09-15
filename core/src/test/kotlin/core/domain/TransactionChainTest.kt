@@ -89,6 +89,7 @@ class TransactionChainTest {
             conversionNumerator = 1L,
             conversionDenominator = 1L,
             isBaseUnit = true,
+            isPurchaseUnit = true,
             isDispensingUnit = true,
             createdAt = testTimestamp,
             updatedAt = testTimestamp
