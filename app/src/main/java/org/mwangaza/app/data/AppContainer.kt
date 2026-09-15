@@ -11,6 +11,7 @@ import core.domain.persistence.StockAllocationDao
 import core.domain.persistence.StockBatchDao
 import core.domain.persistence.StockMovementDao
 import core.domain.receiving.GoodsReceiptPersistenceService
+import core.domain.reporting.InventoryValuationService
 
 class AppContainer(context: Context) {
     val database: CoreDatabase = CoreDatabase.getInstance(context)
@@ -23,6 +24,12 @@ class AppContainer(context: Context) {
     val stockAllocationDao: StockAllocationDao = database.stockAllocationDao()
     val saleDao: SaleDao = database.saleDao()
 
-    val receivingService: GoodsReceiptPersistenceService = GoodsReceiptPersistenceService(database)
-    val consumptionService: ConsumptionService = ConsumptionService(database)
+    val receivingService: GoodsReceiptPersistenceService =
+        GoodsReceiptPersistenceService(database)
+
+    val consumptionService: ConsumptionService =
+        ConsumptionService(database)
+
+    val inventoryValuationService: InventoryValuationService =
+        InventoryValuationService(inventoryCostLayerDao)
 }
