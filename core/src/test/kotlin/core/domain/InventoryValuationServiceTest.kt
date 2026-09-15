@@ -124,25 +124,30 @@ class InventoryValuationServiceTest {
 
     @Test
     fun `recurring fractions remain exact when summed across layers`() {
+        val recurringUnitCost = RationalCost(
+            numerator = BigInteger.valueOf(100L),
+            denominator = BigInteger.valueOf(3L)
+        )
+
         val layer1 = layer(
             id = "L1",
             initialQuantity = 3L,
             remainingQuantity = 1L,
-            acquisitionUnitCost = exactMinor(100L)
+            acquisitionUnitCost = recurringUnitCost
         )
 
         val layer2 = layer(
             id = "L2",
             initialQuantity = 3L,
             remainingQuantity = 1L,
-            acquisitionUnitCost = exactMinor(100L)
+            acquisitionUnitCost = recurringUnitCost
         )
 
         val layer3 = layer(
             id = "L3",
             initialQuantity = 3L,
             remainingQuantity = 1L,
-            acquisitionUnitCost = exactMinor(100L)
+            acquisitionUnitCost = recurringUnitCost
         )
 
         val service = InventoryValuationService(
