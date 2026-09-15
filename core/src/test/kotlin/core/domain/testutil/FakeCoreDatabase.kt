@@ -41,7 +41,6 @@ class FakeCoreDatabase : TransactionRunner {
     val priceConfigs = mutableMapOf<String, UnitPriceConfig>()
 
     override fun <T> runInTransaction(block: () -> T): T {
-        // Snapshot state for atomic rollback on failure
         val snapReceipts = receipts.toMap()
         val snapReceiptItems = receiptItems.mapValues { it.value.toMutableList() }.toMutableMap()
         val snapBatches = batches.toMap()
@@ -57,7 +56,6 @@ class FakeCoreDatabase : TransactionRunner {
         try {
             return block()
         } catch (e: Throwable) {
-            // Restore snapshot
             receipts.clear()
             receipts.putAll(snapReceipts)
             receiptItems.clear()
@@ -226,6 +224,17 @@ class FakeCoreDatabase : TransactionRunner {
                         .thenBy { it.id }
                 )
 
+        override fun getAllActiveLayers(): List<InventoryCostLayer> =
+            costLayers.values
+                .filter {
+                    it.remainingQuantity.isPositive
+                }
+                .sortedWith(
+                    compareBy<InventoryCostLayer> { it.acquiredAt }
+                        .thenBy { it.createdAt }
+                        .thenBy { it.id }
+                )
+
         override fun getLayersForReceiptRef(
             receiptRef: String
         ): List<InventoryCostLayer> =
@@ -264,7 +273,7 @@ class FakeCoreDatabase : TransactionRunner {
 
             if (
                 layer.remainingQuantity.storageUnits + incrementUnits >
-                    layer.initialQuantity.storageUnits
+                layer.initialQuantity.storageUnits
             ) {
                 return 0
             }
@@ -361,46 +370,29 @@ class FakeCoreDatabase : TransactionRunner {
                 .filter { it.inventoryCostLayerId == layerId }
                 .sortedBy { it.allocatedAt }
 
-        override fun getEffectiveCogsForProduct(
+        override fun getEffectiveAllocationsForProduct(
             productId: String
-        ): RationalCost {
-            return allocations
+        ): List<StockAllocation> =
+            allocations
                 .filter { allocation ->
                     allocation.productId == productId &&
                         sales[allocation.consumptionTransactionId]?.status ==
                         Sale.STATUS_COMPLETED
                 }
-                .fold(
-                    RationalCost(
-                        numerator = BigInteger.ZERO,
-                        denominator = BigInteger.ONE
-                    )
-                ) { total, allocation ->
-                    total.add(allocation.allocatedCost)
-                }
-        }
+                .sortedBy { it.allocatedAt }
 
-        override fun getEffectiveCogsForSale(
+        override fun getEffectiveAllocationsForSale(
             saleId: String
-        ): RationalCost {
-            if (sales[saleId]?.status != Sale.STATUS_COMPLETED) {
-                return RationalCost(
-                    numerator = BigInteger.ZERO,
-                    denominator = BigInteger.ONE
-                )
+        ): List<StockAllocation> =
+            if (sales[saleId]?.status == Sale.STATUS_COMPLETED) {
+                allocations
+                    .filter {
+                        it.consumptionTransactionId == saleId
+                    }
+                    .sortedBy { it.allocatedAt }
+            } else {
+                emptyList()
             }
-
-            return allocations
-                .filter { it.consumptionTransactionId == saleId }
-                .fold(
-                    RationalCost(
-                        numerator = BigInteger.ZERO,
-                        denominator = BigInteger.ONE
-                    )
-                ) { total, allocation ->
-                    total.add(allocation.allocatedCost)
-                }
-        }
     }
 
     val saleDao = object : SaleDao {
