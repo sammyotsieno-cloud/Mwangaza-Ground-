@@ -50,390 +50,614 @@ import androidx.compose.ui.unit.dp
 import core.domain.model.InventoryCostLayer
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
+import core.domain.model.RationalCost
 import core.domain.model.StockBatch
 import core.domain.model.StockMovement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
+import java.math.BigDecimal
+import java.math.BigInteger
+import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 data class ProductStockSummary(
-val product: ProductMaster,
-val baseUnit: ProductUnit?,
-val physicalStockUnits: Long,
-val valuationMinorUnits: Long,
-val batches: List<BatchStockSummary>
+    val product: ProductMaster,
+    val baseUnit: ProductUnit?,
+    val physicalStockUnits: Long,
+    val valuation: RationalCost,
+    val batches: List<BatchStockSummary>
 )
 
 data class BatchStockSummary(
-val batch: StockBatch,
-val physicalUnits: Long,
-val costLayers: List<InventoryCostLayer>
+    val batch: StockBatch,
+    val physicalUnits: Long,
+    val costLayers: List<InventoryCostLayer>
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InventoryScreen(
-container: AppContainer,
-onBack: () -> Unit,
-modifier: Modifier = Modifier
+    container: AppContainer,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-val scope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
 
-var selectedTab by remember { mutableIntStateOf(0) }
-var isLoading by remember { mutableStateOf(true) }
-var searchQuery by remember { mutableStateOf("") }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var isLoading by remember { mutableStateOf(true) }
+    var searchQuery by remember { mutableStateOf("") }
 
-var productSummaries by remember {
-    mutableStateOf<List<ProductStockSummary>>(emptyList())
-}
+    var productSummaries by remember {
+        mutableStateOf<List<ProductStockSummary>>(emptyList())
+    }
 
-var allMovements by remember {
-    mutableStateOf<List<StockMovement>>(emptyList())
-}
+    var allMovements by remember {
+        mutableStateOf<List<StockMovement>>(emptyList())
+    }
 
-var productsById by remember {
-    mutableStateOf<Map<String, ProductMaster>>(emptyMap())
-}
+    var productsById by remember {
+        mutableStateOf<Map<String, ProductMaster>>(emptyMap())
+    }
 
-var batchesById by remember {
-    mutableStateOf<Map<String, StockBatch>>(emptyMap())
-}
+    var batchesById by remember {
+        mutableStateOf<Map<String, StockBatch>>(emptyMap())
+    }
 
-var selectedSummaryForDetail by remember {
-    mutableStateOf<ProductStockSummary?>(null)
-}
+    var selectedSummaryForDetail by remember {
+        mutableStateOf<ProductStockSummary?>(null)
+    }
 
-fun refreshData() {
-    scope.launch {
-        isLoading = true
+    fun refreshData() {
+        scope.launch {
+            isLoading = true
 
-        try {
-            withContext(Dispatchers.IO) {
-                val products =
-                    container.productMasterDao.getAllProducts()
+            try {
+                withContext(Dispatchers.IO) {
+                    val products =
+                        container.productMasterDao.getAllProducts()
 
-                val units =
-                    container.productMasterDao.getAllUnits()
+                    val units =
+                        container.productMasterDao.getAllUnits()
 
-                val movements =
-                    container.stockMovementDao.getAllMovements()
+                    val movements =
+                        container.stockMovementDao.getAllMovements()
 
-                val batches =
-                    container.stockBatchDao.getAllBatches()
+                    val batches =
+                        container.stockBatchDao.getAllBatches()
 
-                val productMap =
-                    products.associateBy { it.id }
+                    val productMap =
+                        products.associateBy { it.id }
 
-                val batchMap =
-                    batches.associateBy { it.id }
+                    val batchMap =
+                        batches.associateBy { it.id }
 
-                val baseUnitsByProduct =
-                    units
-                        .filter { it.isBaseUnit }
-                        .associateBy { it.productId }
+                    val baseUnitsByProduct =
+                        units
+                            .filter { it.isBaseUnit }
+                            .associateBy { it.productId }
 
-                val movementsByProduct =
-                    movements.groupBy { it.productId }
+                    val movementsByProduct =
+                        movements.groupBy { it.productId }
 
-                val movementsByBatch =
-                    movements
-                        .filter { it.stockBatchId != null }
-                        .groupBy { it.stockBatchId!! }
+                    val movementsByBatch =
+                        movements
+                            .filter { it.stockBatchId != null }
+                            .groupBy { it.stockBatchId!! }
 
-                val batchesByProduct =
-                    batches.groupBy { it.productId }
+                    val batchesByProduct =
+                        batches.groupBy { it.productId }
 
-                val summaries =
-                    products.map { product ->
+                    val summaries =
+                        products.map { product ->
 
-                        val productMovements =
-                            movementsByProduct[product.id]
-                                ?: emptyList()
+                            val productMovements =
+                                movementsByProduct[product.id]
+                                    ?: emptyList()
 
-                        /*
-                         * Physical stock is authoritative from the
-                         * immutable StockMovement ledger.
-                         */
-                        val totalPhysicalUnits =
-                            productMovements.sumOf {
-                                it.quantity.storageUnits
-                            }
+                            /*
+                             * Physical stock remains authoritative from the
+                             * immutable StockMovement ledger.
+                             */
+                            val totalPhysicalUnits =
+                                productMovements.sumOf {
+                                    it.quantity.storageUnits
+                                }
 
-                        /*
-                         * Financial valuation comes from the active
-                         * InventoryCostLayer records.
-                         *
-                         * InventoryCostLayer is the acquisition-cost
-                         * authority; current selling price and reference
-                         * cost are deliberately not used here.
-                         */
-                        val activeLayers =
-                            container.inventoryCostLayerDao
-                                .getActiveLayersForProduct(product.id)
+                            /*
+                             * Financial valuation comes from active
+                             * InventoryCostLayer records.
+                             *
+                             * acquisitionUnitCost is an exact RationalCost.
+                             * The remaining quantity and initial quantity
+                             * share the same quantity scale, so their ratio
+                             * can be applied directly to the exact unit cost.
+                             *
+                             * No integer division or rounding occurs here.
+                             */
+                            val activeLayers =
+                                container.inventoryCostLayerDao
+                                    .getActiveLayersForProduct(product.id)
 
-                        val totalValuation =
-                            activeLayers.sumOf { layer ->
+                            val totalValuation =
+                                activeLayers.fold(
+                                    zeroRationalCost()
+                                ) { total, layer ->
 
-                                val initialQuantity =
-                                    layer.initialQuantity.storageUnits
-
-                                if (initialQuantity > 0L) {
+                                    val initialQuantity =
+                                        layer.initialQuantity.storageUnits
 
                                     val remainingQuantity =
                                         layer.remainingQuantity.storageUnits
 
-                                    val acquisitionCost =
-                                        layer.acquisitionUnitCost
-                                            .amountMinorUnits
+                                    if (
+                                        initialQuantity > 0L &&
+                                        remainingQuantity > 0L
+                                    ) {
+                                        val layerValuation =
+                                            layer.acquisitionUnitCost.multiply(
+                                                numerator =
+                                                    BigInteger.valueOf(
+                                                        remainingQuantity
+                                                    ),
+                                                denominator =
+                                                    BigInteger.valueOf(
+                                                        initialQuantity
+                                                    )
+                                            )
 
-                                    /*
-                                     * The current domain model stores the
-                                     * acquisition unit cost as an exact
-                                     * Money value associated with the
-                                     * layer's quantity basis.
-                                     *
-                                     * Keep the calculation integer-only.
-                                     */
-                                    (remainingQuantity *
-                                        acquisitionCost) /
-                                        initialQuantity
-
-                                } else {
-                                    0L
+                                        total.add(layerValuation)
+                                    } else {
+                                        total
+                                    }
                                 }
-                            }
 
-                        val productBatches =
-                            batchesByProduct[product.id]
-                                ?: emptyList()
+                            val productBatches =
+                                batchesByProduct[product.id]
+                                    ?: emptyList()
 
-                        val batchSummaries =
-                            productBatches.map { batch ->
+                            val batchSummaries =
+                                productBatches.map { batch ->
 
-                                val batchMovements =
-                                    movementsByBatch[batch.id]
-                                        ?: emptyList()
+                                    val batchMovements =
+                                        movementsByBatch[batch.id]
+                                            ?: emptyList()
 
-                                val batchUnits =
-                                    batchMovements.sumOf {
-                                        it.quantity.storageUnits
-                                    }
+                                    val batchUnits =
+                                        batchMovements.sumOf {
+                                            it.quantity.storageUnits
+                                        }
 
-                                val batchLayers =
-                                    activeLayers.filter {
-                                        it.stockBatchId == batch.id
-                                    }
+                                    val batchLayers =
+                                        activeLayers.filter {
+                                            it.stockBatchId == batch.id
+                                        }
 
-                                BatchStockSummary(
-                                    batch = batch,
-                                    physicalUnits = batchUnits,
-                                    costLayers = batchLayers
-                                )
-                            }
+                                    BatchStockSummary(
+                                        batch = batch,
+                                        physicalUnits = batchUnits,
+                                        costLayers = batchLayers
+                                    )
+                                }
 
-                        ProductStockSummary(
-                            product = product,
-                            baseUnit =
-                                baseUnitsByProduct[product.id],
-                            physicalStockUnits =
-                                totalPhysicalUnits,
-                            valuationMinorUnits =
-                                totalValuation,
-                            batches =
-                                batchSummaries
+                            ProductStockSummary(
+                                product = product,
+                                baseUnit =
+                                    baseUnitsByProduct[product.id],
+                                physicalStockUnits =
+                                    totalPhysicalUnits,
+                                valuation =
+                                    totalValuation,
+                                batches =
+                                    batchSummaries
+                            )
+                        }
+
+                    productSummaries = summaries
+                    allMovements = movements
+                    productsById = productMap
+                    batchesById = batchMap
+                }
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshData()
+    }
+
+    val filteredSummaries =
+        remember(
+            productSummaries,
+            searchQuery
+        ) {
+            if (searchQuery.isBlank()) {
+                productSummaries
+            } else {
+                val query =
+                    searchQuery
+                        .trim()
+                        .lowercase()
+
+                productSummaries.filter {
+                    it.product.brandName
+                        ?.lowercase()
+                        ?.contains(query) == true ||
+                        it.product.genericName
+                            ?.lowercase()
+                            ?.contains(query) == true
+                }
+            }
+        }
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text("Inventory & Ledger")
+                },
+
+                navigationIcon = {
+                    IconButton(
+                        onClick = onBack
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
                         )
                     }
-
-                productSummaries = summaries
-                allMovements = movements
-                productsById = productMap
-                batchesById = batchMap
-            }
-        } finally {
-            isLoading = false
-        }
-    }
-}
-
-LaunchedEffect(Unit) {
-    refreshData()
-}
-
-val filteredSummaries =
-    remember(
-        productSummaries,
-        searchQuery
-    ) {
-        if (searchQuery.isBlank()) {
-            productSummaries
-        } else {
-            val query =
-                searchQuery
-                    .trim()
-                    .lowercase()
-
-            productSummaries.filter {
-                it.product.brandName
-                    ?.lowercase()
-                    ?.contains(query) == true ||
-                    it.product.genericName
-                        ?.lowercase()
-                        ?.contains(query) == true
-            }
-        }
-    }
-
-Scaffold(
-    modifier = modifier.fillMaxSize(),
-
-    topBar = {
-        TopAppBar(
-            title = {
-                Text("Inventory & Ledger")
-            },
-
-            navigationIcon = {
-                IconButton(
-                    onClick = onBack
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back"
-                    )
                 }
-            }
-        )
-    }
-) { innerPadding ->
+            )
+        }
+    ) { innerPadding ->
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-    ) {
-
-        TabRow(
-            selectedTabIndex = selectedTab
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
 
-            Tab(
-                selected = selectedTab == 0,
-                onClick = {
-                    selectedTab = 0
-                },
-                text = {
-                    Text("Stock Balances")
-                }
-            )
-
-            Tab(
-                selected = selectedTab == 1,
-                onClick = {
-                    selectedTab = 1
-                },
-                text = {
-                    Text(
-                        "Movement Ledger (${allMovements.size})"
-                    )
-                }
-            )
-        }
-
-        if (isLoading) {
-
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-
-        } else if (selectedTab == 0) {
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
+            TabRow(
+                selectedTabIndex = selectedTab
             ) {
 
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = {
-                        searchQuery = it
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = {
+                        selectedTab = 0
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    placeholder = {
-                        Text(
-                            "Filter inventory by product name..."
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = null
-                        )
-                    },
-                    trailingIcon = {
-
-                        if (searchQuery.isNotEmpty()) {
-
-                            IconButton(
-                                onClick = {
-                                    searchQuery = ""
-                                }
-                            ) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Clear"
-                                )
-                            }
-                        }
-                    },
-                    singleLine = true
+                    text = {
+                        Text("Stock Balances")
+                    }
                 )
 
-                if (filteredSummaries.isEmpty()) {
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = {
+                        selectedTab = 1
+                    },
+                    text = {
+                        Text(
+                            "Movement Ledger (${allMovements.size})"
+                        )
+                    }
+                )
+            }
+
+            if (isLoading) {
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+
+            } else if (selectedTab == 0) {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = {
+                            searchQuery = it
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        placeholder = {
+                            Text(
+                                "Filter inventory by product name..."
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null
+                            )
+                        },
+                        trailingIcon = {
+
+                            if (searchQuery.isNotEmpty()) {
+
+                                IconButton(
+                                    onClick = {
+                                        searchQuery = ""
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Clear"
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true
+                    )
+
+                    if (filteredSummaries.isEmpty()) {
+
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "No inventory records found.",
+                                color =
+                                    MaterialTheme.colorScheme
+                                        .onSurfaceVariant
+                            )
+                        }
+
+                    } else {
+
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement =
+                                Arrangement.spacedBy(8.dp)
+                        ) {
+
+                            items(
+                                filteredSummaries,
+                                key = {
+                                    it.product.id
+                                }
+                            ) { summary ->
+
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedSummaryForDetail =
+                                                summary
+                                        },
+
+                                    colors =
+                                        CardDefaults.cardColors(
+                                            containerColor =
+                                                MaterialTheme.colorScheme
+                                                    .surface
+                                        )
+                                ) {
+
+                                    Column(
+                                        modifier =
+                                            Modifier.padding(16.dp)
+                                    ) {
+
+                                        Row(
+                                            modifier =
+                                                Modifier.fillMaxWidth(),
+                                            horizontalArrangement =
+                                                Arrangement.SpaceBetween,
+                                            verticalAlignment =
+                                                Alignment.CenterVertically
+                                        ) {
+
+                                            Column(
+                                                modifier =
+                                                    Modifier.weight(1f)
+                                            ) {
+
+                                                Text(
+                                                    text =
+                                                        summary.product
+                                                            .displayName,
+                                                    style =
+                                                        MaterialTheme.typography
+                                                            .titleMedium,
+                                                    fontWeight =
+                                                        FontWeight.SemiBold
+                                                )
+
+                                                val unitLabel =
+                                                    summary.baseUnit?.name
+                                                        ?: "units"
+
+                                                Text(
+                                                    text =
+                                                        "On Hand: ${summary.physicalStockUnits} $unitLabel",
+                                                    style =
+                                                        MaterialTheme.typography
+                                                            .bodyLarge,
+                                                    fontWeight =
+                                                        FontWeight.Bold,
+                                                    color =
+                                                        if (
+                                                            summary.physicalStockUnits >
+                                                            0
+                                                        ) {
+                                                            MaterialTheme.colorScheme
+                                                                .primary
+                                                        } else {
+                                                            MaterialTheme.colorScheme
+                                                                .error
+                                                        }
+                                                )
+                                            }
+
+                                            Column(
+                                                horizontalAlignment =
+                                                    Alignment.End
+                                            ) {
+
+                                                Text(
+                                                    text = "Valuation",
+                                                    style =
+                                                        MaterialTheme.typography
+                                                            .labelSmall,
+                                                    color =
+                                                        MaterialTheme.colorScheme
+                                                            .onSurfaceVariant
+                                                )
+
+                                                Text(
+                                                    text =
+                                                        formatRationalCost(
+                                                            summary.valuation
+                                                        ),
+                                                    style =
+                                                        MaterialTheme.typography
+                                                            .titleSmall,
+                                                    fontWeight =
+                                                        FontWeight.Bold,
+                                                    color =
+                                                        MaterialTheme.colorScheme
+                                                            .secondary
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(
+                                            modifier =
+                                                Modifier.height(6.dp)
+                                        )
+
+                                        Text(
+                                            text =
+                                                "Batches on record: ${
+                                                    summary.batches.size
+                                                } | Active batches with stock: ${
+                                                    summary.batches.count {
+                                                        it.physicalUnits > 0
+                                                    }
+                                                }",
+                                            style =
+                                                MaterialTheme.typography
+                                                    .bodySmall,
+                                            color =
+                                                MaterialTheme.colorScheme
+                                                    .onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            } else {
+
+                if (allMovements.isEmpty()) {
 
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            "No inventory records found.",
-                            color =
-                                MaterialTheme.colorScheme
-                                    .onSurfaceVariant
-                        )
+
+                        Column(
+                            horizontalAlignment =
+                                Alignment.CenterHorizontally
+                        ) {
+
+                            Icon(
+                                Icons.Default.Inventory2,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint =
+                                    MaterialTheme.colorScheme
+                                        .onSurfaceVariant
+                                        .copy(alpha = 0.5f)
+                            )
+
+                            Spacer(
+                                modifier =
+                                    Modifier.height(16.dp)
+                            )
+
+                            Text(
+                                "No stock movements recorded yet",
+                                style =
+                                    MaterialTheme.typography
+                                        .titleMedium,
+                                color =
+                                    MaterialTheme.colorScheme
+                                        .onSurfaceVariant
+                            )
+
+                            Spacer(
+                                modifier =
+                                    Modifier.height(8.dp)
+                            )
+
+                            Text(
+                                "Stock receipts and sales will create immutable ledger movements.",
+                                style =
+                                    MaterialTheme.typography
+                                        .bodyMedium,
+                                color =
+                                    MaterialTheme.colorScheme
+                                        .onSurfaceVariant
+                                        .copy(alpha = 0.7f)
+                            )
+                        }
                     }
 
                 } else {
 
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
                         verticalArrangement =
                             Arrangement.spacedBy(8.dp)
                     ) {
 
                         items(
-                            filteredSummaries,
+                            allMovements,
                             key = {
-                                it.product.id
+                                it.id
                             }
-                        ) { summary ->
+                        ) { movement ->
+
+                            val product =
+                                productsById[
+                                    movement.productId
+                                ]
+
+                            val batch =
+                                movement.stockBatchId
+                                    ?.let {
+                                        batchesById[it]
+                                    }
+
+                            val isPositive =
+                                movement.quantity.storageUnits >= 0
 
                             Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedSummaryForDetail =
-                                            summary
-                                    },
+                                modifier =
+                                    Modifier.fillMaxWidth(),
 
                                 colors =
                                     CardDefaults.cardColors(
@@ -445,7 +669,7 @@ Scaffold(
 
                                 Column(
                                     modifier =
-                                        Modifier.padding(16.dp)
+                                        Modifier.padding(12.dp)
                                 ) {
 
                                     Row(
@@ -457,359 +681,130 @@ Scaffold(
                                             Alignment.CenterVertically
                                     ) {
 
-                                        Column(
-                                            modifier =
-                                                Modifier.weight(1f)
-                                        ) {
+                                        Text(
+                                            text =
+                                                product?.displayName
+                                                    ?: "Product #${
+                                                        movement.productId
+                                                            .take(8)
+                                                    }",
+                                            fontWeight =
+                                                FontWeight.Bold,
+                                            style =
+                                                MaterialTheme.typography
+                                                    .bodyMedium
+                                        )
 
-                                            Text(
-                                                text =
-                                                    summary.product
-                                                        .displayName,
-                                                style =
-                                                    MaterialTheme.typography
-                                                        .titleMedium,
-                                                fontWeight =
-                                                    FontWeight.SemiBold
-                                            )
+                                        Text(
+                                            text =
+                                                (
+                                                    if (isPositive) "+"
+                                                    else ""
+                                                ) +
+                                                    "${movement.quantity.storageUnits} units",
 
-                                            val unitLabel =
-                                                summary.baseUnit?.name
-                                                    ?: "units"
+                                            fontWeight =
+                                                FontWeight.Bold,
 
-                                            Text(
-                                                text =
-                                                    "On Hand: ${summary.physicalStockUnits} $unitLabel",
-                                                style =
-                                                    MaterialTheme.typography
-                                                        .bodyLarge,
-                                                fontWeight =
-                                                    FontWeight.Bold,
-                                                color =
-                                                    if (
-                                                        summary.physicalStockUnits >
-                                                        0
-                                                    ) {
-                                                        MaterialTheme.colorScheme
-                                                            .primary
-                                                    } else {
-                                                        MaterialTheme.colorScheme
-                                                            .error
-                                                    }
-                                            )
-                                        }
-
-                                        Column(
-                                            horizontalAlignment =
-                                                Alignment.End
-                                        ) {
-
-                                            val valuationString =
-                                                "KES ${
-                                                    summary.valuationMinorUnits /
-                                                        100
-                                                }.${
-                                                    (
-                                                        summary.valuationMinorUnits %
-                                                            100
-                                                    )
-                                                        .toString()
-                                                        .padStart(
-                                                            2,
-                                                            '0'
-                                                        )
-                                                }"
-
-                                            Text(
-                                                text = "Valuation",
-                                                style =
-                                                    MaterialTheme.typography
-                                                        .labelSmall,
-                                                color =
+                                            color =
+                                                if (isPositive) {
                                                     MaterialTheme.colorScheme
-                                                        .onSurfaceVariant
-                                            )
-
-                                            Text(
-                                                text =
-                                                    valuationString,
-                                                style =
-                                                    MaterialTheme.typography
-                                                        .titleSmall,
-                                                fontWeight =
-                                                    FontWeight.Bold,
-                                                color =
+                                                        .primary
+                                                } else {
                                                     MaterialTheme.colorScheme
-                                                        .secondary
-                                            )
-                                        }
+                                                        .error
+                                                },
+
+                                            style =
+                                                MaterialTheme.typography
+                                                    .titleSmall
+                                        )
                                     }
 
                                     Spacer(
                                         modifier =
-                                            Modifier.height(6.dp)
+                                            Modifier.height(4.dp)
                                     )
 
-                                    Text(
-                                        text =
-                                            "Batches on record: ${
-                                                summary.batches.size
-                                            } | Active batches with stock: ${
-                                                summary.batches.count {
-                                                    it.physicalUnits > 0
-                                                }
-                                            }",
-                                        style =
-                                            MaterialTheme.typography
-                                                .bodySmall,
-                                        color =
-                                            MaterialTheme.colorScheme
-                                                .onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                                    Row(
+                                        modifier =
+                                            Modifier.fillMaxWidth(),
+                                        horizontalArrangement =
+                                            Arrangement.SpaceBetween
+                                    ) {
 
-        } else {
+                                        Text(
+                                            text =
+                                                "Type: ${movement.movementType}",
+                                            style =
+                                                MaterialTheme.typography
+                                                    .labelSmall,
+                                            fontWeight =
+                                                FontWeight.SemiBold,
+                                            color =
+                                                MaterialTheme.colorScheme
+                                                    .secondary
+                                        )
 
-            if (allMovements.isEmpty()) {
+                                        Text(
+                                            text =
+                                                SimpleDateFormat(
+                                                    "yyyy-MM-dd HH:mm",
+                                                    Locale.US
+                                                ).format(
+                                                    Date(
+                                                        movement.occurredAt
+                                                    )
+                                                ),
+                                            style =
+                                                MaterialTheme.typography
+                                                    .bodySmall,
+                                            color =
+                                                MaterialTheme.colorScheme
+                                                    .onSurfaceVariant
+                                        )
+                                    }
 
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                                    if (batch != null) {
 
-                    Column(
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally
-                    ) {
+                                        Text(
+                                            text =
+                                                "Batch: ${
+                                                    batch.batchNumber
+                                                } (Exp: ${
+                                                    batch.expiryDateInt
+                                                })",
 
-                        Icon(
-                            Icons.Default.Inventory2,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint =
-                                MaterialTheme.colorScheme
-                                    .onSurfaceVariant
-                                    .copy(alpha = 0.5f)
-                        )
+                                            style =
+                                                MaterialTheme.typography
+                                                    .bodySmall,
 
-                        Spacer(
-                            modifier =
-                                Modifier.height(16.dp)
-                        )
+                                            color =
+                                                MaterialTheme.colorScheme
+                                                    .onSurfaceVariant
+                                        )
+                                    }
 
-                        Text(
-                            "No stock movements recorded yet",
-                            style =
-                                MaterialTheme.typography
-                                    .titleMedium,
-                            color =
-                                MaterialTheme.colorScheme
-                                    .onSurfaceVariant
-                        )
+                                    if (
+                                        !movement.sourceTransactionRef
+                                            .isNullOrBlank()
+                                    ) {
 
-                        Spacer(
-                            modifier =
-                                Modifier.height(8.dp)
-                        )
-
-                        Text(
-                            "Stock receipts and sales will create immutable ledger movements.",
-                            style =
-                                MaterialTheme.typography
-                                    .bodyMedium,
-                            color =
-                                MaterialTheme.colorScheme
-                                    .onSurfaceVariant
-                                    .copy(alpha = 0.7f)
-                        )
-                    }
-                }
-
-            } else {
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement =
-                        Arrangement.spacedBy(8.dp)
-                ) {
-
-                    items(
-                        allMovements,
-                        key = {
-                            it.id
-                        }
-                    ) { movement ->
-
-                        val product =
-                            productsById[
-                                movement.productId
-                            ]
-
-                        val batch =
-                            movement.stockBatchId
-                                ?.let {
-                                    batchesById[it]
-                                }
-
-                        val isPositive =
-                            movement.quantity.storageUnits >= 0
-
-                        Card(
-                            modifier =
-                                Modifier.fillMaxWidth(),
-
-                            colors =
-                                CardDefaults.cardColors(
-                                    containerColor =
-                                        MaterialTheme.colorScheme
-                                            .surface
-                                )
-                        ) {
-
-                            Column(
-                                modifier =
-                                    Modifier.padding(12.dp)
-                            ) {
-
-                                Row(
-                                    modifier =
-                                        Modifier.fillMaxWidth(),
-                                    horizontalArrangement =
-                                        Arrangement.SpaceBetween,
-                                    verticalAlignment =
-                                        Alignment.CenterVertically
-                                ) {
-
-                                    Text(
-                                        text =
-                                            product?.displayName
-                                                ?: "Product #${
-                                                    movement.productId
-                                                        .take(8)
+                                        Text(
+                                            text =
+                                                "Ref: ${
+                                                    movement.sourceTransactionRef
                                                 }",
-                                        fontWeight =
-                                            FontWeight.Bold,
-                                        style =
-                                            MaterialTheme.typography
-                                                .bodyMedium
-                                    )
 
-                                    Text(
-                                        text =
-                                            (
-                                                if (isPositive) "+"
-                                                else ""
-                                            ) +
-                                                "${movement.quantity.storageUnits} units",
+                                            style =
+                                                MaterialTheme.typography
+                                                    .bodySmall,
 
-                                        fontWeight =
-                                            FontWeight.Bold,
-
-                                        color =
-                                            if (isPositive) {
+                                            color =
                                                 MaterialTheme.colorScheme
-                                                    .primary
-                                            } else {
-                                                MaterialTheme.colorScheme
-                                                    .error
-                                            },
-
-                                        style =
-                                            MaterialTheme.typography
-                                                .titleSmall
-                                    )
-                                }
-
-                                Spacer(
-                                    modifier =
-                                        Modifier.height(4.dp)
-                                )
-
-                                Row(
-                                    modifier =
-                                        Modifier.fillMaxWidth(),
-                                    horizontalArrangement =
-                                        Arrangement.SpaceBetween
-                                ) {
-
-                                    Text(
-                                        text =
-                                            "Type: ${movement.movementType}",
-                                        style =
-                                            MaterialTheme.typography
-                                                .labelSmall,
-                                        fontWeight =
-                                            FontWeight.SemiBold,
-                                        color =
-                                            MaterialTheme.colorScheme
-                                                .secondary
-                                    )
-
-                                    Text(
-                                        text =
-                                            SimpleDateFormat(
-                                                "yyyy-MM-dd HH:mm",
-                                                Locale.US
-                                            ).format(
-                                                Date(
-                                                    movement.occurredAt
-                                                )
-                                            ),
-                                        style =
-                                            MaterialTheme.typography
-                                                .bodySmall,
-                                        color =
-                                            MaterialTheme.colorScheme
-                                                .onSurfaceVariant
-                                    )
-                                }
-
-                                if (batch != null) {
-
-                                    Text(
-                                        text =
-                                            "Batch: ${
-                                                batch.batchNumber
-                                            } (Exp: ${
-                                                batch.expiryDateInt
-                                            })",
-
-                                        style =
-                                            MaterialTheme.typography
-                                                .bodySmall,
-
-                                        color =
-                                            MaterialTheme.colorScheme
-                                                .onSurfaceVariant
-                                    )
-                                }
-
-                                if (
-                                    !movement.sourceTransactionRef
-                                        .isNullOrBlank()
-                                ) {
-
-                                    Text(
-                                        text =
-                                            "Ref: ${
-                                                movement.sourceTransactionRef
-                                            }",
-
-                                        style =
-                                            MaterialTheme.typography
-                                                .bodySmall,
-
-                                        color =
-                                            MaterialTheme.colorScheme
-                                                .onSurfaceVariant
-                                    )
+                                                    .onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -818,166 +813,188 @@ Scaffold(
             }
         }
     }
-}
 
-selectedSummaryForDetail?.let { summary ->
+    selectedSummaryForDetail?.let { summary ->
 
-    AlertDialog(
-        onDismissRequest = {
-            selectedSummaryForDetail = null
-        },
+        AlertDialog(
+            onDismissRequest = {
+                selectedSummaryForDetail = null
+            },
 
-        title = {
-            Text(
-                summary.product.displayName
-            )
-        },
-
-        text = {
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(
-                        rememberScrollState()
-                    ),
-                verticalArrangement =
-                    Arrangement.spacedBy(8.dp)
-            ) {
-
-                val unitName =
-                    summary.baseUnit?.name ?: "units"
-
+            title = {
                 Text(
-                    "Total On-Hand Ledger Stock: ${
-                        summary.physicalStockUnits
-                    } $unitName",
-                    fontWeight = FontWeight.Bold
+                    summary.product.displayName
                 )
+            },
 
-                val valuationString =
-                    "KES ${
-                        summary.valuationMinorUnits / 100
-                    }.${
-                        (
-                            summary.valuationMinorUnits % 100
-                        )
-                            .toString()
-                            .padStart(2, '0')
-                    }"
+            text = {
 
-                Text(
-                    "Total Inventory Valuation: $valuationString",
-                    fontWeight = FontWeight.SemiBold,
-                    color =
-                        MaterialTheme.colorScheme.secondary
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(
+                            rememberScrollState()
+                        ),
+                    verticalArrangement =
+                        Arrangement.spacedBy(8.dp)
+                ) {
 
-                Spacer(
-                    modifier =
-                        Modifier.height(8.dp)
-                )
-
-                Text(
-                    "Physical Batches (${summary.batches.size}):",
-                    fontWeight = FontWeight.Bold
-                )
-
-                if (summary.batches.isEmpty()) {
+                    val unitName =
+                        summary.baseUnit?.name ?: "units"
 
                     Text(
-                        "No batches registered for this product yet.",
-                        style =
-                            MaterialTheme.typography.bodySmall,
-                        color =
-                            MaterialTheme.colorScheme
-                                .onSurfaceVariant
+                        "Total On-Hand Ledger Stock: ${
+                            summary.physicalStockUnits
+                        } $unitName",
+                        fontWeight = FontWeight.Bold
                     )
 
-                } else {
+                    Text(
+                        "Total Inventory Valuation: ${
+                            formatRationalCost(
+                                summary.valuation
+                            )
+                        }",
+                        fontWeight = FontWeight.SemiBold,
+                        color =
+                            MaterialTheme.colorScheme.secondary
+                    )
 
-                    summary.batches.forEach { batchSummary ->
+                    Spacer(
+                        modifier =
+                            Modifier.height(8.dp)
+                    )
 
-                        Card(
-                            modifier =
-                                Modifier.fillMaxWidth(),
+                    Text(
+                        "Physical Batches (${summary.batches.size}):",
+                        fontWeight = FontWeight.Bold
+                    )
 
-                            colors =
-                                CardDefaults.cardColors(
-                                    containerColor =
-                                        MaterialTheme.colorScheme
-                                            .surfaceVariant
-                                )
-                        ) {
+                    if (summary.batches.isEmpty()) {
 
-                            Column(
+                        Text(
+                            "No batches registered for this product yet.",
+                            style =
+                                MaterialTheme.typography.bodySmall,
+                            color =
+                                MaterialTheme.colorScheme
+                                    .onSurfaceVariant
+                        )
+
+                    } else {
+
+                        summary.batches.forEach { batchSummary ->
+
+                            Card(
                                 modifier =
-                                    Modifier.padding(8.dp)
+                                    Modifier.fillMaxWidth(),
+
+                                colors =
+                                    CardDefaults.cardColors(
+                                        containerColor =
+                                            MaterialTheme.colorScheme
+                                                .surfaceVariant
+                                    )
                             ) {
 
-                                Row(
+                                Column(
                                     modifier =
-                                        Modifier.fillMaxWidth(),
-                                    horizontalArrangement =
-                                        Arrangement.SpaceBetween
+                                        Modifier.padding(8.dp)
                                 ) {
 
+                                    Row(
+                                        modifier =
+                                            Modifier.fillMaxWidth(),
+                                        horizontalArrangement =
+                                            Arrangement.SpaceBetween
+                                    ) {
+
+                                        Text(
+                                            "Batch: ${
+                                                batchSummary.batch
+                                                    .batchNumber
+                                            }",
+                                            fontWeight =
+                                                FontWeight.SemiBold
+                                        )
+
+                                        Text(
+                                            "Exp: ${
+                                                batchSummary.batch
+                                                    .expiryDateInt
+                                            }",
+                                            style =
+                                                MaterialTheme.typography
+                                                    .bodySmall
+                                        )
+                                    }
+
                                     Text(
-                                        "Batch: ${
-                                            batchSummary.batch.batchNumber
-                                        }",
+                                        "Physical Stock: ${
+                                            batchSummary.physicalUnits
+                                        } $unitName",
                                         fontWeight =
-                                            FontWeight.SemiBold
+                                            FontWeight.Medium
                                     )
 
                                     Text(
-                                        "Exp: ${
-                                            batchSummary.batch
-                                                .expiryDateInt
+                                        "Active Cost Layers: ${
+                                            batchSummary.costLayers.size
                                         }",
                                         style =
                                             MaterialTheme.typography
-                                                .bodySmall
+                                                .bodySmall,
+                                        color =
+                                            MaterialTheme.colorScheme
+                                                .onSurfaceVariant
                                     )
                                 }
-
-                                Text(
-                                    "Physical Stock: ${
-                                        batchSummary.physicalUnits
-                                    } $unitName",
-                                    fontWeight =
-                                        FontWeight.Medium
-                                )
-
-                                Text(
-                                    "Active Cost Layers: ${
-                                        batchSummary.costLayers.size
-                                    }",
-                                    style =
-                                        MaterialTheme.typography
-                                            .bodySmall,
-                                    color =
-                                        MaterialTheme.colorScheme
-                                            .onSurfaceVariant
-                                )
                             }
                         }
                     }
                 }
-            }
-        },
+            },
 
-        confirmButton = {
+            confirmButton = {
 
-            TextButton(
-                onClick = {
-                    selectedSummaryForDetail = null
+                TextButton(
+                    onClick = {
+                        selectedSummaryForDetail = null
+                    }
+                ) {
+                    Text("Close")
                 }
-            ) {
-                Text("Close")
             }
-        }
+        )
+    }
+}
+
+/**
+ * Canonical exact zero used for RationalCost aggregation.
+ */
+private fun zeroRationalCost(): RationalCost {
+    return RationalCost(
+        numerator = BigInteger.ZERO,
+        denominator = BigInteger.ONE
     )
 }
 
+/**
+ * Converts an exact RationalCost to the UI representation.
+ *
+ * Exact arithmetic is completed before this function is called.
+ * Rounding occurs only at this final display boundary.
+ */
+private fun formatRationalCost(
+    cost: RationalCost
+): String {
+    val value =
+        BigDecimal(cost.numerator)
+            .divide(
+                BigDecimal(cost.denominator),
+                2,
+                RoundingMode.HALF_UP
+            )
+
+    return "KES ${value.setScale(2, RoundingMode.HALF_UP)}"
 }
