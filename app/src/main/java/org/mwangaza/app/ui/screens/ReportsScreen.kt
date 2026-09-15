@@ -72,16 +72,28 @@ fun ReportsScreen(
             isLoading = true
 
             withContext(Dispatchers.IO) {
-                val products = container.productMasterDao.getAllProducts()
-                val sales = container.saleDao.getAllSales()
-                val receipts = container.goodsReceiptDao.getAllReceipts()
-                val movements = container.stockMovementDao.getAllMovements()
+                val products =
+                    container.productMasterDao.getAllProducts()
 
-                val completedSales = sales.filter { it.isCompleted }
-                val voidedSales = sales.filter { it.isVoided }
+                val sales =
+                    container.saleDao.getAllSales()
+
+                val receipts =
+                    container.goodsReceiptDao.getAllReceipts()
+
+                val movements =
+                    container.stockMovementDao.getAllMovements()
+
+                val completedSales =
+                    sales.filter { it.isCompleted }
+
+                val voidedSales =
+                    sales.filter { it.isVoided }
 
                 val totalRevenueMinor =
-                    completedSales.sumOf { it.totalSellingAmount.amountMinorUnits }
+                    completedSales.sumOf {
+                        it.totalSellingAmount.amountMinorUnits
+                    }
 
                 /*
                  * COGS is now an exact mathematical value.
@@ -100,67 +112,30 @@ fun ReportsScreen(
                     }
 
                 /*
-                 * Inventory valuation is derived from active InventoryCostLayer
-                 * records.
+                 * Inventory valuation is owned by the domain valuation
+                 * service.
                  *
-                 * The authoritative acquisition cost is RationalCost and must
-                 * remain exact throughout the calculation.
-                 *
-                 * Because initialQuantity and remainingQuantity use the same
-                 * QuantityScale, the remaining fraction of a cost layer is:
-                 *
-                 *     remainingQuantity / initialQuantity
-                 *
-                 * Therefore:
-                 *
-                 *     valuation =
-                 *         acquisitionUnitCost ×
-                 *         remainingQuantity / initialQuantity
-                 *
-                 * No integer division and no display rounding occurs here.
+                 * This screen must not reproduce cost-layer valuation
+                 * arithmetic. The service retrieves all active layers and
+                 * calculates their exact remaining values without rounding.
                  */
-                var totalValuation =
-                    RationalCost(
-                        numerator = BigInteger.ZERO,
-                        denominator = BigInteger.ONE
-                    )
+                val totalValuation =
+                    container.inventoryValuationService
+                        .calculateTotalValuation()
 
-                var activeLayerCount = 0
-
-                products.forEach { product ->
-                    val layers =
-                        container.inventoryCostLayerDao
-                            .getActiveLayersForProduct(product.id)
-
-                    activeLayerCount += layers.size
-
-                    layers.forEach { layer ->
-                        val initialQuantity =
-                            layer.initialQuantity.storageUnits
-
-                        val remainingQuantity =
-                            layer.remainingQuantity.storageUnits
-
-                        if (initialQuantity > 0L && remainingQuantity > 0L) {
-                            val layerValuation =
-                                layer.acquisitionUnitCost.multiply(
-                                    numerator = BigInteger.valueOf(
-                                        remainingQuantity
-                                    ),
-                                    denominator = BigInteger.valueOf(
-                                        initialQuantity
-                                    )
-                                )
-
-                            totalValuation =
-                                totalValuation.add(layerValuation)
-                        }
-                    }
-                }
+                /*
+                 * The valuation service operates across all active layers,
+                 * so the active-layer count is obtained separately for the
+                 * report statistic. This does not perform valuation logic.
+                 */
+                val totalActiveCostLayers =
+                    container.inventoryCostLayerDao
+                        .getAllActiveLayers()
+                        .size
 
                 reportData = FinancialReportData(
                     totalInventoryValuation = totalValuation,
-                    totalActiveCostLayers = activeLayerCount,
+                    totalActiveCostLayers = totalActiveCostLayers,
                     totalSalesRevenueMinor = totalRevenueMinor,
                     totalSalesCogs = totalCogs,
                     completedSalesCount = completedSales.size,
@@ -215,8 +190,8 @@ fun ReportsScreen(
              *
              *     revenue - exact COGS
              *
-             * The conversion to BigDecimal does not introduce rounding;
-             * rounding happens only when the final display string is created.
+             * The conversion to BigDecimal does not occur until the final
+             * display formatting boundary.
              */
             val revenueExact =
                 RationalCost(
@@ -227,8 +202,7 @@ fun ReportsScreen(
                 )
 
             val grossMarginExact =
-                rationalDifference(
-                    revenueExact,
+                revenueExact.subtract(
                     data.totalSalesCogs
                 )
 
@@ -259,13 +233,19 @@ fun ReportsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         val revenueString =
-                            formatMinorUnits(data.totalSalesRevenueMinor)
+                            formatMinorUnits(
+                                data.totalSalesRevenueMinor
+                            )
 
                         val cogsString =
-                            formatRationalCost(data.totalSalesCogs)
+                            formatRationalCost(
+                                data.totalSalesCogs
+                            )
 
                         val marginString =
-                            formatRationalCost(grossMarginExact)
+                            formatRationalCost(
+                                grossMarginExact
+                            )
 
                         ReportRow(
                             label = "Total Sales Revenue",
@@ -365,39 +345,14 @@ fun ReportsScreen(
 
                         ReportRow(
                             label = "Immutable Stock Movement Records",
-                            value = "${data.totalStockMovementsCount} ledger entries"
+                            value =
+                                "${data.totalStockMovementsCount} ledger entries"
                         )
                     }
                 }
             }
         }
     }
-}
-
-/**
- * Calculates the exact mathematical difference between two RationalCost
- * values without display rounding.
- *
- * This is used only for report presentation and does not mutate persisted
- * financial values.
- */
-private fun rationalDifference(
-    left: RationalCost,
-    right: RationalCost
-): RationalCost {
-    val numerator =
-        left.numerator.multiply(right.denominator)
-            .subtract(
-                right.numerator.multiply(left.denominator)
-            )
-
-    val denominator =
-        left.denominator.multiply(right.denominator)
-
-    return RationalCost(
-        numerator = numerator,
-        denominator = denominator
-    )
 }
 
 /**
