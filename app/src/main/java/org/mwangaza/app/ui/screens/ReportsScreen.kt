@@ -35,16 +35,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import core.domain.model.RationalCost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
+import java.math.BigDecimal
+import java.math.BigInteger
+import java.math.RoundingMode
 
 data class FinancialReportData(
-    val totalInventoryValuationMinor: Long,
+    val totalInventoryValuation: RationalCost,
     val totalActiveCostLayers: Int,
     val totalSalesRevenueMinor: Long,
-    val totalSalesCogsMinor: Long,
+    val totalSalesCogs: RationalCost,
     val completedSalesCount: Int,
     val voidedSalesCount: Int,
     val totalReceiptsCount: Int,
@@ -79,23 +83,48 @@ fun ReportsScreen(
                 val totalRevenueMinor =
                     completedSales.sumOf { it.totalSellingAmount.amountMinorUnits }
 
-                val totalCogsMinor =
-                    completedSales.sumOf { it.totalCogs.amountMinorUnits }
+                /*
+                 * COGS is now an exact mathematical value.
+                 *
+                 * No conversion to integer minor units is permitted here.
+                 * Each completed sale already preserves its exact totalCogs.
+                 */
+                val totalCogs =
+                    completedSales.fold(
+                        RationalCost(
+                            numerator = BigInteger.ZERO,
+                            denominator = BigInteger.ONE
+                        )
+                    ) { total, sale ->
+                        total.add(sale.totalCogs)
+                    }
 
                 /*
                  * Inventory valuation is derived from active InventoryCostLayer
-                 * records. acquisitionUnitCost is the authoritative acquisition
-                 * cost stored by each cost layer.
+                 * records.
                  *
-                 * The calculation intentionally does not use:
-                 * - current selling price
-                 * - current reference cost
-                 * - historical sales prices
+                 * The authoritative acquisition cost is RationalCost and must
+                 * remain exact throughout the calculation.
                  *
-                 * Historical acquisition information remains attached to the
-                 * individual cost layer.
+                 * Because initialQuantity and remainingQuantity use the same
+                 * QuantityScale, the remaining fraction of a cost layer is:
+                 *
+                 *     remainingQuantity / initialQuantity
+                 *
+                 * Therefore:
+                 *
+                 *     valuation =
+                 *         acquisitionUnitCost ×
+                 *         remainingQuantity / initialQuantity
+                 *
+                 * No integer division and no display rounding occurs here.
                  */
-                var totalValuationMinor = 0L
+                var totalValuation =
+                    RationalCost(
+                        numerator = BigInteger.ZERO,
+                        denominator = BigInteger.ONE
+                    )
+
                 var activeLayerCount = 0
 
                 products.forEach { product ->
@@ -105,29 +134,35 @@ fun ReportsScreen(
 
                     activeLayerCount += layers.size
 
-                    totalValuationMinor = Math.addExact(
-                        totalValuationMinor,
-                        layers.sumOf { layer ->
-                            val initialQuantity =
-                                layer.initialQuantity.storageUnits
+                    layers.forEach { layer ->
+                        val initialQuantity =
+                            layer.initialQuantity.storageUnits
 
-                            if (initialQuantity > 0L) {
-                                Math.multiplyExact(
-                                    layer.remainingQuantity.storageUnits,
-                                    layer.acquisitionUnitCost.amountMinorUnits
-                                ) / initialQuantity
-                            } else {
-                                0L
-                            }
+                        val remainingQuantity =
+                            layer.remainingQuantity.storageUnits
+
+                        if (initialQuantity > 0L && remainingQuantity > 0L) {
+                            val layerValuation =
+                                layer.acquisitionUnitCost.multiply(
+                                    numerator = BigInteger.valueOf(
+                                        remainingQuantity
+                                    ),
+                                    denominator = BigInteger.valueOf(
+                                        initialQuantity
+                                    )
+                                )
+
+                            totalValuation =
+                                totalValuation.add(layerValuation)
                         }
-                    )
+                    }
                 }
 
                 reportData = FinancialReportData(
-                    totalInventoryValuationMinor = totalValuationMinor,
+                    totalInventoryValuation = totalValuation,
                     totalActiveCostLayers = activeLayerCount,
                     totalSalesRevenueMinor = totalRevenueMinor,
-                    totalSalesCogsMinor = totalCogsMinor,
+                    totalSalesCogs = totalCogs,
                     completedSalesCount = completedSales.size,
                     voidedSalesCount = voidedSales.size,
                     totalReceiptsCount = receipts.size,
@@ -170,8 +205,32 @@ fun ReportsScreen(
             }
         } else {
             val data = reportData!!
-            val grossMarginMinor =
-                data.totalSalesRevenueMinor - data.totalSalesCogsMinor
+
+            /*
+             * Revenue is a settled Money value expressed in minor units.
+             *
+             * COGS is an exact RationalCost.
+             *
+             * Gross margin is therefore calculated exactly as:
+             *
+             *     revenue - exact COGS
+             *
+             * The conversion to BigDecimal does not introduce rounding;
+             * rounding happens only when the final display string is created.
+             */
+            val revenueExact =
+                RationalCost(
+                    numerator = BigInteger.valueOf(
+                        data.totalSalesRevenueMinor
+                    ),
+                    denominator = BigInteger.ONE
+                )
+
+            val grossMarginExact =
+                rationalDifference(
+                    revenueExact,
+                    data.totalSalesCogs
+                )
 
             Column(
                 modifier = Modifier
@@ -203,10 +262,10 @@ fun ReportsScreen(
                             formatMinorUnits(data.totalSalesRevenueMinor)
 
                         val cogsString =
-                            formatMinorUnits(data.totalSalesCogsMinor)
+                            formatRationalCost(data.totalSalesCogs)
 
                         val marginString =
-                            formatMinorUnits(grossMarginMinor)
+                            formatRationalCost(grossMarginExact)
 
                         ReportRow(
                             label = "Total Sales Revenue",
@@ -234,7 +293,8 @@ fun ReportsScreen(
                         Text(
                             text =
                                 "Completed Sales: ${data.completedSalesCount} | " +
-                                    "Voided / Reversed Sales: ${data.voidedSalesCount}",
+                                    "Voided / Reversed Sales: " +
+                                    data.voidedSalesCount,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -259,8 +319,8 @@ fun ReportsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         val valuationString =
-                            formatMinorUnits(
-                                data.totalInventoryValuationMinor
+                            formatRationalCost(
+                                data.totalInventoryValuation
                             )
 
                         ReportRow(
@@ -314,6 +374,58 @@ fun ReportsScreen(
     }
 }
 
+/**
+ * Calculates the exact mathematical difference between two RationalCost
+ * values without display rounding.
+ *
+ * This is used only for report presentation and does not mutate persisted
+ * financial values.
+ */
+private fun rationalDifference(
+    left: RationalCost,
+    right: RationalCost
+): RationalCost {
+    val numerator =
+        left.numerator.multiply(right.denominator)
+            .subtract(
+                right.numerator.multiply(left.denominator)
+            )
+
+    val denominator =
+        left.denominator.multiply(right.denominator)
+
+    return RationalCost(
+        numerator = numerator,
+        denominator = denominator
+    )
+}
+
+/**
+ * Converts an exact RationalCost into a user-facing KES value.
+ *
+ * The mathematical value remains exact until this final display boundary.
+ * Exactly two decimal places are produced for the UI.
+ */
+private fun formatRationalCost(
+    cost: RationalCost
+): String {
+    val value =
+        BigDecimal(cost.numerator)
+            .divide(
+                BigDecimal(cost.denominator),
+                2,
+                RoundingMode.HALF_UP
+            )
+
+    return "KES ${value.setScale(2, RoundingMode.HALF_UP)}"
+}
+
+/**
+ * Formats a settled Money value represented in integer minor units.
+ *
+ * This remains appropriate for revenue because totalSellingAmount is still
+ * a settled Money value, not a RationalCost.
+ */
 private fun formatMinorUnits(
     amountMinorUnits: Long
 ): String {
