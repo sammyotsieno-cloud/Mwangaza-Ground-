@@ -1739,7 +1739,7 @@ class TransactionChainTest {
 
         assertEquals(
             exactMinor(30_000L),
-            db.stockAllocationDao.getEffectiveCogsForSale(
+            db.stockAllocationDao.calculateEffectiveCogsForSale(
                 saleResult.sale.id
             )
         )
@@ -1771,7 +1771,7 @@ class TransactionChainTest {
                 BigInteger.ZERO,
                 BigInteger.ONE
             ),
-            db.stockAllocationDao.getEffectiveCogsForSale(
+            db.stockAllocationDao.calculateEffectiveCogsForSale(
                 saleResult.sale.id
             )
         )
