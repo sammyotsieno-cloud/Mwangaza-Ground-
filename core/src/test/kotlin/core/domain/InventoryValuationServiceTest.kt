@@ -19,7 +19,10 @@ class InventoryValuationServiceTest {
             id = "L1",
             initialQuantity = 3L,
             remainingQuantity = 3L,
-            acquisitionUnitCost = exactMinor(100L)
+            acquisitionUnitCost = RationalCost(
+                numerator = BigInteger.valueOf(100L),
+                denominator = BigInteger.valueOf(3L)
+            )
         )
 
         val service = InventoryValuationService(
@@ -32,12 +35,14 @@ class InventoryValuationServiceTest {
             RationalCost(
                 numerator = BigInteger.valueOf(100L),
                 denominator = BigInteger.valueOf(3L)
+            ).multiply(
+                BigInteger.valueOf(3L)
             ),
             valuation
         )
 
         assertEquals(
-            "100/3",
+            "100/1",
             valuation.toString()
         )
     }
@@ -48,7 +53,10 @@ class InventoryValuationServiceTest {
             id = "L1",
             initialQuantity = 3L,
             remainingQuantity = 2L,
-            acquisitionUnitCost = exactMinor(100L)
+            acquisitionUnitCost = RationalCost(
+                numerator = BigInteger.valueOf(100L),
+                denominator = BigInteger.valueOf(3L)
+            )
         )
 
         val service = InventoryValuationService(
@@ -67,14 +75,20 @@ class InventoryValuationServiceTest {
             id = "L1",
             initialQuantity = 3L,
             remainingQuantity = 3L,
-            acquisitionUnitCost = exactMinor(100L)
+            acquisitionUnitCost = RationalCost(
+                numerator = BigInteger.valueOf(100L),
+                denominator = BigInteger.valueOf(3L)
+            )
         )
 
         val layer2 = layer(
             id = "L2",
             initialQuantity = 2L,
             remainingQuantity = 2L,
-            acquisitionUnitCost = exactMinor(50L)
+            acquisitionUnitCost = RationalCost(
+                numerator = BigInteger.valueOf(50L),
+                denominator = BigInteger.valueOf(2L)
+            )
         )
 
         val service = InventoryValuationService(
@@ -84,7 +98,7 @@ class InventoryValuationServiceTest {
         )
 
         assertEquals(
-            "250/3",
+            "150/1",
             service.calculateTotalValuation().toString()
         )
     }
