@@ -30,6 +30,9 @@ interface InventoryCostLayerDao {
     @Query("SELECT * FROM inventory_cost_layers WHERE product_id = :productId AND remaining_quantity_storage_units > 0 ORDER BY acquired_at ASC, created_at ASC, id ASC")
     fun getActiveLayersForProduct(productId: String): List<InventoryCostLayer>
 
+    @Query("SELECT * FROM inventory_cost_layers WHERE remaining_quantity_storage_units > 0 ORDER BY acquired_at ASC, created_at ASC, id ASC")
+    fun getAllActiveLayers(): List<InventoryCostLayer>
+
     @Query("SELECT * FROM inventory_cost_layers WHERE source_receipt_ref = :receiptRef")
     fun getLayersForReceiptRef(receiptRef: String): List<InventoryCostLayer>
 
