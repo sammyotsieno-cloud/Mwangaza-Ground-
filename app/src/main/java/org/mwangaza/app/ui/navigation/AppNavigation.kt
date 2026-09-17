@@ -3,6 +3,7 @@ package org.mwangaza.app.ui.navigation
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -36,6 +37,7 @@ import org.mwangaza.app.ui.screens.GoodsReceivingScreen
 import org.mwangaza.app.ui.screens.InventoryScreen
 import org.mwangaza.app.ui.screens.NotificationsScreen
 import org.mwangaza.app.ui.screens.PlaceholderScreen
+import org.mwangaza.app.ui.screens.ProductScannerScreen
 import org.mwangaza.app.ui.screens.ProductsScreen
 import org.mwangaza.app.ui.screens.ReportsScreen
 import org.mwangaza.app.ui.screens.SettingsScreen
@@ -61,17 +63,14 @@ fun AppNavigation(
     var currentFeature by remember { mutableStateOf<String?>(null) }
     var showExitConfirmation by remember { mutableStateOf(false) }
 
-    // Intercept Back Press 1: From any feature screen back to Dashboard
     BackHandler(enabled = currentFeature != null) {
         currentFeature = null
     }
 
-    // Intercept Back Press 2: From Notifications or Settings back to Dashboard tab
     BackHandler(enabled = currentFeature == null && currentBottomTab != BottomNavItem.Dashboard) {
         currentBottomTab = BottomNavItem.Dashboard
     }
 
-    // Intercept Back Press 3: On Dashboard root, prompt for application exit
     BackHandler(enabled = currentFeature == null && currentBottomTab == BottomNavItem.Dashboard) {
         showExitConfirmation = true
     }
@@ -132,13 +131,19 @@ fun AppNavigation(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(if (currentFeature == null) innerPadding else androidx.compose.foundation.layout.PaddingValues())
+                .padding(if (currentFeature == null) innerPadding else PaddingValues())
         ) {
             when {
                 currentFeature == "products" -> {
                     ProductsScreen(
                         container = appContainer,
-                        onBack = { currentFeature = null }
+                        onBack = { currentFeature = null },
+                        onScanProduct = { currentFeature = "product-scanner" }
+                    )
+                }
+                currentFeature == "product-scanner" -> {
+                    ProductScannerScreen(
+                        onBack = { currentFeature = "products" }
                     )
                 }
                 currentFeature == "receiving" -> {
@@ -191,18 +196,15 @@ fun AppNavigation(
                         onBack = { currentFeature = null }
                     )
                 }
-
                 currentBottomTab is BottomNavItem.Dashboard -> {
                     DashboardScreen(
                         onFeatureClick = { route -> currentFeature = route },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-
                 currentBottomTab is BottomNavItem.Notifications -> {
                     NotificationsScreen(modifier = Modifier.fillMaxSize())
                 }
-
                 currentBottomTab is BottomNavItem.Settings -> {
                     SettingsScreen(modifier = Modifier.fillMaxSize())
                 }
