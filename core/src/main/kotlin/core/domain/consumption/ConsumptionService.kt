@@ -338,17 +338,15 @@ class ConsumptionService(
                         ?: Money.ZERO
 
                     /*
-                     * NOTE:
-                     * This multiplication remains based on the existing pricing
-                     * contract and is intentionally not redesigned in this repair.
-                     *
-                     * The scale-aware selling-price model will be corrected in
-                     * the dedicated quantity/pricing hardening step.
+                     * Scale-aware selling total:
+                     *   physicalQty = storageUnits / 10^scale
+                     *   totalMinor  = unitPriceMinor * storageUnits / 10^scale
                      */
-                    val lineSellingTotalMinor = Math.multiplyExact(
-                        lineReq.requestedQuantity.storageUnits,
-                        sellingPrice.amountMinorUnits
-                    )
+                    val lineSellingTotalMinor =
+                        Math.multiplyExact(
+                            lineReq.requestedQuantity.storageUnits,
+                            sellingPrice.amountMinorUnits
+                        ) / lineReq.requestedQuantity.scale.multiplier
 
                     val lineSellingTotal = Money(lineSellingTotalMinor)
                     val lineCogs = allocationResult.totalCogs
