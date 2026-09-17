@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -79,6 +80,7 @@ data class ProductWithDetails(
 fun ProductsScreen(
     container: AppContainer,
     onBack: () -> Unit,
+    onScanProduct: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -181,6 +183,21 @@ fun ProductsScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
+
+            OutlinedButton(
+                onClick = onScanProduct,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            ) {
+                Icon(
+                    Icons.Default.CameraAlt,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Scan Product")
+            }
 
             OutlinedTextField(
                 value = searchQuery,
@@ -428,10 +445,6 @@ fun ProductsScreen(
         }
     }
 
-    // -------------------------------------------------------------------------
-    // PRODUCT DETAILS
-    // -------------------------------------------------------------------------
-
     selectedProductForDetails?.let { details ->
 
         val product = details.product
@@ -668,10 +681,6 @@ fun ProductsScreen(
             }
         )
     }
-
-    // -------------------------------------------------------------------------
-    // ADD PRODUCT
-    // -------------------------------------------------------------------------
 
     if (showAddProductDialog) {
 
@@ -992,12 +1001,8 @@ fun ProductsScreen(
                                 abbreviation = baseUnitAbbr
                                     .trim()
                                     .ifBlank { null },
-
-                                // The canonical base unit is always exactly
-                                // one base unit.
                                 conversionNumerator = 1L,
                                 conversionDenominator = 1L,
-
                                 isBaseUnit = true,
                                 isPurchaseUnit = true,
                                 isDispensingUnit = true,
@@ -1018,19 +1023,12 @@ fun ProductsScreen(
                             )
 
                             withContext(Dispatchers.IO) {
-
-                                container.productMasterDao
-                                    .insertProduct(product)
-
-                                container.productMasterDao
-                                    .insertUnit(baseUnit)
-
-                                container.productMasterDao
-                                    .savePriceConfig(priceConfig)
+                                container.productMasterDao.insertProduct(product)
+                                container.productMasterDao.insertUnit(baseUnit)
+                                container.productMasterDao.savePriceConfig(priceConfig)
                             }
 
                             showAddProductDialog = false
-
                             refreshProducts()
 
                             snackbarHostState.showSnackbar(
@@ -1054,26 +1052,16 @@ fun ProductsScreen(
         )
     }
 
-    // -------------------------------------------------------------------------
-    // ADD COMMERCIAL UNIT
-    // -------------------------------------------------------------------------
-
     showAddUnitDialogForProduct?.let { product ->
 
         var unitName by remember { mutableStateOf("") }
         var unitAbbr by remember { mutableStateOf("") }
-
         var numeratorStr by remember { mutableStateOf("") }
         var denominatorStr by remember { mutableStateOf("1") }
-
         var priceStr by remember { mutableStateOf("") }
-
         var isPurchase by remember { mutableStateOf(true) }
         var isDispensing by remember { mutableStateOf(true) }
-
-        var unitError by remember {
-            mutableStateOf<String?>(null)
-        }
+        var unitError by remember { mutableStateOf<String?>(null) }
 
         AlertDialog(
             onDismissRequest = {
@@ -1083,14 +1071,12 @@ fun ProductsScreen(
                 Text("Add Commercial Unit")
             },
             text = {
-
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-
                     Text(
                         text = "For: ${product.displayName}",
                         style = MaterialTheme.typography.bodySmall,
@@ -1099,30 +1085,18 @@ fun ProductsScreen(
 
                     OutlinedTextField(
                         value = unitName,
-                        onValueChange = {
-                            unitName = it
-                        },
-                        label = {
-                            Text("Unit Name *")
-                        },
-                        placeholder = {
-                            Text("e.g. Box of 100, Blister of 10")
-                        },
+                        onValueChange = { unitName = it },
+                        label = { Text("Unit Name *") },
+                        placeholder = { Text("e.g. Box of 100, Blister of 10") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     OutlinedTextField(
                         value = unitAbbr,
-                        onValueChange = {
-                            unitAbbr = it
-                        },
-                        label = {
-                            Text("Abbreviation (Optional)")
-                        },
-                        placeholder = {
-                            Text("e.g. box100, blist")
-                        },
+                        onValueChange = { unitAbbr = it },
+                        label = { Text("Abbreviation (Optional)") },
+                        placeholder = { Text("e.g. box100, blist") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1141,86 +1115,48 @@ fun ProductsScreen(
 
                     OutlinedTextField(
                         value = numeratorStr,
-                        onValueChange = {
-                            numeratorStr = it
-                        },
-                        label = {
-                            Text("Conversion Numerator *")
-                        },
-                        placeholder = {
-                            Text("100 for a box containing 100 tablets")
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number
-                        ),
+                        onValueChange = { numeratorStr = it },
+                        label = { Text("Conversion Numerator *") },
+                        placeholder = { Text("100 for a box containing 100 tablets") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     OutlinedTextField(
                         value = denominatorStr,
-                        onValueChange = {
-                            denominatorStr = it
-                        },
-                        label = {
-                            Text("Conversion Denominator *")
-                        },
-                        placeholder = {
-                            Text("1 for whole-base-unit packaging")
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number
-                        ),
+                        onValueChange = { denominatorStr = it },
+                        label = { Text("Conversion Denominator *") },
+                        placeholder = { Text("1 for whole-base-unit packaging") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     OutlinedTextField(
                         value = priceStr,
-                        onValueChange = {
-                            priceStr = it
-                        },
-                        label = {
-                            Text("Selling Price for this Unit (KES)")
-                        },
-                        placeholder = {
-                            Text("e.g. 500")
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal
-                        ),
+                        onValueChange = { priceStr = it },
+                        label = { Text("Selling Price for this Unit (KES)") },
+                        placeholder = { Text("e.g. 500") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
                             checked = isPurchase,
-                            onCheckedChange = {
-                                isPurchase = it
-                            }
+                            onCheckedChange = { isPurchase = it }
                         )
-
-                        Text(
-                            "Available for Goods Receiving (Purchase Unit)"
-                        )
+                        Text("Available for Goods Receiving (Purchase Unit)")
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
                             checked = isDispensing,
-                            onCheckedChange = {
-                                isDispensing = it
-                            }
+                            onCheckedChange = { isDispensing = it }
                         )
-
-                        Text(
-                            "Available for Dispensing (Sale Unit)"
-                        )
+                        Text("Available for Dispensing (Sale Unit)")
                     }
 
                     unitError?.let {
@@ -1233,75 +1169,46 @@ fun ProductsScreen(
                 }
             },
             confirmButton = {
-
                 Button(
                     onClick = {
-
                         if (unitName.isBlank()) {
-                            unitError =
-                                "Unit name is required."
+                            unitError = "Unit name is required."
                             return@Button
                         }
 
-                        val numerator =
-                            numeratorStr.trim().toLongOrNull()
-
-                        if (
-                            numerator == null ||
-                            numerator <= 0L
-                        ) {
-                            unitError =
-                                "Conversion numerator must be a positive whole number."
+                        val numerator = numeratorStr.trim().toLongOrNull()
+                        if (numerator == null || numerator <= 0L) {
+                            unitError = "Conversion numerator must be a positive whole number."
                             return@Button
                         }
 
-                        val denominator =
-                            denominatorStr.trim().toLongOrNull()
-
-                        if (
-                            denominator == null ||
-                            denominator <= 0L
-                        ) {
-                            unitError =
-                                "Conversion denominator must be a positive whole number."
+                        val denominator = denominatorStr.trim().toLongOrNull()
+                        if (denominator == null || denominator <= 0L) {
+                            unitError = "Conversion denominator must be a positive whole number."
                             return@Button
                         }
 
-                        if (
-                            numerator == 1L &&
-                            denominator != 1L
-                        ) {
-                            unitError =
-                                "A conversion of 1/n must be intentional. Verify that this commercial unit really represents a fractional base quantity."
+                        if (numerator == 1L && denominator != 1L) {
+                            unitError = "A conversion of 1/n must be intentional. Verify that this commercial unit really represents a fractional base quantity."
                         }
 
                         val priceMinor = try {
-                            Money.fromDecimalString(
-                                priceStr.trim()
-                            ).amountMinorUnits
+                            Money.fromDecimalString(priceStr.trim()).amountMinorUnits
                         } catch (_: Exception) {
                             null
                         }
 
                         scope.launch {
-
-                            val now =
-                                System.currentTimeMillis()
-
-                            val unitId =
-                                UUID.randomUUID().toString()
+                            val now = System.currentTimeMillis()
+                            val unitId = UUID.randomUUID().toString()
 
                             val unit = ProductUnit(
                                 id = unitId,
                                 productId = product.id,
                                 name = unitName.trim(),
-                                abbreviation = unitAbbr
-                                    .trim()
-                                    .ifBlank { null },
-
+                                abbreviation = unitAbbr.trim().ifBlank { null },
                                 conversionNumerator = numerator,
                                 conversionDenominator = denominator,
-
                                 isBaseUnit = false,
                                 isPurchaseUnit = isPurchase,
                                 isDispensingUnit = isDispensing,
@@ -1313,33 +1220,23 @@ fun ProductsScreen(
                             )
 
                             withContext(Dispatchers.IO) {
-
-                                container.productMasterDao
-                                    .insertUnit(unit)
+                                container.productMasterDao.insertUnit(unit)
 
                                 if (priceMinor != null) {
-
-                                    val priceConfig =
-                                        UnitPriceConfig(
-                                            id = UUID.randomUUID()
-                                                .toString(),
-                                            productUnitId = unitId,
-                                            sellingPrice = Money(
-                                                priceMinor
-                                            ),
-                                            isActive = true,
-                                            createdAt = now,
-                                            updatedAt = now
-                                        )
-
-                                    container.productMasterDao
-                                        .savePriceConfig(priceConfig)
+                                    val priceConfig = UnitPriceConfig(
+                                        id = UUID.randomUUID().toString(),
+                                        productUnitId = unitId,
+                                        sellingPrice = Money(priceMinor),
+                                        isActive = true,
+                                        createdAt = now,
+                                        updatedAt = now
+                                    )
+                                    container.productMasterDao.savePriceConfig(priceConfig)
                                 }
                             }
 
                             showAddUnitDialogForProduct = null
                             selectedProductForDetails = null
-
                             refreshProducts()
 
                             snackbarHostState.showSnackbar(
@@ -1352,71 +1249,37 @@ fun ProductsScreen(
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showAddUnitDialogForProduct = null
-                    }
-                ) {
+                TextButton(onClick = { showAddUnitDialogForProduct = null }) {
                     Text("Cancel")
                 }
             }
         )
     }
 
-    // -------------------------------------------------------------------------
-    // EDIT PRICE
-    // -------------------------------------------------------------------------
-
     showEditPriceDialogForUnit?.let { (unit, existingConfig) ->
+        val currentPriceMajor = existingConfig?.sellingPrice?.let {
+            "${it.amountMinorUnits / 100}." +
+                (it.amountMinorUnits % 100).toString().padStart(2, '0')
+        } ?: ""
 
-        val currentPriceMajor =
-            existingConfig?.sellingPrice?.let {
-                "${it.amountMinorUnits / 100}." +
-                    (it.amountMinorUnits % 100)
-                        .toString()
-                        .padStart(2, '0')
-            } ?: ""
-
-        var newPriceMajor by remember {
-            mutableStateOf(currentPriceMajor)
-        }
-
-        var priceError by remember {
-            mutableStateOf<String?>(null)
-        }
+        var newPriceMajor by remember { mutableStateOf(currentPriceMajor) }
+        var priceError by remember { mutableStateOf<String?>(null) }
 
         AlertDialog(
             onDismissRequest = {
                 showEditPriceDialogForUnit = null
             },
-            title = {
-                Text("Configure Selling Price")
-            },
+            title = { Text("Configure Selling Price") },
             text = {
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-
-                    Text(
-                        "Unit: ${unit.name} " +
-                            "(${unit.conversionFraction} base units)"
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Unit: ${unit.name} (${unit.conversionFraction} base units)")
 
                     OutlinedTextField(
                         value = newPriceMajor,
-                        onValueChange = {
-                            newPriceMajor = it
-                        },
-                        label = {
-                            Text("Selling Price (KES) *")
-                        },
-                        placeholder = {
-                            Text("e.g. 50.00")
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal
-                        ),
+                        onValueChange = { newPriceMajor = it },
+                        label = { Text("Selling Price (KES) *") },
+                        placeholder = { Text("e.g. 50.00") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1431,45 +1294,32 @@ fun ProductsScreen(
                 }
             },
             confirmButton = {
-
                 Button(
                     onClick = {
-
                         val minor = try {
-                            Money.fromDecimalString(
-                                newPriceMajor.trim()
-                            ).amountMinorUnits
+                            Money.fromDecimalString(newPriceMajor.trim()).amountMinorUnits
                         } catch (_: Exception) {
-                            priceError =
-                                "Enter a valid non-negative price."
+                            priceError = "Enter a valid non-negative price."
                             return@Button
                         }
 
                         scope.launch {
-
-                            val now =
-                                System.currentTimeMillis()
-
+                            val now = System.currentTimeMillis()
                             val config = UnitPriceConfig(
-                                id = existingConfig?.id
-                                    ?: UUID.randomUUID().toString(),
+                                id = existingConfig?.id ?: UUID.randomUUID().toString(),
                                 productUnitId = unit.id,
                                 sellingPrice = Money(minor),
                                 isActive = true,
-                                createdAt = existingConfig?.createdAt
-                                    ?: now,
+                                createdAt = existingConfig?.createdAt ?: now,
                                 updatedAt = now
                             )
 
                             withContext(Dispatchers.IO) {
-
-                                container.productMasterDao
-                                    .savePriceConfig(config)
+                                container.productMasterDao.savePriceConfig(config)
                             }
 
                             showEditPriceDialogForUnit = null
                             selectedProductForDetails = null
-
                             refreshProducts()
 
                             snackbarHostState.showSnackbar(
@@ -1482,11 +1332,7 @@ fun ProductsScreen(
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showEditPriceDialogForUnit = null
-                    }
-                ) {
+                TextButton(onClick = { showEditPriceDialogForUnit = null }) {
                     Text("Cancel")
                 }
             }
