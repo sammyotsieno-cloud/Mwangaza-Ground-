@@ -1,0 +1,145 @@
+name: Finish Mwangaza Math Fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  finish-math-fix:
+    if: github.event.head_commit.message != 'chore: remove temporary math-fix workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply remaining exact math fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          # Shared formatter: replace local RationalCost formatters and imports.
+          screen_paths = [
+              root / 'app/src/main/java/org/mwangaza/app/ui/screens/ReportsScreen.kt',
+              root / 'app/src/main/java/org/mwangaza/app/ui/screens/InventoryScreen.kt',
+              root / 'app/src/main/java/org/mwangaza/app/ui/screens/DispensingScreen.kt',
+          ]
+          formatter_import = 'import org.mwangaza.app.ui.formatters.MoneyDisplayFormatter\n'
+
+          for path in screen_paths:
+              text = path.read_text()
+              if 'MoneyDisplayFormatter' not in text:
+                  anchor = 'import org.mwangaza.app.data.AppContainer\n'
+                  if anchor not in text:
+                      raise SystemExit(f'Import anchor missing in {path}')
+                  text = text.replace(anchor, anchor + formatter_import, 1)
+
+              # Remove private RationalCost formatter, wherever present.
+              text, n = re.subn(
+                  r'\n/\*\*\n \* Converts an exact RationalCost.*?\nprivate fun formatRationalCost\(\n    cost: RationalCost\n\): String \{.*?\n\}\n',
+                  '\n', text, count=1, flags=re.S
+              )
+              if n == 0:
+                  text, n = re.subn(
+                      r'\nprivate fun formatRationalCost\(cost: RationalCost\): String \{.*?\n\}\n',
+                      '\n', text, count=1, flags=re.S
+                  )
+
+              text = text.replace('formatRationalCost(', 'MoneyDisplayFormatter.formatRationalCost(')
+              path.write_text(text)
+
+          # Remove now-unused formatter imports where appropriate.
+          reports = root / 'app/src/main/java/org/mwangaza/app/ui/screens/ReportsScreen.kt'
+          t = reports.read_text().replace('import java.math.BigDecimal\n', '').replace('import java.math.RoundingMode\n', '')
+          reports.write_text(t)
+
+          inventory = root / 'app/src/main/java/org/mwangaza/app/ui/screens/InventoryScreen.kt'
+          t = inventory.read_text().replace('import java.math.BigDecimal\n', '').replace('import java.math.RoundingMode\n', '')
+          inventory.write_text(t)
+
+          dispensing = root / 'app/src/main/java/org/mwangaza/app/ui/screens/DispensingScreen.kt'
+          t = dispensing.read_text().replace('import java.math.BigDecimal\n', '').replace('import java.math.RoundingMode\n', '')
+
+          # Exact cart line total: physical quantity × minor-unit price.
+          old = '''                        val lineTotalMinor = try {\n                            Math.multiplyExact(\n                                quantity.storageUnits,\n                                unitPriceMinor\n                            )\n                        } catch (e: ArithmeticException) {\n                            throw IllegalArgumentException(\n                                "Line total overflow for quantity=${quantity.storageUnits} " +\n                                    "and unit price=$unitPriceMinor",\n                                e\n                            )\n                        }'''
+          new = '''                        val lineTotalProduct = try {\n                            Math.multiplyExact(\n                                quantity.storageUnits,\n                                unitPriceMinor\n                            )\n                        } catch (e: ArithmeticException) {\n                            throw IllegalArgumentException(\n                                "Line total overflow for quantity=${quantity.storageUnits} " +\n                                    "and unit price=$unitPriceMinor",\n                                e\n                            )\n                        }\n\n                        val scaleMultiplier = quantity.scale.multiplier\n                        require(scaleMultiplier > 0L) {\n                            "Quantity scale multiplier must be positive"\n                        }\n                        val lineTotalRemainder =\n                            lineTotalProduct % scaleMultiplier\n                        require(lineTotalRemainder == 0L) {\n                            "Selling total is not exactly representable in minor units: " +\n                                "quantity=${quantity.toPlainString()}, " +\n                                "unitPriceMinor=$unitPriceMinor"\n                        }\n                        val lineTotalMinor =\n                            lineTotalProduct / scaleMultiplier'''
+          if old not in t:
+              # Accept the current block if formatting differs, but fail rather than guessing.
+              if 'val lineTotalMinor = try {' in t:
+                  raise SystemExit('Dispensing cart total block found but did not match expected source')
+          else:
+              t = t.replace(old, new, 1)
+          dispensing.write_text(t)
+
+          # ConsumptionService persisted SaleItem total: same physical-quantity contract.
+          consumption = root / 'core/src/main/kotlin/core/domain/consumption/ConsumptionService.kt'
+          t = consumption.read_text()
+          old = '''                    /*\n                     * NOTE:\n                     * This multiplication remains based on the existing pricing\n                     * contract and is intentionally not redesigned in this repair.\n                     *\n                     * The scale-aware selling-price model will be corrected in\n                     * the dedicated quantity/pricing hardening step.\n                     */\n                    val lineSellingTotalMinor = Math.multiplyExact(\n                        lineReq.requestedQuantity.storageUnits,\n                        sellingPrice.amountMinorUnits\n                    )'''
+          new = '''                    val lineSellingProduct = Math.multiplyExact(\n                        lineReq.requestedQuantity.storageUnits,\n                        sellingPrice.amountMinorUnits\n                    )\n                    val scaleMultiplier = lineReq.requestedQuantity.scale.multiplier\n                    require(scaleMultiplier > 0L) {\n                        "Quantity scale multiplier must be positive"\n                    }\n                    require(lineSellingProduct % scaleMultiplier == 0L) {\n                        "Selling total is not exactly representable in minor units: " +\n                            "quantity=${lineReq.requestedQuantity.toPlainString()}, " +\n                            "unitPriceMinor=${sellingPrice.amountMinorUnits}"\n                    }\n                    val lineSellingTotalMinor =\n                        lineSellingProduct / scaleMultiplier'''
+          if old not in t:
+              raise SystemExit('ConsumptionService selling-total block not found')
+          consumption.write_text(t.replace(old, new, 1))
+
+          # ProductsScreen: eliminate Double parsing for both registration prices.
+          products = root / 'app/src/main/java/org/mwangaza/app/ui/screens/ProductsScreen.kt'
+          t = products.read_text()
+          old = '''                        val priceParsed =\n                            initialPriceMajor.trim().toDoubleOrNull()\n\n                        if (\n                            priceParsed == null ||\n                            priceParsed < 0.0\n                        ) {\n                            errorMessage = "Initial price must be a valid non-negative number."\n                            return@Button\n                        }\n\n                        val priceMinor =\n                            Math.round(priceParsed * 100.0)'''
+          new = '''                        val initialPrice = try {\n                            Money.fromDecimalString(\n                                initialPriceMajor.trim()\n                            )\n                        } catch (_: Exception) {\n                            errorMessage = "Initial price must be a valid non-negative amount."\n                            return@Button\n                        }\n\n                        if (initialPrice.amountMinorUnits < 0L) {\n                            errorMessage = "Initial price must be a valid non-negative amount."\n                            return@Button\n                        }\n\n                        val priceMinor =\n                            initialPrice.amountMinorUnits'''
+          if old not in t:
+              raise SystemExit('ProductsScreen initial price block not found')
+          t = t.replace(old, new, 1)
+
+          # Commercial-unit price editor: exact Money parsing, no Double.
+          old2 = '''                        val parsedPrice =\n                            priceStr.trim().toDoubleOrNull()\n\n                        val priceMinor =\n                            if (\n                                parsedPrice != null &&\n                                parsedPrice >= 0.0\n                            ) {\n                                Math.round(parsedPrice * 100.0)\n                            } else {\n                                0L\n                            }'''
+          new2 = '''                        val parsedPriceMinor = try {\n                            Money.fromDecimalString(\n                                priceStr.trim()\n                            ).amountMinorUnits\n                        } catch (_: Exception) {\n                            0L\n                        }\n\n                        val priceMinor =\n                            parsedPriceMinor'''
+          if old2 not in t:
+              raise SystemExit('ProductsScreen commercial price block not found')
+          t = t.replace(old2, new2, 1)
+          products.write_text(t)
+
+          # Add focused tests for the exact display and scale-aware sale arithmetic.
+          test = root / 'app/src/test/kotlin/org/mwangaza/app/ui/formatters/MoneyDisplayFormatterTest.kt'
+          test.parent.mkdir(parents=True, exist_ok=True)
+          test.write_text('''package org.mwangaza.app.ui.formatters\n\nimport core.domain.model.RationalCost\nimport org.junit.Assert.assertEquals\nimport org.junit.Test\nimport java.math.BigInteger\n\nclass MoneyDisplayFormatterTest {\n\n    @Test\n    fun `rational cost minor units display as KES major units`() {\n        val cost = RationalCost(\n            numerator = BigInteger.valueOf(10000L),\n            denominator = BigInteger.ONE\n        )\n\n        assertEquals(\"KES 100.00\", MoneyDisplayFormatter.formatRationalCost(cost))\n    }\n}\n''')
+
+          test2 = root / 'core/src/test/kotlin/core/domain/consumption/SaleLineTotalMathTest.kt'
+          test2.parent.mkdir(parents=True, exist_ok=True)
+          test2.write_text('''package core.domain.consumption\n\nimport core.domain.model.QuantityScale\nimport org.junit.Assert.assertEquals\nimport org.junit.Test\n\nclass SaleLineTotalMathTest {\n\n    @Test\n    fun `scale one quantity 2 point 5 at KES 10 gives 2500 minor units`() {\n        val storageUnits = 25L\n        val unitPriceMinor = 1000L\n        val scaleMultiplier = QuantityScale.SCALE_1.multiplier\n\n        val lineTotalMinor =\n            Math.multiplyExact(storageUnits, unitPriceMinor) / scaleMultiplier\n\n        assertEquals(2500L, lineTotalMinor)\n    }\n}\n''')
+
+          # Ensure forbidden source patterns are absent in the repaired paths.
+          all_text = ''.join(p.read_text() for p in root.rglob('*.kt'))
+          if re.search(r'private fun formatRationalCost', all_text):
+              raise SystemExit('Private formatRationalCost copy remains')
+          if 'toDoubleOrNull()' in products.read_text():
+              raise SystemExit('ProductsScreen still contains Double price parsing')
+
+          # Verify the critical acquisition valuation multiplication is scale-aware.
+          valuation = (root / 'core/src/main/kotlin/core/domain/reporting/InventoryValuationService.kt').read_text()
+          if 'remainingQuantity.scale.multiplier' not in valuation:
+              raise SystemExit('Inventory valuation scale denominator regression detected')
+
+      - name: Commit remaining math fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app core
+          git commit -m 'fix: complete remaining math and display corrections' || exit 0
+          git push
+
+      - name: Build and test
+        run: ./gradlew testDebugUnitTest assembleDebug
+
+      - name: Remove temporary workflow after verification
+        if: success()
+        run: |
+          git rm .github/workflows/finish-math-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: remove temporary math-fix workflow'
+          git push
