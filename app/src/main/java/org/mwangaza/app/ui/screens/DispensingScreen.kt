@@ -70,7 +70,6 @@ import core.domain.model.Money
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.Quantity
-import core.domain.model.RationalCost
 import core.domain.model.Sale
 import core.domain.model.SaleItem
 import core.domain.model.UnitPriceConfig
@@ -79,8 +78,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
-import java.math.BigDecimal
-import java.math.RoundingMode
+import org.mwangaza.app.ui.formatters.MoneyDisplayFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -93,26 +91,6 @@ private data class TempDispenseLine(
     val unitPriceMinor: Long,
     val lineTotalMinor: Long
 )
-
-private fun formatMoney(minorUnits: Long): String {
-    val major = minorUnits / 100
-    val minor = kotlin.math.abs(minorUnits % 100)
-        .toString()
-        .padStart(2, '0')
-
-    return "KES $major.$minor"
-}
-
-private fun formatRationalCost(cost: RationalCost): String {
-    val value = BigDecimal(cost.numerator)
-        .divide(
-            BigDecimal(cost.denominator),
-            2,
-            RoundingMode.HALF_UP
-        )
-
-    return "KES ${value.setScale(2, RoundingMode.HALF_UP).toPlainString()}"
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -436,9 +414,10 @@ fun DispensingScreen(
                                                 "${line.quantity.toPlainString()} " +
                                                     line.unit.name +
                                                     " @ " +
-                                                    formatMoney(
-                                                        line.unitPriceMinor
-                                                    ),
+                                                    MoneyDisplayFormatter
+                                                        .formatMinorUnits(
+                                                            line.unitPriceMinor
+                                                        ),
                                             style =
                                                 MaterialTheme.typography.bodyMedium
                                         )
@@ -446,9 +425,10 @@ fun DispensingScreen(
                                         Text(
                                             text =
                                                 "Line Total: " +
-                                                    formatMoney(
-                                                        line.lineTotalMinor
-                                                    ),
+                                                    MoneyDisplayFormatter
+                                                        .formatMinorUnits(
+                                                            line.lineTotalMinor
+                                                        ),
                                             style =
                                                 MaterialTheme.typography.bodyMedium,
                                             fontWeight =
@@ -509,9 +489,10 @@ fun DispensingScreen(
 
                                 Text(
                                     text =
-                                        formatMoney(
-                                            totalCartSellingMinor
-                                        ),
+                                        MoneyDisplayFormatter
+                                            .formatMinorUnits(
+                                                totalCartSellingMinor
+                                            ),
                                     style =
                                         MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
@@ -620,15 +601,17 @@ fun DispensingScreen(
                                         "Dispense complete! Sale " +
                                             "'${result.sale.saleNumber}' " +
                                             "recorded. Total: " +
-                                            formatMoney(
-                                                result.sale
-                                                    .totalSellingAmount
-                                                    .amountMinorUnits
-                                            ) +
+                                            MoneyDisplayFormatter
+                                                .formatMinorUnits(
+                                                    result.sale
+                                                        .totalSellingAmount
+                                                        .amountMinorUnits
+                                                ) +
                                             " (COGS: " +
-                                            formatRationalCost(
-                                                result.sale.totalCogs
-                                            ) +
+                                            MoneyDisplayFormatter
+                                                .formatRationalCost(
+                                                    result.sale.totalCogs
+                                                ) +
                                             ")"
                                     )
 
@@ -904,10 +887,11 @@ fun DispensingScreen(
 
                                         Text(
                                             "Revenue: " +
-                                                formatMoney(
-                                                    sale.totalSellingAmount
-                                                        .amountMinorUnits
-                                                ),
+                                                MoneyDisplayFormatter
+                                                    .formatMinorUnits(
+                                                        sale.totalSellingAmount
+                                                            .amountMinorUnits
+                                                    ),
                                             fontWeight =
                                                 FontWeight.SemiBold,
                                             color =
@@ -917,9 +901,10 @@ fun DispensingScreen(
 
                                         Text(
                                             "COGS: " +
-                                                formatRationalCost(
-                                                    sale.totalCogs
-                                                ),
+                                                MoneyDisplayFormatter
+                                                    .formatRationalCost(
+                                                        sale.totalCogs
+                                                    ),
                                             style =
                                                 MaterialTheme.typography
                                                     .bodySmall,
@@ -1276,7 +1261,7 @@ fun DispensingScreen(
                             return@Button
                         }
 
-                        val lineTotalMinor = try {
+                        val lineTotalProduct = try {
                             Math.multiplyExact(
                                 quantity.storageUnits,
                                 unitPriceMinor
@@ -1286,6 +1271,10 @@ fun DispensingScreen(
                                 "Line selling amount is too large."
                             return@Button
                         }
+
+                        val lineTotalMinor =
+                            lineTotalProduct /
+                                quantity.scale.multiplier
 
                         cartLines.value =
                             cartLines.value +
@@ -1418,14 +1407,16 @@ fun DispensingScreen(
 
                                 Text(
                                     "Line Revenue: " +
-                                        formatMoney(
-                                            item.lineTotal
-                                                .amountMinorUnits
-                                        ) +
+                                        MoneyDisplayFormatter
+                                            .formatMinorUnits(
+                                                item.lineTotal
+                                                    .amountMinorUnits
+                                            ) +
                                         " | Line COGS: " +
-                                        formatRationalCost(
-                                            item.lineCogs
-                                        ),
+                                        MoneyDisplayFormatter
+                                            .formatRationalCost(
+                                                item.lineCogs
+                                            ),
                                     style =
                                         MaterialTheme.typography.bodySmall
                                 )
@@ -1439,18 +1430,20 @@ fun DispensingScreen(
 
                     Text(
                         "Total Selling Amount: " +
-                            formatMoney(
-                                sale.totalSellingAmount
-                                    .amountMinorUnits
-                            ),
+                            MoneyDisplayFormatter
+                                .formatMinorUnits(
+                                    sale.totalSellingAmount
+                                        .amountMinorUnits
+                                ),
                         fontWeight = FontWeight.Bold
                     )
 
                     Text(
                         "Total Acquisition Cost (COGS): " +
-                            formatRationalCost(
-                                sale.totalCogs
-                            ),
+                            MoneyDisplayFormatter
+                                .formatRationalCost(
+                                    sale.totalCogs
+                                ),
                         fontWeight = FontWeight.Medium
                     )
 
