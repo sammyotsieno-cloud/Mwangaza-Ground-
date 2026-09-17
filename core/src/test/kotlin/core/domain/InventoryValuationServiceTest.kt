@@ -70,6 +70,46 @@ class InventoryValuationServiceTest {
     }
 
     @Test
+    fun `scale 1 valuation divides storage units by ten`() {
+        val layer = layer(
+            id = "S1",
+            initialQuantity = 25L,
+            remainingQuantity = 25L,
+            scale = QuantityScale.SCALE_1,
+            acquisitionUnitCost = exactMinor(100L)
+        )
+
+        val service = InventoryValuationService(
+            FakeInventoryCostLayerDao(listOf(layer))
+        )
+
+        assertEquals(
+            "250/1",
+            service.calculateLayerValuation(layer).toString()
+        )
+    }
+
+    @Test
+    fun `scale 3 valuation divides storage units by one thousand`() {
+        val layer = layer(
+            id = "S3",
+            initialQuantity = 2_500L,
+            remainingQuantity = 2_500L,
+            scale = QuantityScale.SCALE_3,
+            acquisitionUnitCost = exactMinor(10_000L)
+        )
+
+        val service = InventoryValuationService(
+            FakeInventoryCostLayerDao(listOf(layer))
+        )
+
+        assertEquals(
+            "25000/1",
+            service.calculateLayerValuation(layer).toString()
+        )
+    }
+
+    @Test
     fun `multiple active layers are summed exactly`() {
         val layer1 = layer(
             id = "L1",
@@ -256,6 +296,7 @@ class InventoryValuationServiceTest {
         id: String,
         initialQuantity: Long,
         remainingQuantity: Long,
+        scale: QuantityScale = QuantityScale.SCALE_0,
         acquisitionUnitCost: RationalCost
     ): InventoryCostLayer {
         return InventoryCostLayer(
@@ -265,11 +306,11 @@ class InventoryValuationServiceTest {
             supplierId = "S1",
             initialQuantity = Quantity(
                 storageUnits = initialQuantity,
-                scale = QuantityScale.SCALE_0
+                scale = scale
             ),
             remainingQuantity = Quantity(
                 storageUnits = remainingQuantity,
-                scale = QuantityScale.SCALE_0
+                scale = scale
             ),
             acquisitionUnitCost = acquisitionUnitCost,
             acquiredAt = 1_000L,
