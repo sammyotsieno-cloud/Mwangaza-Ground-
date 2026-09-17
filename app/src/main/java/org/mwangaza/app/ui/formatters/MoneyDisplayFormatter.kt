@@ -23,11 +23,11 @@ object MoneyDisplayFormatter {
     fun formatRationalCost(cost: RationalCost): String {
         val majorShillings = BigDecimal(cost.numerator)
             .divide(
-                BigDecimal(cost.denominator),
+                BigDecimal(cost.denominator)
+                    .movePointRight(2),
                 2,
                 RoundingMode.HALF_UP
             )
-            .movePointLeft(2)
             .setScale(2, RoundingMode.HALF_UP)
 
         return "KES ${majorShillings.toPlainString()}"
