@@ -25,10 +25,11 @@ import java.math.BigInteger
  *
  * The authoritative valuation formula for one active cost layer is:
  *
- *     acquisitionUnitCost × remainingQuantity
+ *     acquisitionUnitCost × remainingPhysicalQuantity
  *
- * acquisitionUnitCost is already expressed per storage unit, so no division
- * by initialQuantity is required.
+ * acquisitionUnitCost is expressed per physical unit under the receiving
+ * contract. remainingQuantity stores that physical quantity as integer
+ * storage units, so valuation must divide by the quantity scale multiplier.
  *
  * Because acquisitionUnitCost is a RationalCost, the complete calculation
  * remains exact.
@@ -59,11 +60,11 @@ class InventoryValuationService(
      *
      * The calculation is:
      *
-     *     acquisitionUnitCost × remainingQuantity
+     *     acquisitionUnitCost × remainingStorageUnits / 10^scale
      *
-     * acquisitionUnitCost is already the exact acquisition cost per storage
-     * unit, while remainingQuantity is the number of storage units currently
-     * represented by the layer.
+     * The quantity scale is a precision representation, not a packaging
+     * conversion. The scale multiplier therefore belongs in the valuation
+     * denominator.
      */
     fun calculateLayerValuation(
         layer: InventoryCostLayer
@@ -94,8 +95,11 @@ class InventoryValuationService(
         }
 
         return layer.acquisitionUnitCost.multiply(
-            BigInteger.valueOf(
+            numerator = BigInteger.valueOf(
                 layer.remainingQuantity.storageUnits
+            ),
+            denominator = BigInteger.valueOf(
+                layer.remainingQuantity.scale.multiplier
             )
         )
     }
