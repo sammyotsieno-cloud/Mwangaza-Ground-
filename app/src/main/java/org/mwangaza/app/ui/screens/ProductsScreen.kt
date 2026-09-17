@@ -936,20 +936,15 @@ fun ProductsScreen(
                             return@Button
                         }
 
-                        val priceParsed =
-                            initialPriceMajor.trim().toDoubleOrNull()
-
-                        if (
-                            priceParsed == null ||
-                            priceParsed < 0.0
-                        ) {
+                        val priceMinor = try {
+                            Money.fromDecimalString(
+                                initialPriceMajor.trim()
+                            ).amountMinorUnits
+                        } catch (_: Exception) {
                             errorMessage =
                                 "Enter a valid non-negative selling price."
                             return@Button
                         }
-
-                        val priceMinor =
-                            Math.round(priceParsed * 100.0)
 
                         scope.launch {
 
@@ -1280,18 +1275,13 @@ fun ProductsScreen(
                                 "A conversion of 1/n must be intentional. Verify that this commercial unit really represents a fractional base quantity."
                         }
 
-                        val parsedPrice =
-                            priceStr.trim().toDoubleOrNull()
-
-                        val priceMinor =
-                            if (
-                                parsedPrice != null &&
-                                parsedPrice >= 0.0
-                            ) {
-                                Math.round(parsedPrice * 100.0)
-                            } else {
-                                null
-                            }
+                        val priceMinor = try {
+                            Money.fromDecimalString(
+                                priceStr.trim()
+                            ).amountMinorUnits
+                        } catch (_: Exception) {
+                            null
+                        }
 
                         scope.launch {
 
@@ -1445,20 +1435,15 @@ fun ProductsScreen(
                 Button(
                     onClick = {
 
-                        val parsed =
-                            newPriceMajor.trim().toDoubleOrNull()
-
-                        if (
-                            parsed == null ||
-                            parsed < 0.0
-                        ) {
+                        val minor = try {
+                            Money.fromDecimalString(
+                                newPriceMajor.trim()
+                            ).amountMinorUnits
+                        } catch (_: Exception) {
                             priceError =
                                 "Enter a valid non-negative price."
                             return@Button
                         }
-
-                        val minor =
-                            Math.round(parsed * 100.0)
 
                         scope.launch {
 
