@@ -40,9 +40,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
-import java.math.BigDecimal
+import org.mwangaza.app.ui.formatters.MoneyDisplayFormatter
 import java.math.BigInteger
-import java.math.RoundingMode
 
 data class FinancialReportData(
     val totalInventoryValuation: RationalCost,
@@ -95,12 +94,6 @@ fun ReportsScreen(
                         it.totalSellingAmount.amountMinorUnits
                     }
 
-                /*
-                 * COGS is now an exact mathematical value.
-                 *
-                 * No conversion to integer minor units is permitted here.
-                 * Each completed sale already preserves its exact totalCogs.
-                 */
                 val totalCogs =
                     completedSales.fold(
                         RationalCost(
@@ -111,23 +104,10 @@ fun ReportsScreen(
                         total.add(sale.totalCogs)
                     }
 
-                /*
-                 * Inventory valuation is owned by the domain valuation
-                 * service.
-                 *
-                 * This screen must not reproduce cost-layer valuation
-                 * arithmetic. The service retrieves all active layers and
-                 * calculates their exact remaining values without rounding.
-                 */
                 val totalValuation =
                     container.inventoryValuationService
                         .calculateTotalValuation()
 
-                /*
-                 * The valuation service operates across all active layers,
-                 * so the active-layer count is obtained separately for the
-                 * report statistic. This does not perform valuation logic.
-                 */
                 val totalActiveCostLayers =
                     container.inventoryCostLayerDao
                         .getAllActiveLayers()
@@ -181,18 +161,6 @@ fun ReportsScreen(
         } else {
             val data = reportData!!
 
-            /*
-             * Revenue is a settled Money value expressed in minor units.
-             *
-             * COGS is an exact RationalCost.
-             *
-             * Gross margin is therefore calculated exactly as:
-             *
-             *     revenue - exact COGS
-             *
-             * The conversion to BigDecimal does not occur until the final
-             * display formatting boundary.
-             */
             val revenueExact =
                 RationalCost(
                     numerator = BigInteger.valueOf(
@@ -233,17 +201,17 @@ fun ReportsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         val revenueString =
-                            formatMinorUnits(
+                            MoneyDisplayFormatter.formatMinorUnits(
                                 data.totalSalesRevenueMinor
                             )
 
                         val cogsString =
-                            formatRationalCost(
+                            MoneyDisplayFormatter.formatRationalCost(
                                 data.totalSalesCogs
                             )
 
                         val marginString =
-                            formatRationalCost(
+                            MoneyDisplayFormatter.formatRationalCost(
                                 grossMarginExact
                             )
 
@@ -299,7 +267,7 @@ fun ReportsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         val valuationString =
-                            formatRationalCost(
+                            MoneyDisplayFormatter.formatRationalCost(
                                 data.totalInventoryValuation
                             )
 
@@ -352,54 +320,6 @@ fun ReportsScreen(
                 }
             }
         }
-    }
-}
-
-/**
- * Converts an exact RationalCost into a user-facing KES value.
- *
- * The mathematical value remains exact until this final display boundary.
- * Exactly two decimal places are produced for the UI.
- */
-private fun formatRationalCost(
-    cost: RationalCost
-): String {
-    val value =
-        BigDecimal(cost.numerator)
-            .divide(
-                BigDecimal(cost.denominator),
-                2,
-                RoundingMode.HALF_UP
-            )
-
-    return "KES ${value.setScale(2, RoundingMode.HALF_UP)}"
-}
-
-/**
- * Formats a settled Money value represented in integer minor units.
- *
- * This remains appropriate for revenue because totalSellingAmount is still
- * a settled Money value, not a RationalCost.
- */
-private fun formatMinorUnits(
-    amountMinorUnits: Long
-): String {
-    val negative = amountMinorUnits < 0L
-    val absoluteAmount =
-        if (negative) -amountMinorUnits else amountMinorUnits
-
-    val major = absoluteAmount / 100L
-    val minor = absoluteAmount % 100L
-
-    return buildString {
-        if (negative) {
-            append("-")
-        }
-
-        append("KES ")
-        append(major)
-        append(".")
-        append(minor.toString().padStart(2, '0'))
     }
 }
 
