@@ -57,8 +57,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
-import java.math.BigDecimal
-import java.math.RoundingMode
+import org.mwangaza.app.ui.formatters.MoneyDisplayFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -507,9 +506,10 @@ fun InventoryScreen(
 
                                                 Text(
                                                     text =
-                                                        formatRationalCost(
-                                                            summary.valuation
-                                                        ),
+                                                        MoneyDisplayFormatter
+                                                            .formatRationalCost(
+                                                                summary.valuation
+                                                            ),
                                                     style =
                                                         MaterialTheme.typography
                                                             .titleSmall,
@@ -684,7 +684,7 @@ fun InventoryScreen(
                                                     if (isPositive) "+"
                                                     else ""
                                                 ) +
-                                                    "${movement.quantity.storageUnits} units",
+                                                    "${movement.quantity.toPlainString()} units",
 
                                             fontWeight =
                                                 FontWeight.Bold,
@@ -834,9 +834,10 @@ fun InventoryScreen(
 
                     Text(
                         "Total Inventory Valuation: ${
-                            formatRationalCost(
-                                summary.valuation
-                            )
+                            MoneyDisplayFormatter
+                                .formatRationalCost(
+                                    summary.valuation
+                                )
                         }",
                         fontWeight = FontWeight.SemiBold,
                         color =
@@ -950,24 +951,4 @@ fun InventoryScreen(
             }
         )
     }
-}
-
-/**
- * Converts an exact RationalCost to the UI representation.
- *
- * Exact arithmetic is completed before this function is called.
- * Rounding occurs only at this final display boundary.
- */
-private fun formatRationalCost(
-    cost: RationalCost
-): String {
-    val value =
-        BigDecimal(cost.numerator)
-            .divide(
-                BigDecimal(cost.denominator),
-                2,
-                RoundingMode.HALF_UP
-            )
-
-    return "KES ${value.setScale(2, RoundingMode.HALF_UP)}"
 }
