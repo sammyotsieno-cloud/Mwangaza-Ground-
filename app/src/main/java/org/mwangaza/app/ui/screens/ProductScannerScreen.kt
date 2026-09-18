@@ -231,6 +231,7 @@ private fun CameraCapturePreview(
                 }
                 val capture = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setJpegQuality(95)
                     .build()
                 provider.unbindAll()
                 provider.bindToLifecycle(
