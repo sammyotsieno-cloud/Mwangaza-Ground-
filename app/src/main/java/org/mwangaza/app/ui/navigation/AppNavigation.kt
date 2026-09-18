@@ -144,11 +144,18 @@ fun AppNavigation(
                     ProductsScreen(
                         container = appContainer,
                         onBack = { currentFeature = null },
-                        onScanProduct = { currentFeature = "product-scanner" }
+                        onScanProduct = { currentFeature = "product-scanner" },
+                        initialScanDraft = pendingScanDraft,
+                        onScanDraftConsumed = { pendingScanDraft = null }
                     )
                 }
                 currentFeature == "product-scanner" -> {
-                    ProductScannerScreen()
+                    ProductScannerScreen(
+                        onConfirmed = { draft ->
+                            pendingScanDraft = draft
+                            currentFeature = "products"
+                        }
+                    )
                 }
                 currentFeature == "receiving" -> {
                     GoodsReceivingScreen(
