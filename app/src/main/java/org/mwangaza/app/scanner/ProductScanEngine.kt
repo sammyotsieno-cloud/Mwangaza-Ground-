@@ -17,9 +17,9 @@ class ProductScanEngine(
                 ?: error("Unable to decode captured image")
             val quality = ProductImageQualityAnalyzer.analyze(originalBitmap, originalFile)
             val detections = runCatching { objectDetector.detect(context, originalFile) }.getOrDefault(emptyList())
-            val largest = detections.maxByOrNull { it.bounds.width().toLong() * it.bounds.height().toLong() }
-                ?.takeIf { it.confidence >= 0.20f }
-            val workingBitmap = ProductImageProcessor.createWorkingCopy(originalFile, workingFile, largest)
+            // Generic object detection is evidence for localization, not proof of a product boundary.
+            // Do not crop automatically from a generic ML Kit object result.
+            val workingBitmap = ProductImageProcessor.createWorkingCopy(originalFile, workingFile, null)
             workingBitmap.recycle()
             originalBitmap.recycle()
             val ocr = runCatching {
