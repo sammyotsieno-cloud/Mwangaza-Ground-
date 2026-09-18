@@ -5,6 +5,17 @@ plugins {
 
 android {
     namespace = "org.mwangaza.app"
+
+    androidComponents {
+        beforeVariants { variantBuilder ->
+            if (
+                providers.gradleProperty("skipReleaseForManualVerification").orNull == "true" &&
+                variantBuilder.buildType == "release"
+            ) {
+                variantBuilder.enable = false
+            }
+        }
+    }
     compileSdk = 34
 
     defaultConfig {
