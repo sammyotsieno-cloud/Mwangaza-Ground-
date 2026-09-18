@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import org.mwangaza.app.scanner.ProductScanAnalysis
 import org.mwangaza.app.scanner.ProductScanDraft
 import org.mwangaza.app.scanner.ProductScanEngine
+import org.mwangaza.app.scanner.ProductExtractionEngine
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -66,6 +67,7 @@ fun ProductScannerScreen(
     var isProcessing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var acceptedImageUris by remember { mutableStateOf<List<String>>(emptyList()) }
+    var acceptedAnalyses by remember { mutableStateOf<List<ProductScanAnalysis>>(emptyList()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -91,6 +93,7 @@ fun ProductScannerScreen(
                     },
                     onAddAnother = {
                         acceptedImageUris = acceptedImageUris + analysis!!.originalUri
+                        acceptedAnalyses = acceptedAnalyses + analysis!!
                         analysis = null
                         capturedFile = null
                         errorMessage = null
@@ -145,7 +148,13 @@ fun ProductScannerScreen(
                                             runCatching {
                                                 ProductScanEngine().process(context, file, working)
                                             }.onSuccess {
-                                                analysis = it
+                                                val combinedOcr = acceptedAnalyses.flatMap { item -> item.ocrResults } + it.ocrResults
+                                                val combinedBarcodes = acceptedAnalyses.flatMap { item -> item.barcodeResults } + it.barcodeResults
+                                                analysis = it.copy(
+                                                    ocrResults = combinedOcr,
+                                                    barcodeResults = combinedBarcodes,
+                                                    draft = ProductExtractionEngine.extract(combinedOcr, combinedBarcodes)
+                                                )
                                             }.onFailure {
                                                 errorMessage = "Image analysis failed: ${it.message ?: "unknown error"}"
                                             }
