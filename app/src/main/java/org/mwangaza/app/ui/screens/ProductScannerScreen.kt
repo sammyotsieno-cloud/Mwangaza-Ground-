@@ -105,6 +105,38 @@ fun ProductScannerScreen(
                     }
                 )
             }
+            capturedFile != null -> {
+                ProductCaptureReviewScreen(
+                    file = capturedFile!!,
+                    onRetake = {
+                        capturedFile?.delete()
+                        capturedFile = null
+                        errorMessage = null
+                    },
+                    onProceed = {
+                        val original = capturedFile ?: return@ProductCaptureReviewScreen
+                        isProcessing = true
+                        errorMessage = null
+                        scope.launch {
+                            val working = File(context.cacheDir, original.nameWithoutExtension + "_working.jpg")
+                            runCatching {
+                                ProductScanEngine().process(context, original, working)
+                            }.onSuccess {
+                                val combinedOcr = acceptedAnalyses.flatMap { item -> item.ocrResults } + it.ocrResults
+                                val combinedBarcodes = acceptedAnalyses.flatMap { item -> item.barcodeResults } + it.barcodeResults
+                                analysis = it.copy(
+                                    ocrResults = combinedOcr,
+                                    barcodeResults = combinedBarcodes,
+                                    draft = ProductExtractionEngine.extract(combinedOcr, combinedBarcodes)
+                                )
+                            }.onFailure {
+                                errorMessage = "Image analysis failed: " + (it.message ?: "unknown error")
+                            }
+                            isProcessing = false
+                        }
+                    }
+                )
+            }
             isProcessing -> {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -139,15 +171,8 @@ fun ProductScannerScreen(
                                 object : ImageCapture.OnImageSavedCallback {
                                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                                         capturedFile = file
-                                        isProcessing = true
-                                        scope.launch {
-                                            val working = File(
-                                                context.cacheDir,
-                                                file.nameWithoutExtension + "_working.jpg"
-                                            )
-                                            runCatching {
-                                                ProductScanEngine().process(context, file, working)
-                                            }.onSuccess {
+                                        errorMessage = null
+                                    }.onSuccess {
                                                 val combinedOcr = acceptedAnalyses.flatMap { item -> item.ocrResults } + it.ocrResults
                                                 val combinedBarcodes = acceptedAnalyses.flatMap { item -> item.barcodeResults } + it.barcodeResults
                                                 analysis = it.copy(
