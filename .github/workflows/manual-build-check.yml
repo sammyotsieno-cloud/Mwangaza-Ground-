@@ -1,17 +1,29 @@
-name: Manual Build Check
+name: Manual Verification
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "What should be verified?"
+        required: true
+        type: choice
+        options:
+          - build
+          - lint
+          - tests
+          - full
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
+    env:
+      ORG_GRADLE_PROJECT_skipReleaseForManualVerification: "true"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -21,12 +33,39 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build
+        if: inputs.target == 'build'
         run: ./gradlew build
 
-      - name: Upload APK artifacts
+      - name: Lint
+        if: inputs.target == 'lint'
+        run: ./gradlew lint
+
+      - name: Tests
+        if: inputs.target == 'tests'
+        run: ./gradlew test
+
+      - name: Full verification
+        if: inputs.target == 'full'
+        run: ./gradlew build lint test
+
+      - name: Prepare debug APK artifact
+        if: inputs.target == 'build' || inputs.target == 'full'
+        run: |
+          set -euo pipefail
+          source_apk="app/build/outputs/apk/debug/app-debug.apk"
+          artifact_dir="app/build/ci-artifact"
+          artifact_apk="$artifact_dir/SamilliMed-debug.apk"
+
+          test -f "$source_apk"
+          rm -rf "$artifact_dir"
+          mkdir -p "$artifact_dir"
+          cp "$source_apk" "$artifact_apk"
+          test -f "$artifact_apk"
+
+      - name: Upload debug APK artifact
+        if: inputs.target == 'build' || inputs.target == 'full'
         uses: actions/upload-artifact@v4
         with:
-          path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release-unsigned.apk
+          name: SamilliMed-debug
+          path: app/build/ci-artifact/SamilliMed-debug.apk
           if-no-files-found: error
