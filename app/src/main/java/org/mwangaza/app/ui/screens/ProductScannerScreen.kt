@@ -35,7 +35,6 @@ import androidx.core.content.ContextCompat
 
 @Composable
 fun ProductScannerScreen(
-    onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
