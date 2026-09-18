@@ -172,19 +172,6 @@ fun ProductScannerScreen(
                                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                                         capturedFile = file
                                         errorMessage = null
-                                    }.onSuccess {
-                                                val combinedOcr = acceptedAnalyses.flatMap { item -> item.ocrResults } + it.ocrResults
-                                                val combinedBarcodes = acceptedAnalyses.flatMap { item -> item.barcodeResults } + it.barcodeResults
-                                                analysis = it.copy(
-                                                    ocrResults = combinedOcr,
-                                                    barcodeResults = combinedBarcodes,
-                                                    draft = ProductExtractionEngine.extract(combinedOcr, combinedBarcodes)
-                                                )
-                                            }.onFailure {
-                                                errorMessage = "Image analysis failed: ${it.message ?: "unknown error"}"
-                                            }
-                                            isProcessing = false
-                                        }
                                     }
 
                                     override fun onError(exception: ImageCaptureException) {
