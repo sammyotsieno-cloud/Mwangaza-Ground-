@@ -2,28 +2,35 @@ package org.mwangaza.app.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,66 +39,146 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.launch
+import org.mwangaza.app.scanner.ProductScanAnalysis
+import org.mwangaza.app.scanner.ProductScanDraft
+import org.mwangaza.app.scanner.ProductScanEngine
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun ProductScannerScreen(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onConfirmed: (ProductScanDraft) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
     var hasCameraPermission by remember {
         mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
         )
     }
+    var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
+    var capturedFile by remember { mutableStateOf<File?>(null) }
+    var analysis by remember { mutableStateOf<ProductScanAnalysis?>(null) }
+    var isProcessing by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasCameraPermission = granted
-    }
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> hasCameraPermission = granted }
 
     LaunchedEffect(Unit) {
-        if (!hasCameraPermission) {
-            permissionLauncher.launch(Manifest.permission.CAMERA)
-        }
+        if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
-    Box(
-        modifier = modifier.fillMaxSize()
-    ) {
-        if (hasCameraPermission) {
-            CameraPreview(
-                modifier = Modifier.fillMaxSize(),
-                lifecycleOwner = lifecycleOwner
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        when {
+            analysis != null -> {
+                ProductScanReviewScreen(
+                    analysis = analysis!!,
+                    onRetake = {
+                        analysis = null
+                        capturedFile?.delete()
+                        capturedFile = null
+                        errorMessage = null
+                    },
+                    onSaveAsIs = {
+                        onConfirmed(
+                            analysis!!.draft.copy(sourceImageUris = listOf(analysis!!.originalUri))
+                        )
+                    },
+                    onAddAnother = {
+                        analysis = null
+                        errorMessage = null
+                    },
+                    onConfirm = { draft ->
+                        onConfirmed(
+                            draft.copy(sourceImageUris = listOf(analysis!!.originalUri))
+                        )
+                    }
+                )
+            }
+            isProcessing -> {
                 Column(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CameraAlt,
-                        contentDescription = null
-                    )
+                    CircularProgressIndicator()
+                    Text("Analysing captured image…", modifier = Modifier.padding(top = 12.dp))
+                }
+            }
+            hasCameraPermission -> {
+                CameraCapturePreview(
+                    lifecycleOwner = lifecycleOwner,
+                    onImageCaptureReady = { imageCapture = it }
+                )
+                Column(
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    errorMessage?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
+                    Button(
+                        onClick = {
+                            val capture = imageCapture ?: return@Button
+                            val file = File(
+                                context.cacheDir,
+                                "product_scan_" + SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + ".jpg"
+                            )
+                            capture.takePicture(
+                                ImageCapture.OutputFileOptions.Builder(file).build(),
+                                ContextCompat.getMainExecutor(context),
+                                object : ImageCapture.OnImageSavedCallback {
+                                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                                        capturedFile = file
+                                        isProcessing = true
+                                        scope.launch {
+                                            val working = File(
+                                                context.cacheDir,
+                                                file.nameWithoutExtension + "_working.jpg"
+                                            )
+                                            runCatching {
+                                                ProductScanEngine().process(context, file, working)
+                                            }.onSuccess {
+                                                analysis = it
+                                            }.onFailure {
+                                                errorMessage = "Image analysis failed: ${it.message ?: "unknown error"}"
+                                            }
+                                            isProcessing = false
+                                        }
+                                    }
+
+                                    override fun onError(exception: ImageCaptureException) {
+                                        errorMessage = "Unable to capture image."
+                                    }
+                                }
+                            )
+                        },
+                        enabled = imageCapture != null
+                    ) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null)
+                        Text(" Capture")
+                    }
+                }
+            }
+            else -> {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null)
                     Text(
-                        text = "Camera permission is required to scan a product.",
+                        "Camera permission is required to scan a product.",
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(vertical = 12.dp)
                     )
-                    Button(
-                        onClick = {
-                            permissionLauncher.launch(Manifest.permission.CAMERA)
-                        }
-                    ) {
+                    Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) {
                         Text("Allow Camera")
                     }
                 }
@@ -101,33 +188,38 @@ fun ProductScannerScreen(
 }
 
 @Composable
-private fun CameraPreview(
+private fun CameraCapturePreview(
     lifecycleOwner: androidx.lifecycle.LifecycleOwner,
+    onImageCaptureReady: (ImageCapture) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
 
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.fillMaxSize(),
         factory = { viewContext ->
             PreviewView(viewContext).apply {
                 scaleType = PreviewView.ScaleType.FILL_CENTER
             }
         },
         update = { previewView ->
-            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-            cameraProviderFuture.addListener({
-                val cameraProvider = cameraProviderFuture.get()
+            val providerFuture = ProcessCameraProvider.getInstance(context)
+            providerFuture.addListener({
+                val provider = providerFuture.get()
                 val preview = Preview.Builder().build().also {
                     it.setSurfaceProvider(previewView.surfaceProvider)
                 }
-
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
+                val capture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .build()
+                provider.unbindAll()
+                provider.bindToLifecycle(
                     lifecycleOwner,
                     CameraSelector.DEFAULT_BACK_CAMERA,
-                    preview
+                    preview,
+                    capture
                 )
+                onImageCaptureReady(capture)
             }, ContextCompat.getMainExecutor(context))
         }
     )
