@@ -18,8 +18,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout latest branch commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -32,7 +35,7 @@ jobs:
 
       - name: Build
         if: inputs.target == 'build'
-        run: ./gradlew build
+        run: ./gradlew :app:assembleDebug
 
       - name: Lint
         if: inputs.target == 'lint'
@@ -44,14 +47,16 @@ jobs:
 
       - name: Full verification
         if: inputs.target == 'full'
-        run: ./gradlew build lint test
+        run: ./gradlew :app:assembleDebug lint test
 
-      - name: Upload APK artifacts
+      - name: Rename debug APK
+        if: inputs.target == 'build' || inputs.target == 'full'
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/SamilliMed-debug.apk
+
+      - name: Upload debug APK artifact
         if: inputs.target == 'build' || inputs.target == 'full'
         uses: actions/upload-artifact@v4
         with:
-          name: mwangaza-apks
-          path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release-unsigned.apk
+          name: SamilliMed-debug
+          path: app/build/outputs/apk/debug/SamilliMed-debug.apk
           if-no-files-found: error
