@@ -3,6 +3,7 @@ package core.domain.testutil
 import core.domain.model.GoodsReceipt
 import core.domain.model.GoodsReceiptItem
 import core.domain.model.InventoryCostLayer
+import core.domain.model.PharmaceuticalDetail
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.RationalCost
@@ -37,6 +38,7 @@ class FakeCoreDatabase : TransactionRunner {
     val sales = mutableMapOf<String, Sale>()
     val saleItems = mutableMapOf<String, MutableList<SaleItem>>()
     val products = mutableMapOf<String, ProductMaster>()
+    val pharmaceuticalDetails = mutableMapOf<String, PharmaceuticalDetail>()
     val units = mutableMapOf<String, ProductUnit>()
     val priceConfigs = mutableMapOf<String, UnitPriceConfig>()
 
@@ -50,6 +52,7 @@ class FakeCoreDatabase : TransactionRunner {
         val snapSales = sales.toMap()
         val snapSaleItems = saleItems.mapValues { it.value.toMutableList() }.toMutableMap()
         val snapProducts = products.toMap()
+        val snapPharmaceuticalDetails = pharmaceuticalDetails.toMap()
         val snapUnits = units.toMap()
         val snapPriceConfigs = priceConfigs.toMap()
 
@@ -74,6 +77,8 @@ class FakeCoreDatabase : TransactionRunner {
             saleItems.putAll(snapSaleItems)
             products.clear()
             products.putAll(snapProducts)
+            pharmaceuticalDetails.clear()
+            pharmaceuticalDetails.putAll(snapPharmaceuticalDetails)
             units.clear()
             units.putAll(snapUnits)
             priceConfigs.clear()
@@ -440,6 +445,10 @@ class FakeCoreDatabase : TransactionRunner {
     val productMasterDao = object : ProductMasterDao {
         override fun insertProduct(product: ProductMaster) {
             products[product.id] = product
+        }
+
+        override fun insertPharmaceuticalDetail(detail: PharmaceuticalDetail) {
+            pharmaceuticalDetails[detail.productId] = detail
         }
 
         override fun insertUnits(newUnits: List<ProductUnit>) {
