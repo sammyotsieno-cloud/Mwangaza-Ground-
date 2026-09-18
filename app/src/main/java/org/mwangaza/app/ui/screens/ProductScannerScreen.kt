@@ -66,7 +66,7 @@ fun ProductScannerScreen(
     var capturedFile by remember { mutableStateOf<File?>(null) }
     var analysis by remember { mutableStateOf<ProductScanAnalysis?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }\n    var acceptedImageUris by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -98,7 +98,7 @@ fun ProductScannerScreen(
                     },
                     onConfirm = { draft ->
                         onConfirmed(
-                            draft.copy(sourceImageUris = listOf(analysis!!.originalUri))
+                            draft.copy(sourceImageUris = acceptedImageUris + analysis!!.originalUri)
                         )
                     }
                 )
