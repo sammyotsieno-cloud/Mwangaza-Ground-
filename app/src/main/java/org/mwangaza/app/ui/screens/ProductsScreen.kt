@@ -1109,6 +1109,7 @@ fun ProductsScreen(
                 TextButton(
                     onClick = {
                         showAddProductDialog = false
+                        onScanDraftConsumed()
                     }
                 ) {
                     Text("Cancel")
