@@ -64,7 +64,11 @@ fun AppNavigation(
     var showExitConfirmation by remember { mutableStateOf(false) }
 
     BackHandler(enabled = currentFeature != null) {
-        currentFeature = null
+        currentFeature = if (currentFeature == "product-scanner") {
+            "products"
+        } else {
+            null
+        }
     }
 
     BackHandler(enabled = currentFeature == null && currentBottomTab != BottomNavItem.Dashboard) {
