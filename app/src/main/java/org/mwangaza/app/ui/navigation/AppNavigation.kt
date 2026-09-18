@@ -146,9 +146,7 @@ fun AppNavigation(
                     )
                 }
                 currentFeature == "product-scanner" -> {
-                    ProductScannerScreen(
-                        onBack = { currentFeature = "products" }
-                    )
+                    ProductScannerScreen()
                 }
                 currentFeature == "receiving" -> {
                     GoodsReceivingScreen(
