@@ -2,7 +2,6 @@ package org.mwangaza.app.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -23,7 +22,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -88,10 +86,8 @@ fun ProductScannerScreen(
                         capturedFile = null
                         errorMessage = null
                     },
-                    onSaveAsIs = {
-                        onConfirmed(
-                            analysis!!.draft.copy(sourceImageUris = acceptedImageUris + analysis!!.originalUri)
-                        )
+                    onSaveAsIs = { draft ->
+                        onConfirmed(draft.copy(sourceImageUris = acceptedImageUris + analysis!!.originalUri))
                     },
                     onAddAnother = {
                         acceptedImageUris = acceptedImageUris + analysis!!.originalUri
