@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import org.mwangaza.app.data.AppContainer
 import org.mwangaza.app.ui.screens.DashboardScreen
+import org.mwangaza.app.scanner.ProductScanDraft
 import org.mwangaza.app.ui.screens.DispensingScreen
 import org.mwangaza.app.ui.screens.ExpiryAlertsScreen
 import org.mwangaza.app.ui.screens.GoodsReceivingScreen
@@ -61,6 +62,7 @@ fun AppNavigation(
 
     var currentBottomTab by remember { mutableStateOf<BottomNavItem>(BottomNavItem.Dashboard) }
     var currentFeature by remember { mutableStateOf<String?>(null) }
+    var pendingScanDraft by remember { mutableStateOf<ProductScanDraft?>(null) }
     var showExitConfirmation by remember { mutableStateOf(false) }
 
     BackHandler(enabled = currentFeature != null) {
