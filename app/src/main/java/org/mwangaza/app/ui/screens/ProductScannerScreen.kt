@@ -108,6 +108,15 @@ fun ProductScannerScreen(
                     }
                 )
             }
+            isProcessing -> {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator()
+                    Text("Analysing captured image…", modifier = Modifier.padding(top = 12.dp))
+                }
+            }
             capturedFile != null -> {
                 ProductCaptureReviewScreen(
                     file = capturedFile!!,
@@ -140,15 +149,6 @@ fun ProductScannerScreen(
                         }
                     }
                 )
-            }
-            isProcessing -> {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    CircularProgressIndicator()
-                    Text("Analysing captured image…", modifier = Modifier.padding(top = 12.dp))
-                }
             }
             hasCameraPermission -> {
                 CameraCapturePreview(
