@@ -6,6 +6,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import core.domain.model.ProductMaster
+import core.domain.model.PharmaceuticalDetail
+import core.domain.model.ProductImage
 import core.domain.model.ProductUnit
 import core.domain.model.UnitPriceConfig
 
@@ -13,6 +15,12 @@ import core.domain.model.UnitPriceConfig
 interface ProductMasterDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertProduct(product: ProductMaster)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertPharmaceuticalDetail(detail: PharmaceuticalDetail)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertProductImage(image: ProductImage)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertUnits(units: List<ProductUnit>)
