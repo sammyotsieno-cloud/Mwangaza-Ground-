@@ -722,6 +722,7 @@ fun ProductsScreen(
         AlertDialog(
             onDismissRequest = {
                 showAddProductDialog = false
+                onScanDraftConsumed()
             },
             title = {
                 Text("Register New Product")
