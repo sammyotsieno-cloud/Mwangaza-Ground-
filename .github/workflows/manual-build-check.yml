@@ -16,13 +16,12 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      ORG_GRADLE_PROJECT_skipReleaseForManualVerification: "true"
 
     steps:
-      - name: Checkout latest branch commit
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: 1
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -35,7 +34,7 @@ jobs:
 
       - name: Build
         if: inputs.target == 'build'
-        run: ./gradlew :app:assembleDebug
+        run: ./gradlew build
 
       - name: Lint
         if: inputs.target == 'lint'
@@ -47,16 +46,26 @@ jobs:
 
       - name: Full verification
         if: inputs.target == 'full'
-        run: ./gradlew :app:assembleDebug lint test
+        run: ./gradlew build lint test
 
-      - name: Rename debug APK
+      - name: Prepare debug APK artifact
         if: inputs.target == 'build' || inputs.target == 'full'
-        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/SamilliMed-debug.apk
+        run: |
+          set -euo pipefail
+          source_apk="app/build/outputs/apk/debug/app-debug.apk"
+          artifact_dir="app/build/ci-artifact"
+          artifact_apk="$artifact_dir/SamilliMed-debug.apk"
+
+          test -f "$source_apk"
+          rm -rf "$artifact_dir"
+          mkdir -p "$artifact_dir"
+          cp "$source_apk" "$artifact_apk"
+          test -f "$artifact_apk"
 
       - name: Upload debug APK artifact
         if: inputs.target == 'build' || inputs.target == 'full'
         uses: actions/upload-artifact@v4
         with:
           name: SamilliMed-debug
-          path: app/build/outputs/apk/debug/SamilliMed-debug.apk
+          path: app/build/ci-artifact/SamilliMed-debug.apk
           if-no-files-found: error
