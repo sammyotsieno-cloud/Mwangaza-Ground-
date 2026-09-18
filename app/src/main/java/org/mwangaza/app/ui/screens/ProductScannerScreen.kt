@@ -54,6 +54,9 @@ fun ProductScannerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val sessionDir = remember(context) {
+        File(context.filesDir, "product_scan_sessions").apply { mkdirs() }
+    }
     val scope = rememberCoroutineScope()
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -118,7 +121,7 @@ fun ProductScannerScreen(
                         isProcessing = true
                         errorMessage = null
                         scope.launch {
-                            val working = File(context.cacheDir, original.nameWithoutExtension + "_working.jpg")
+                            val working = File(sessionDir, original.nameWithoutExtension + "_working.jpg")
                             runCatching {
                                 ProductScanEngine().process(context, original, working)
                             }.onSuccess {
@@ -130,6 +133,7 @@ fun ProductScannerScreen(
                                     draft = ProductExtractionEngine.extract(combinedOcr, combinedBarcodes)
                                 )
                             }.onFailure {
+                                working.delete()
                                 errorMessage = "Image analysis failed: " + (it.message ?: "unknown error")
                             }
                             isProcessing = false
@@ -162,7 +166,7 @@ fun ProductScannerScreen(
                         onClick = {
                             val capture = imageCapture ?: return@Button
                             val file = File(
-                                context.cacheDir,
+                                sessionDir,
                                 "product_scan_" + SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + ".jpg"
                             )
                             capture.takePicture(
@@ -214,38 +218,45 @@ private fun CameraCapturePreview(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val previewView = remember {
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, previewView) {
+        var cameraProvider: ProcessCameraProvider? = null
+        val providerFuture = ProcessCameraProvider.getInstance(context)
+
+        providerFuture.addListener({
+            val provider = providerFuture.get()
+            cameraProvider = provider
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
+            }
+            val capture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setJpegQuality(95)
+                .build()
+
+            provider.unbindAll()
+            provider.bindToLifecycle(
+                lifecycleOwner,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                preview,
+                capture
+            )
+            onImageCaptureReady(capture)
+        }, ContextCompat.getMainExecutor(context))
+
+        onDispose {
+            cameraProvider?.unbindAll()
+        }
+    }
 
     AndroidView(
         modifier = modifier.fillMaxSize(),
-        factory = { viewContext ->
-            PreviewView(viewContext).apply {
-                scaleType = PreviewView.ScaleType.FILL_CENTER
-            }
-        },
-        update = { previewView ->
-            val providerFuture = ProcessCameraProvider.getInstance(context)
-            providerFuture.addListener({
-                val provider = providerFuture.get()
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
-                val capture = ImageCapture.Builder()
-                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .setJpegQuality(95)
-                    .build()
-                provider.unbindAll()
-                provider.bindToLifecycle(
-                    lifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
-                    preview,
-                    capture
-                )
-                onImageCaptureReady(capture)
-            }, ContextCompat.getMainExecutor(context))
-        }
+        factory = { previewView },
+        update = { }
     )
-
-    DisposableEffect(lifecycleOwner) {
-        onDispose { }
-    }
 }
