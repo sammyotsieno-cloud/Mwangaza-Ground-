@@ -59,6 +59,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import core.domain.model.Money
+import core.domain.model.PharmaceuticalDetail
+import core.domain.model.ProductImage
+import org.mwangaza.app.scanner.ProductScanDraft
+import android.net.Uri
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.QuantityScale
@@ -81,6 +85,8 @@ fun ProductsScreen(
     container: AppContainer,
     onBack: () -> Unit,
     onScanProduct: () -> Unit,
+    initialScanDraft: ProductScanDraft? = null,
+    onScanDraftConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -90,7 +96,7 @@ fun ProductsScreen(
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
 
-    var showAddProductDialog by remember { mutableStateOf(false) }
+    var showAddProductDialog by remember { mutableStateOf(initialScanDraft != null) }
     var selectedProductForDetails by remember { mutableStateOf<ProductWithDetails?>(null) }
     var showAddUnitDialogForProduct by remember { mutableStateOf<ProductMaster?>(null) }
     var showEditPriceDialogForUnit by remember {
@@ -684,11 +690,20 @@ fun ProductsScreen(
 
     if (showAddProductDialog) {
 
-        var brandName by remember { mutableStateOf("") }
-        var genericName by remember { mutableStateOf("") }
-        var productType by remember { mutableStateOf("") }
-        var manufacturer by remember { mutableStateOf("") }
-        var description by remember { mutableStateOf("") }
+        var brandName by remember { mutableStateOf(initialScanDraft?.brandName ?: "") }
+        var genericName by remember { mutableStateOf(initialScanDraft?.genericName ?: "") }
+        var productType by remember { mutableStateOf(initialScanDraft?.productType ?: "") }
+        var manufacturer by remember { mutableStateOf(initialScanDraft?.manufacturer ?: "") }
+        var description by remember { mutableStateOf(initialScanDraft?.description ?: "") }
+
+        var activeIngredients by remember { mutableStateOf(initialScanDraft?.activeIngredients ?: "") }
+        var strength by remember { mutableStateOf(initialScanDraft?.strength ?: "") }
+        var dosageForm by remember { mutableStateOf(initialScanDraft?.dosageForm ?: "") }
+        var route by remember { mutableStateOf(initialScanDraft?.route ?: "") }
+        var therapeuticCategory by remember { mutableStateOf(initialScanDraft?.therapeuticCategory ?: "") }
+        var prescriptionClassification by remember { mutableStateOf(initialScanDraft?.prescriptionClassification ?: "") }
+        var storageCondition by remember { mutableStateOf(initialScanDraft?.storageCondition ?: "") }
+        var scannedImageUris by remember { mutableStateOf(initialScanDraft?.sourceImageUris ?: emptyList()) }
 
         var baseUnitName by remember { mutableStateOf("") }
         var baseUnitAbbr by remember { mutableStateOf("") }
@@ -776,6 +791,14 @@ fun ProductsScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    OutlinedTextField(value = activeIngredients, onValueChange = { activeIngredients = it }, label = { Text("Active Ingredient(s) (Optional)") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = strength, onValueChange = { strength = it }, label = { Text("Strength (Optional)") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = dosageForm, onValueChange = { dosageForm = it }, label = { Text("Dosage Form (Optional)") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = route, onValueChange = { route = it }, label = { Text("Route (Optional)") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = therapeuticCategory, onValueChange = { therapeuticCategory = it }, label = { Text("Therapeutic Category (Optional)") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = prescriptionClassification, onValueChange = { prescriptionClassification = it }, label = { Text("Prescription Classification (Optional)") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = storageCondition, onValueChange = { storageCondition = it }, label = { Text("Storage Condition (Optional)") }, modifier = Modifier.fillMaxWidth())
 
                     OutlinedTextField(
                         value = description,
@@ -1026,9 +1049,48 @@ fun ProductsScreen(
                                 container.productMasterDao.insertProduct(product)
                                 container.productMasterDao.insertUnit(baseUnit)
                                 container.productMasterDao.savePriceConfig(priceConfig)
+
+                                if (listOf(activeIngredients, strength, dosageForm, route, therapeuticCategory, prescriptionClassification, storageCondition).any { it.isNotBlank() }) {
+                                    container.productMasterDao.insertPharmaceuticalDetail(
+                                        PharmaceuticalDetail(
+                                            id = UUID.randomUUID().toString(),
+                                            productId = productId,
+                                            activeIngredients = activeIngredients.trim().ifBlank { null },
+                                            strength = strength.trim().ifBlank { null },
+                                            dosageForm = dosageForm.trim().ifBlank { null },
+                                            route = route.trim().ifBlank { null },
+                                            therapeuticCategory = therapeuticCategory.trim().ifBlank { null },
+                                            prescriptionClassification = prescriptionClassification.trim().ifBlank { null },
+                                            storageCondition = storageCondition.trim().ifBlank { null },
+                                            createdAt = now,
+                                            updatedAt = now
+                                        )
+                                    )
+                                }
+
+                                scannedImageUris.forEachIndexed { index, uriString ->
+                                    val source = java.io.File(Uri.parse(uriString).path ?: "")
+                                    if (source.exists()) {
+                                        val imageDir = java.io.File(context.filesDir, "product_images").apply { mkdirs() }
+                                        val destination = java.io.File(imageDir, productId + "_" + index + ".jpg")
+                                        source.copyTo(destination, overwrite = true)
+                                        container.productMasterDao.insertProductImage(
+                                            ProductImage(
+                                                id = UUID.randomUUID().toString(),
+                                                productId = productId,
+                                                imageUri = Uri.fromFile(destination).toString(),
+                                                imageSource = ProductImage.SOURCE_SCANNER_OUTPUT,
+                                                isPrimary = index == 0,
+                                                sortOrder = index,
+                                                createdAt = now
+                                            )
+                                        )
+                                    }
+                                }
                             }
 
                             showAddProductDialog = false
+                            onScanDraftConsumed()
                             refreshProducts()
 
                             snackbarHostState.showSnackbar(
