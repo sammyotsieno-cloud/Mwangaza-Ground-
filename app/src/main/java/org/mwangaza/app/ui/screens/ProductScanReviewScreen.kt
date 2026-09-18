@@ -32,7 +32,7 @@ import org.mwangaza.app.scanner.ProductScanDraft
 fun ProductScanReviewScreen(
     analysis: ProductScanAnalysis,
     onRetake: () -> Unit,
-    onSaveAsIs: () -> Unit,
+    onSaveAsIs: (ProductScanDraft) -> Unit,
     onAddAnother: () -> Unit,
     onConfirm: (ProductScanDraft) -> Unit
 ) {
@@ -90,7 +90,7 @@ fun ProductScanReviewScreen(
         Text(analysis.ocrResults.joinToString("\n") { it.text }.ifBlank { "No readable text detected." })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onRetake) { Text("Retake") }
-            OutlinedButton(onClick = onSaveAsIs) { Text("Save As Is") }
+            OutlinedButton(onClick = { onSaveAsIs(currentDraft()) }) { Text("Save As Is") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onAddAnother) { Text("Add Another Photo") }
