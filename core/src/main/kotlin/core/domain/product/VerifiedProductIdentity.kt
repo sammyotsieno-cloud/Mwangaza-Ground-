@@ -48,6 +48,7 @@ data class VerifiedProductIdentity(
     val attributes: List<ProductAttributeIdentity> = emptyList(),
     val dosageForm: String? = null,
     val route: String? = null,
+    val routeSource: String? = null,
     val therapeuticCategory: String? = null,
     val prescriptionClassification: String? = null,
     val storageCondition: String? = null,
@@ -56,6 +57,9 @@ data class VerifiedProductIdentity(
     init {
         require(brandName?.isNotBlank() == true || genericName?.isNotBlank() == true) {
             "Verified product identity requires a brand or generic name"
+        }
+        require(routeSource == null || routeSource == "EXPLICIT" || routeSource == "INFERRED") {
+            "routeSource must be EXPLICIT, INFERRED, or null"
         }
     }
 }
