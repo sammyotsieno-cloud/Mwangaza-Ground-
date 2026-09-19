@@ -1,17 +1,19 @@
 package org.mwangaza.app.scanner
 
 import android.graphics.Rect
+import core.domain.model.ProductType
 
 data class ProductScanDraft(
     val brandName: String? = null,
     val genericName: String? = null,
-    val productType: String? = null,
+    val productType: ProductType? = null,
     val manufacturer: String? = null,
     val description: String? = null,
     val activeIngredients: String? = null,
     val strength: String? = null,
     val dosageForm: String? = null,
     val route: String? = null,
+    val routeSource: String? = null,
     val therapeuticCategory: String? = null,
     val prescriptionClassification: String? = null,
     val storageCondition: String? = null,
