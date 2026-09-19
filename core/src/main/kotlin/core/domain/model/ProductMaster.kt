@@ -104,6 +104,7 @@ data class ProductMaster(
     @ColumnInfo(name = "generic_name")
     val genericName: String? = null,
 
+    /** Semantic ProductType.name; never a legacy keycode. */
     @ColumnInfo(name = "product_type")
     val productType: String? = null,
 
