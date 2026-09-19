@@ -41,10 +41,46 @@ object ProductIdentityInterpreter {
         val strengthMatches = strengthRegex.findAll(text).map { it.value }.distinct().toList()
 
         val dosageForms = listOf(
-            "tablet", "capsule", "syrup", "suspension", "solution",
-            "cream", "ointment", "gel", "injection", "drops",
-            "suppository", "sachet", "powder", "patch", "device"
+            "tablet", "tablets", "tab", "tabs", "capsule", "capsules", "cap", "caps",
+            "caplet", "caplets", "syrup", "suspension", "susp", "solution", "soln", "sol",
+            "powder", "pwd", "sachet", "sachets", "granules", "cream", "cr", "ointment",
+            "oint", "gel", "lotion", "injection", "inj", "vial", "ampoule", "ampule", "amp",
+            "drops", "spray", "inhaler", "patch", "patches", "suppository", "suppositories",
+            "supp", "pessary", "pessaries", "pess", "device", "kit", "strip", "strips",
+            "lozenge", "lozenges", "film", "emulsion", "eye drops", "ear drops",
+            "nasal spray", "nasal drops"
         )
+        val explicitRoute = listOf(
+            "Ophthalmic" to Regex("\\bophthalmic\\b|\\beye\\s+drops?\\b", RegexOption.IGNORE_CASE),
+            "Otic" to Regex("\\botic\\b|\\bear\\s+drops?\\b", RegexOption.IGNORE_CASE),
+            "Nasal" to Regex("\\bnasal\\b|\\bintranasal\\b", RegexOption.IGNORE_CASE),
+            "Topical" to Regex("\\btopical\\b|\\bdermal\\b|\\bcutaneous\\b", RegexOption.IGNORE_CASE),
+            "Transdermal" to Regex("\\btransdermal\\b", RegexOption.IGNORE_CASE),
+            "Parenteral" to Regex("\\bparenteral\\b|\\bintravenous\\b|\\bintramuscular\\b|\\bsubcutaneous\\b", RegexOption.IGNORE_CASE),
+            "Rectal" to Regex("\\brectal\\b", RegexOption.IGNORE_CASE),
+            "Vaginal" to Regex("\\bvaginal\\b|\\bintravaginal\\b", RegexOption.IGNORE_CASE),
+            "Oral" to Regex("\\boral\\b|\\bby\\s+mouth\\b|\\bper\\s+os\\b", RegexOption.IGNORE_CASE)
+        ).firstOrNull { it.second.containsMatchIn(text) }?.first
+        val inferredRoute = when (dosageForm?.lowercase(Locale.ROOT)) {
+            "tablet", "tablets", "tab", "tabs", "capsule", "capsules", "cap", "caps", "caplet", "caplets",
+            "syrup", "suspension", "susp", "solution", "soln", "sol", "powder", "pwd", "sachet", "sachets", "granules",
+            "lozenge", "lozenges", "film" -> "Oral"
+            "cream", "cr", "ointment", "oint", "gel", "lotion", "patch", "patches" -> "Topical"
+            "injection", "inj", "vial", "ampoule", "ampule", "amp" -> "Parenteral"
+            "eye drops" -> "Ophthalmic"
+            "ear drops" -> "Otic"
+            "nasal spray", "nasal drops" -> "Nasal"
+            "suppository", "suppositories", "supp" -> "Rectal"
+            "pessary", "pessaries", "pess" -> "Vaginal"
+            else -> if (productType == ProductType.MEDICINE && dosageForm == null) "Oral" else null
+        }
+        val route = explicitRoute ?: inferredRoute
+        val routeSource = when {
+            explicitRoute != null -> "EXPLICIT"
+            inferredRoute != null -> "INFERRED"
+            else -> null
+        }
+
         val dosageForm = dosageForms.firstOrNull {
             Regex("\\b" + Regex.escape(it) + "\\b", RegexOption.IGNORE_CASE).containsMatchIn(text)
         }
@@ -67,12 +103,17 @@ object ProductIdentityInterpreter {
             }
             .sortedByDescending { it.confidence }
 
-        val manufacturerLine = lines.firstOrNull {
-            it.lowercase(Locale.ROOT).matches(
-                Regex(".*\\b(manufactured by|mfd\\.? by|mfg\\.? by)\\b.*")
-            )
-        }
-        val manufacturer = manufacturerLine?.substringAfter("by", "").trim()?.ifBlank { null }
+        val manufacturerCues = listOf(
+            "Manufactured by", "Mfd. by", "Mfd by", "Mfg. by", "Mfg by",
+            "Manufactured for", "Marketed by", "Distributed by", "Packed by",
+            "Repacked by", "Produced by", "Made by", "Under licence by", "Under license by"
+        )
+        val manufacturerMatch = manufacturerCues.asSequence().flatMap { cue ->
+            lines.asSequence().mapNotNull { line ->
+                Regex("(?i)\\b" + Regex.escape(cue) + "\\s*[:\\-]?\\s*(.+)$").find(line)
+            }
+        }.firstOrNull()
+        val manufacturer = manufacturerMatch?.groupValues?.get(1)?.trim()?.trimEnd('.', ',', ';', ':')?.ifBlank { null }
 
         val active = lines.firstOrNull {
             it.lowercase(Locale.ROOT).contains("active ingredient")
@@ -87,10 +128,10 @@ object ProductIdentityInterpreter {
         val draft = ProductScanDraft(
             brandName = brandCandidates.firstOrNull()?.value,
             genericName = if (productType == ProductType.MEDICINE) active else null,
-            productType = productType.keycode,
+            productType = productType,
             manufacturer = manufacturer,
             dosageForm = dosageForm,
-            route = deriveRoute(dosageForm),
+            route = null,
             strength = strengthMatches.firstOrNull(),
             activeIngredients = active,
             prescriptionClassification = prescription,
@@ -114,12 +155,4 @@ object ProductIdentityInterpreter {
         return ProductIdentityInterpretation(draft, candidates)
     }
 
-    private fun deriveRoute(dosageForm: String?): String? = when (dosageForm?.lowercase(Locale.ROOT)) {
-        "tablet", "capsule", "syrup", "suspension", "solution", "powder", "sachet" -> "Oral"
-        "cream", "ointment", "gel", "patch" -> "Topical"
-        "injection" -> "Parenteral"
-        "drops" -> "Ophthalmic"
-        "suppository" -> "Rectal"
-        else -> null
-    }
 }
