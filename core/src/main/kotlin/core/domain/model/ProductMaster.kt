@@ -12,8 +12,12 @@ import androidx.room.PrimaryKey
  *
  * CANONICAL IDENTITY:
  * - Answers: "What product is this?"
- * - Owns brand/trade name, standard/generic name, manufacturer,
- *   product type, category, and description.
+ * - Owns the stable, searchable product-level identity projection:
+ *   brand/trade name, standardized product name/description, product type,
+ *   category, and lifecycle/quantity policy.
+ * - Normalized formulation, identifiers, and organization relationships live
+ *   in dedicated child entities; legacy manufacturer/generic fields remain
+ *   compatibility/search projections and must not become scanner evidence stores.
  * - Does NOT track stock balances, batches, expiry dates, acquisition
  *   costs, selling prices, suppliers, or transactions.
  * - Barcode/GTIN is explicitly excluded.
