@@ -461,7 +461,7 @@ fun ProductsScreen(
             title = { Text("Select Product Type") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ProductType.entries.forEach { type ->
+                    ProductType.values().forEach { type ->
                         OutlinedButton(
                             onClick = {
                                 showProductTypeDialog = false
