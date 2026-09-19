@@ -38,7 +38,8 @@ class ProductScanEngine(
                 quality = quality,
                 ocrResults = ocr,
                 barcodeResults = barcodes,
-                draft = interpretation.draft
+                draft = interpretation.draft,
+                identityCandidates = interpretation.candidates
             )
         }
 }
