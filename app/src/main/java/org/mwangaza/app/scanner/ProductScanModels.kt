@@ -21,7 +21,11 @@ data class ProductScanDraft(
     val sourceImageUris: List<String> = emptyList()
 )
 
-data class DetectedRegion(val bounds: Rect, val confidence: Float, val labels: List<String>)
+data class DetectedRegion(
+    val bounds: Rect,
+    val confidence: Float,
+    val labels: List<String>
+)
 
 data class ImageQualityResult(
     val width: Int,
@@ -36,9 +40,40 @@ data class ImageQualityResult(
         get() = warnings.none { it == "SEVERE_BLUR" || it == "EXTREME_DARKNESS" }
 }
 
-data class BarcodeResult(val rawValue: String, val format: String)
+data class OcrElementEvidence(
+    val text: String,
+    val bounds: Rect?,
+    val confidence: Float? = null
+)
 
-data class OcrResult(val text: String, val confidence: Float?, val sourceImageUri: String)
+data class OcrLineEvidence(
+    val text: String,
+    val bounds: Rect?,
+    val elements: List<OcrElementEvidence>,
+    val confidence: Float? = null
+)
+
+data class OcrBlockEvidence(
+    val text: String,
+    val bounds: Rect?,
+    val lines: List<OcrLineEvidence>
+)
+
+data class OcrResult(
+    val text: String,
+    val confidence: Float?,
+    val sourceImageUri: String,
+    val blocks: List<OcrBlockEvidence> = emptyList()
+)
+
+data class BarcodeResult(
+    val rawValue: String,
+    val format: String,
+    val bounds: Rect? = null,
+    val cornerPoints: List<Pair<Int, Int>> = emptyList(),
+    val sourceImageUri: String? = null,
+    val validationState: String = "UNVALIDATED"
+)
 
 data class ProductScanAnalysis(
     val originalUri: String,
