@@ -8,6 +8,7 @@ import core.domain.model.ProductImage
 import core.domain.model.ProductIngredient
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
+import core.domain.model.QuantityScale
 import core.domain.model.UnitPriceConfig
 import core.domain.persistence.ProductMasterDao
 import core.domain.persistence.TransactionRunner
@@ -27,6 +28,8 @@ class ProductRegistrationService(
         val identity: VerifiedProductIdentity,
         val productId: String,
         val baseUnit: ProductUnit,
+        val quantityScale: QuantityScale = QuantityScale.SCALE_0,
+        val minimumTransactionIncrementStorageUnits: Long = 1L,
         val basePriceConfig: UnitPriceConfig? = null,
         val images: List<ProductImage> = emptyList()
     )
@@ -51,6 +54,8 @@ class ProductRegistrationService(
                 categoryId = request.identity.categoryId?.trim()?.ifBlank { null },
                 manufacturer = manufacturer?.trim()?.ifBlank { null },
                 description = request.identity.description?.trim()?.ifBlank { null },
+                quantityScale = request.quantityScale,
+                minimumTransactionIncrementStorageUnits = request.minimumTransactionIncrementStorageUnits,
                 isActive = true,
                 createdAt = now,
                 updatedAt = now
