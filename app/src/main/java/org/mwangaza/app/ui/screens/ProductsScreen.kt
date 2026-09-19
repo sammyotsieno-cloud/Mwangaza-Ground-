@@ -69,6 +69,7 @@ import core.domain.model.ProductUnit
 import core.domain.model.QuantityScale
 import core.domain.model.UnitPriceConfig
 import core.domain.product.ProductRegistrationService
+import core.domain.product.ProductIdentifierIdentity
 import core.domain.product.VerifiedProductIdentity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -724,8 +725,9 @@ fun ProductsScreen(
 
         var brandName by remember { mutableStateOf(initialScanDraft?.brandName ?: "") }
         var genericName by remember { mutableStateOf(initialScanDraft?.genericName ?: "") }
-        var productType by remember { mutableStateOf(initialScanDraft?.productType?.displayName ?: "") }
+        var productType by remember { mutableStateOf(initialScanDraft?.productType ?: ProductType.OTHER_HEALTH_COMMODITY) }
         var manufacturer by remember { mutableStateOf(initialScanDraft?.manufacturer ?: "") }
+        var barcodeValue by remember { mutableStateOf(initialScanDraft?.barcodeValue ?: "") }
         var description by remember { mutableStateOf(initialScanDraft?.description ?: "") }
 
         var activeIngredients by remember { mutableStateOf(initialScanDraft?.activeIngredients ?: "") }
@@ -796,17 +798,10 @@ fun ProductsScreen(
                     )
 
                     OutlinedTextField(
-                        value = productType,
-                        onValueChange = {
-                            productType = it
-                        },
-                        label = {
-                            Text("Product Type")
-                        },
-                        placeholder = {
-                            Text("e.g. Tablet, Capsule, Syrup, Vial")
-                        },
-                        singleLine = true,
+                        value = productType.displayName,
+                        onValueChange = { },
+                        readOnly = true,
+                        label = { Text("Product Type") },
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -821,6 +816,14 @@ fun ProductsScreen(
                         placeholder = {
                             Text("e.g. GSK, Dawa Ltd")
                         },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = barcodeValue,
+                        onValueChange = { barcodeValue = it },
+                        label = { Text("Barcode / Identifier") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1033,10 +1036,7 @@ fun ProductsScreen(
                                 genericName = genericName
                                     .trim()
                                     .ifBlank { null },
-                                productType = ProductType.values()
-                                    .firstOrNull { it.displayName.equals(productType.trim(), ignoreCase = true) }
-                                    ?.name
-                                    ?: ProductType.OTHER_HEALTH_COMMODITY.name,
+                                productType = productType.name,
                                 manufacturer = manufacturer
                                     .trim()
                                     .ifBlank { null },
@@ -1087,6 +1087,15 @@ fun ProductsScreen(
                                     categoryId = product.categoryId,
                                     description = product.description,
                                     manufacturer = product.manufacturer,
+                                    identifiers = barcodeValue.trim().ifBlank { null }?.let {
+                                        listOf(
+                                            ProductIdentifierIdentity(
+                                                identifierType = initialScanDraft?.barcodeFormat ?: "IDENTIFIER",
+                                                value = it,
+                                                isPrimary = true
+                                            )
+                                        )
+                                    }.orEmpty(),
                                     dosageForm = dosageForm.trim().ifBlank { null },
                                     route = route.trim().ifBlank { null },
                                     routeSource = initialScanDraft?.routeSource,
