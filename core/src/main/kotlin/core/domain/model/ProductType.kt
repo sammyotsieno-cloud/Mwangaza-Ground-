@@ -21,6 +21,6 @@ enum class ProductType(
 
     companion object {
         fun fromKeycode(value: String?): ProductType? =
-            entries.firstOrNull { it.keycode.equals(value?.trim(), ignoreCase = true) }
+            values().firstOrNull { it.keycode.equals(value?.trim(), ignoreCase = true) }
     }
 }
