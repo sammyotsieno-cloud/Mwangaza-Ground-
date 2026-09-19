@@ -60,7 +60,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import core.domain.model.Money
-import core.domain.model.PharmaceuticalDetail
 import core.domain.model.ProductImage
 import org.mwangaza.app.scanner.ProductScanDraft
 import android.net.Uri
