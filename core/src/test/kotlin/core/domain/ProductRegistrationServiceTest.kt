@@ -36,7 +36,10 @@ class ProductRegistrationServiceTest {
                 ProductEntityIdentity("Company A", role = "MANUFACTURER", location = "Kenya")
             ),
             dosageForm = "Tablet",
-            route = "Oral"
+            route = "Oral",
+            routeSource = "EXPLICIT",
+            manufacturer = "Company A",
+            identifiers = listOf(core.domain.product.ProductIdentifierIdentity("EAN_13", "1234567890128"))
         )
 
         val unit = ProductUnit(
@@ -74,6 +77,11 @@ class ProductRegistrationServiceTest {
         )
 
         assertEquals(productId, product.id)
+        assertEquals("Augmentin", product.brandName)
+        assertEquals("Company A", product.manufacturer)
+        assertEquals("1234567890128", db.productIdentifiers.values.single().value)
+        assertEquals("Tablet", db.pharmaceuticalDetails.values.single().dosageForm)
+        assertEquals("Oral", db.pharmaceuticalDetails.values.single().route)
         assertEquals(2, db.productIngredients.size)
         assertEquals(1, db.productEntities.size)
         assertEquals("500", db.productIngredients.values.first { it.sequence == 0 }.strengthValue)
