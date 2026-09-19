@@ -1081,7 +1081,7 @@ fun ProductsScreen(
 
                             withContext(Dispatchers.IO) {
                                 val verifiedIdentity = VerifiedProductIdentity(
-                                    productType = ProductType.values().firstOrNull { it.name == product.productType } ?: ProductType.OTHER_HEALTH_COMMODITY,
+                                    productType = initialScanDraft?.productType ?: ProductType.values().firstOrNull { it.name == product.productType } ?: ProductType.OTHER_HEALTH_COMMODITY,
                                     brandName = product.brandName,
                                     genericName = product.genericName,
                                     categoryId = product.categoryId,
