@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import org.mwangaza.app.scanner.ProductScanAnalysis
 import org.mwangaza.app.scanner.ProductScanDraft
 import org.mwangaza.app.scanner.ProductScanEngine
+import org.mwangaza.app.scanner.ProductExtractionEngine
 import core.domain.model.ProductType
 import org.mwangaza.app.scanner.interpretation.ProductIdentityInterpreter
 import java.io.File
@@ -138,7 +139,7 @@ fun ProductScannerScreen(
                             }.onSuccess {
                                 val combinedOcr = acceptedAnalyses.flatMap { item -> item.ocrResults } + it.ocrResults
                                 val combinedBarcodes = acceptedAnalyses.flatMap { item -> item.barcodeResults } + it.barcodeResults
-                                val interpretation = ProductIdentityInterpreter.interpret(
+                                val interpretation = ProductExtractionEngine.extract(
                                     selectedProductType,
                                     combinedOcr,
                                     combinedBarcodes
