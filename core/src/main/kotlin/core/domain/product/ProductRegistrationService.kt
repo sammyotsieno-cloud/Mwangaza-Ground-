@@ -25,6 +25,7 @@ class ProductRegistrationService(
 ) {
     data class RegistrationRequest(
         val identity: VerifiedProductIdentity,
+        val productId: String,
         val baseUnit: ProductUnit,
         val basePriceConfig: UnitPriceConfig? = null,
         val images: List<ProductImage> = emptyList()
@@ -33,10 +34,9 @@ class ProductRegistrationService(
     fun register(request: RegistrationRequest): ProductMaster =
         transactionRunner.runInTransaction {
             val now = System.currentTimeMillis()
-            val productId = request.baseUnit.productId.ifBlank { UUID.randomUUID().toString() }
-            require(request.baseUnit.productId == productId) {
-                "Base unit must reference the product being registered"
-            }
+            val productId = request.productId.trim()
+            require(productId.isNotBlank()) { "Product id must not be blank" }
+            require(request.baseUnit.productId == productId) { "Base unit must reference the product being registered" }
 
             val manufacturer = request.identity.manufacturer
                 ?: request.identity.entities
