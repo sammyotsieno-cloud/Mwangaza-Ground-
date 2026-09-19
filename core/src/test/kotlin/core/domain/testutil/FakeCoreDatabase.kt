@@ -4,6 +4,7 @@ import core.domain.model.GoodsReceipt
 import core.domain.model.GoodsReceiptItem
 import core.domain.model.InventoryCostLayer
 import core.domain.model.PharmaceuticalDetail
+import core.domain.model.ProductImage
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.RationalCost
@@ -39,6 +40,7 @@ class FakeCoreDatabase : TransactionRunner {
     val saleItems = mutableMapOf<String, MutableList<SaleItem>>()
     val products = mutableMapOf<String, ProductMaster>()
     val pharmaceuticalDetails = mutableMapOf<String, PharmaceuticalDetail>()
+    val productImages = mutableMapOf<String, ProductImage>()
     val units = mutableMapOf<String, ProductUnit>()
     val priceConfigs = mutableMapOf<String, UnitPriceConfig>()
 
@@ -53,6 +55,7 @@ class FakeCoreDatabase : TransactionRunner {
         val snapSaleItems = saleItems.mapValues { it.value.toMutableList() }.toMutableMap()
         val snapProducts = products.toMap()
         val snapPharmaceuticalDetails = pharmaceuticalDetails.toMap()
+        val snapProductImages = productImages.toMap()
         val snapUnits = units.toMap()
         val snapPriceConfigs = priceConfigs.toMap()
 
@@ -79,6 +82,8 @@ class FakeCoreDatabase : TransactionRunner {
             products.putAll(snapProducts)
             pharmaceuticalDetails.clear()
             pharmaceuticalDetails.putAll(snapPharmaceuticalDetails)
+            productImages.clear()
+            productImages.putAll(snapProductImages)
             units.clear()
             units.putAll(snapUnits)
             priceConfigs.clear()
@@ -449,6 +454,10 @@ class FakeCoreDatabase : TransactionRunner {
 
         override fun insertPharmaceuticalDetail(detail: PharmaceuticalDetail) {
             pharmaceuticalDetails[detail.productId] = detail
+        }
+
+        override fun insertProductImage(image: ProductImage) {
+            productImages[image.id] = image
         }
 
         override fun insertUnits(newUnits: List<ProductUnit>) {
