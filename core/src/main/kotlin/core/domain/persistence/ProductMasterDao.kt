@@ -27,6 +27,9 @@ interface ProductMasterDao {
     fun insertProductImage(image: ProductImage)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertProductImages(images: List<ProductImage>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertProductIngredients(ingredients: List<ProductIngredient>)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
