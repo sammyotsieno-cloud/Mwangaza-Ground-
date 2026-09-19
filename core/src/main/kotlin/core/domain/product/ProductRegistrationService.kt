@@ -13,6 +13,7 @@ import core.domain.model.UnitPriceConfig
 import core.domain.persistence.ProductMasterDao
 import core.domain.persistence.TransactionRunner
 import java.util.UUID
+import java.util.Locale
 
 /**
  * Atomic persistence boundary for a verified product identity.
@@ -155,7 +156,7 @@ class ProductRegistrationService(
                         activeIngredients = null,
                         strength = null,
                         dosageForm = request.identity.dosageForm?.trim()?.ifBlank { null },
-                        route = request.identity.route?.trim()?.ifBlank { null },
+                        route = deriveRoute(request.identity.dosageForm) ?: request.identity.route?.trim()?.ifBlank { null },
                         therapeuticCategory = request.identity.therapeuticCategory?.trim()?.ifBlank { null },
                         prescriptionClassification = request.identity.prescriptionClassification?.trim()?.ifBlank { null },
                         storageCondition = request.identity.storageCondition?.trim()?.ifBlank { null },
@@ -174,5 +175,16 @@ class ProductRegistrationService(
             }
 
             product
-        }
+        private fun deriveRoute(dosageForm: String?): String? = when (dosageForm?.trim()?.lowercase(Locale.ROOT)) {
+        "tablet", "tablets", "capsule", "capsules", "syrup", "suspension", "solution", "powder", "sachet" -> "Oral"
+        "cream", "ointment", "gel", "patch" -> "Topical"
+        "injection" -> "Parenteral"
+        "eye drops", "ophthalmic drops", "ophthalmic" -> "Ophthalmic"
+        "otic drops", "ear drops", "otic" -> "Otic"
+        "nasal drops", "nasal spray", "nasal" -> "Nasal"
+        "suppository", "rectal" -> "Rectal"
+        else -> null
+    }
+
+    }
 }
