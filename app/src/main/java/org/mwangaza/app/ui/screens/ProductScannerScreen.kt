@@ -41,7 +41,8 @@ import kotlinx.coroutines.launch
 import org.mwangaza.app.scanner.ProductScanAnalysis
 import org.mwangaza.app.scanner.ProductScanDraft
 import org.mwangaza.app.scanner.ProductScanEngine
-import org.mwangaza.app.scanner.ProductExtractionEngine
+import core.domain.model.ProductType
+import org.mwangaza.app.scanner.interpretation.ProductIdentityInterpreter
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -49,6 +50,7 @@ import java.util.Locale
 
 @Composable
 fun ProductScannerScreen(
+    selectedProductType: ProductType,
     modifier: Modifier = Modifier,
     onConfirmed: (ProductScanDraft) -> Unit = {}
 ) {
@@ -139,7 +141,7 @@ fun ProductScannerScreen(
                                 analysis = it.copy(
                                     ocrResults = combinedOcr,
                                     barcodeResults = combinedBarcodes,
-                                    draft = ProductExtractionEngine.extract(combinedOcr, combinedBarcodes)
+                                    draft = ProductIdentityInterpreter.interpret(selectedProductType, combinedOcr, combinedBarcodes).draft.copy(productType = selectedProductType.keycode, sourceImageUris = acceptedImageUris + it.originalUri)
                                 )
                             }.onFailure {
                                 working.delete()
