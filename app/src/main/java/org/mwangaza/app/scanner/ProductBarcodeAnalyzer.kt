@@ -32,7 +32,7 @@ class ProductBarcodeAnalyzer {
     }
 
     private fun ocrFallback(ocrResults: List<OcrResult>, imageFile: File): List<BarcodeResult> {
-        val digitPattern = Regex("""d{8,14}""")
+        val digitPattern = Regex("""\\b\\d{8,14}\\b""")
         return ocrResults.flatMap { result ->
             result.blocks.flatMap { block ->
                 block.lines.flatMap { line -> digitPattern.findAll(line.text).map { it.value }.toList() }
@@ -42,7 +42,6 @@ class ProductBarcodeAnalyzer {
                 13 -> "EAN_13"
                 8 -> "EAN_8"
                 12 -> "UPC_A"
-                6, 7 -> "UPC_E"
                 else -> return@mapNotNull null
             }
             if (!validateByFormat(format, raw)) return@mapNotNull null
