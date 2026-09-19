@@ -13,6 +13,10 @@ import core.domain.model.PharmaceuticalDetail
 import core.domain.model.PriceHistory
 import core.domain.model.ProductCategory
 import core.domain.model.ProductImage
+import core.domain.model.ProductIngredient
+import core.domain.model.ProductIdentifier
+import core.domain.model.ProductEntity
+import core.domain.model.ProductAttribute
 import core.domain.model.ProductMaster
 import core.domain.model.ProductTag
 import core.domain.model.ProductTagAssignment
@@ -55,6 +59,10 @@ import core.domain.model.UnitPriceConfig
         ProductUnit::class,
         PharmaceuticalDetail::class,
         ProductImage::class,
+        ProductIngredient::class,
+        ProductIdentifier::class,
+        ProductEntity::class,
+        ProductAttribute::class,
         ProductTag::class,
         ProductTagAssignment::class,
         UnitPriceConfig::class,
@@ -70,7 +78,7 @@ import core.domain.model.UnitPriceConfig
         Sale::class,
         SaleItem::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(RoomConverters::class)
@@ -131,6 +139,84 @@ abstract class CoreDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS product_ingredients (
+                        id TEXT NOT NULL,
+                        product_id TEXT NOT NULL,
+                        ingredient_name TEXT NOT NULL,
+                        normalized_ingredient_name TEXT,
+                        strength_value TEXT,
+                        strength_unit TEXT,
+                        denominator_value TEXT,
+                        denominator_unit TEXT,
+                        sequence INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY(id),
+                        FOREIGN KEY(product_id) REFERENCES product_masters(id) ON DELETE RESTRICT ON UPDATE NO ACTION
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_ingredients_product_id ON product_ingredients(product_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_ingredients_product_id_sequence ON product_ingredients(product_id, sequence)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS product_identifiers (
+                        id TEXT NOT NULL,
+                        product_id TEXT NOT NULL,
+                        identifier_type TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        normalized_value TEXT NOT NULL,
+                        is_primary INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY(id),
+                        FOREIGN KEY(product_id) REFERENCES product_masters(id) ON DELETE RESTRICT ON UPDATE NO ACTION
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_identifiers_product_id ON product_identifiers(product_id)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_product_identifiers_identifier_type_normalized_value ON product_identifiers(identifier_type, normalized_value)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS product_entities (
+                        id TEXT NOT NULL,
+                        product_id TEXT NOT NULL,
+                        entity_name TEXT NOT NULL,
+                        normalized_name TEXT,
+                        role TEXT NOT NULL,
+                        location TEXT,
+                        address TEXT,
+                        sequence INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY(id),
+                        FOREIGN KEY(product_id) REFERENCES product_masters(id) ON DELETE RESTRICT ON UPDATE NO ACTION
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_entities_product_id ON product_entities(product_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_entities_product_id_role_sequence ON product_entities(product_id, role, sequence)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS product_attributes (
+                        id TEXT NOT NULL,
+                        product_id TEXT NOT NULL,
+                        definition_key TEXT NOT NULL,
+                        value_type TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        normalized_value TEXT,
+                        provenance TEXT,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY(id),
+                        FOREIGN KEY(product_id) REFERENCES product_masters(id) ON DELETE RESTRICT ON UPDATE NO ACTION
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_attributes_product_id ON product_attributes(product_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_attributes_product_id_definition_key ON product_attributes(product_id, definition_key)")
+            }
+        }
+
         @Volatile
         private var INSTANCE: CoreDatabase? = null
 
@@ -141,7 +227,7 @@ abstract class CoreDatabase : RoomDatabase() {
                     CoreDatabase::class.java,
                     "mwangaza_ground.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { INSTANCE = it }
             }
