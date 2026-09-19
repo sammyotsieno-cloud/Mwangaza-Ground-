@@ -6,6 +6,10 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import core.domain.model.ProductMaster
+import core.domain.model.ProductIngredient
+import core.domain.model.ProductIdentifier
+import core.domain.model.ProductEntity
+import core.domain.model.ProductAttribute
 import core.domain.model.PharmaceuticalDetail
 import core.domain.model.ProductImage
 import core.domain.model.ProductUnit
@@ -21,6 +25,18 @@ interface ProductMasterDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertProductImage(image: ProductImage)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertProductIngredients(ingredients: List<ProductIngredient>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertProductIdentifiers(identifiers: List<ProductIdentifier>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertProductEntities(entities: List<ProductEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertProductAttributes(attributes: List<ProductAttribute>)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertUnits(units: List<ProductUnit>)
@@ -39,6 +55,18 @@ interface ProductMasterDao {
 
     @Query("SELECT * FROM product_masters WHERE id = :id")
     fun getProductById(id: String): ProductMaster?
+
+    @Query("SELECT * FROM product_ingredients WHERE product_id = :productId ORDER BY sequence ASC")
+    fun getIngredientsForProduct(productId: String): List<ProductIngredient>
+
+    @Query("SELECT * FROM product_identifiers WHERE product_id = :productId ORDER BY is_primary DESC, identifier_type ASC")
+    fun getIdentifiersForProduct(productId: String): List<ProductIdentifier>
+
+    @Query("SELECT * FROM product_entities WHERE product_id = :productId ORDER BY role ASC, sequence ASC")
+    fun getEntitiesForProduct(productId: String): List<ProductEntity>
+
+    @Query("SELECT * FROM product_attributes WHERE product_id = :productId ORDER BY definition_key ASC")
+    fun getAttributesForProduct(productId: String): List<ProductAttribute>
 
     @Query("SELECT * FROM product_masters ORDER BY is_active DESC, brand_name ASC, generic_name ASC")
     fun getAllProducts(): List<ProductMaster>
