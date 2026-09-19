@@ -1120,50 +1120,7 @@ fun ProductsScreen(
                                         images = persistedImages
                                     )
                                 )
-                                /* Legacy registration inserts intentionally removed: registration service owns the transaction. */
-                                /*
-                                container.productMasterDao.insertProduct(product)
-                                container.productMasterDao.insertUnit(baseUnit)
-                                container.productMasterDao.savePriceConfig(priceConfig)
 
-                                if (listOf(activeIngredients, strength, dosageForm, route, therapeuticCategory, prescriptionClassification, storageCondition).any { it.isNotBlank() }) {
-                                    container.productMasterDao.insertPharmaceuticalDetail(
-                                        PharmaceuticalDetail(
-                                            id = UUID.randomUUID().toString(),
-                                            productId = productId,
-                                            activeIngredients = activeIngredients.trim().ifBlank { null },
-                                            strength = strength.trim().ifBlank { null },
-                                            dosageForm = dosageForm.trim().ifBlank { null },
-                                            route = route.trim().ifBlank { null },
-                                            therapeuticCategory = therapeuticCategory.trim().ifBlank { null },
-                                            prescriptionClassification = prescriptionClassification.trim().ifBlank { null },
-                                            storageCondition = storageCondition.trim().ifBlank { null },
-                                            createdAt = now,
-                                            updatedAt = now
-                                        )
-                                    )
-                                }
-
-                                scannedImageUris.forEachIndexed { index, uriString ->
-                                    val source = java.io.File(Uri.parse(uriString).path ?: "")
-                                    if (source.exists()) {
-                                        val imageDir = java.io.File(context.filesDir, "product_images").apply { mkdirs() }
-                                        val destination = java.io.File(imageDir, productId + "_" + index + ".jpg")
-                                        source.copyTo(destination, overwrite = true)
-                                        container.productMasterDao.insertProductImage(
-                                            ProductImage(
-                                                id = UUID.randomUUID().toString(),
-                                                productId = productId,
-                                                imageUri = Uri.fromFile(destination).toString(),
-                                                imageSource = ProductImage.SOURCE_SCANNER_OUTPUT,
-                                                isPrimary = index == 0,
-                                                sortOrder = index,
-                                                createdAt = now
-                                            )
-                                        )
-                                    }
-                                }
-                                */
                             }
 
                             showAddProductDialog = false
