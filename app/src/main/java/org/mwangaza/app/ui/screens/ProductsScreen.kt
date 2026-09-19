@@ -724,7 +724,7 @@ fun ProductsScreen(
 
         var brandName by remember { mutableStateOf(initialScanDraft?.brandName ?: "") }
         var genericName by remember { mutableStateOf(initialScanDraft?.genericName ?: "") }
-        var productType by remember { mutableStateOf(initialScanDraft?.productType ?: "") }
+        var productType by remember { mutableStateOf(initialScanDraft?.productType?.displayName ?: "") }
         var manufacturer by remember { mutableStateOf(initialScanDraft?.manufacturer ?: "") }
         var description by remember { mutableStateOf(initialScanDraft?.description ?: "") }
 
@@ -1080,7 +1080,7 @@ fun ProductsScreen(
 
                             withContext(Dispatchers.IO) {
                                 val verifiedIdentity = VerifiedProductIdentity(
-                                    productType = ProductType.fromKeycode(product.productType) ?: ProductType.OTHER_HEALTH_COMMODITY,
+                                    productType = ProductType.values().firstOrNull { it.name == product.productType } ?: ProductType.OTHER_HEALTH_COMMODITY,
                                     brandName = product.brandName,
                                     genericName = product.genericName,
                                     categoryId = product.categoryId,
