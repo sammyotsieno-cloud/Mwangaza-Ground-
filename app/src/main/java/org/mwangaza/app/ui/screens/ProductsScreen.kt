@@ -69,6 +69,8 @@ import core.domain.model.ProductType
 import core.domain.model.ProductUnit
 import core.domain.model.QuantityScale
 import core.domain.model.UnitPriceConfig
+import core.domain.product.ProductRegistrationService
+import core.domain.product.VerifiedProductIdentity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1078,6 +1080,48 @@ fun ProductsScreen(
                             )
 
                             withContext(Dispatchers.IO) {
+                                val verifiedIdentity = VerifiedProductIdentity(
+                                    productType = ProductType.fromKeycode(product.productType) ?: ProductType.OTHER_HEALTH_COMMODITY,
+                                    brandName = product.brandName,
+                                    genericName = product.genericName,
+                                    categoryId = product.categoryId,
+                                    description = product.description,
+                                    manufacturer = product.manufacturer,
+                                    dosageForm = dosageForm.trim().ifBlank { null },
+                                    route = route.trim().ifBlank { null },
+                                    therapeuticCategory = therapeuticCategory.trim().ifBlank { null },
+                                    prescriptionClassification = prescriptionClassification.trim().ifBlank { null },
+                                    storageCondition = storageCondition.trim().ifBlank { null },
+                                    sourceImageUris = scannedImageUris
+                                )
+                                val persistedImages = scannedImageUris.mapIndexedNotNull { index, uriString ->
+                                    val source = java.io.File(Uri.parse(uriString).path ?: "")
+                                    if (!source.exists()) return@mapIndexedNotNull null
+                                    val imageDir = java.io.File(context.filesDir, "product_images").apply { mkdirs() }
+                                    val destination = java.io.File(imageDir, productId + "_" + index + ".jpg")
+                                    source.copyTo(destination, overwrite = true)
+                                    ProductImage(
+                                        id = UUID.randomUUID().toString(),
+                                        productId = productId,
+                                        imageUri = Uri.fromFile(destination).toString(),
+                                        imageSource = ProductImage.SOURCE_SCANNER_OUTPUT,
+                                        isPrimary = index == 0,
+                                        sortOrder = index,
+                                        createdAt = now
+                                    )
+                                }
+
+                                container.productRegistrationService.register(
+                                    ProductRegistrationService.RegistrationRequest(
+                                        identity = verifiedIdentity,
+                                        productId = productId,
+                                        baseUnit = baseUnit,
+                                        basePriceConfig = priceConfig,
+                                        images = persistedImages
+                                    )
+                                )
+                                /* Legacy registration inserts intentionally removed: registration service owns the transaction. */
+                                /*
                                 container.productMasterDao.insertProduct(product)
                                 container.productMasterDao.insertUnit(baseUnit)
                                 container.productMasterDao.savePriceConfig(priceConfig)
@@ -1119,6 +1163,7 @@ fun ProductsScreen(
                                         )
                                     }
                                 }
+                                */
                             }
 
                             showAddProductDialog = false
