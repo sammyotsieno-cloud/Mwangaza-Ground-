@@ -5,6 +5,10 @@ import core.domain.model.GoodsReceiptItem
 import core.domain.model.InventoryCostLayer
 import core.domain.model.PharmaceuticalDetail
 import core.domain.model.ProductImage
+import core.domain.model.ProductIngredient
+import core.domain.model.ProductIdentifier
+import core.domain.model.ProductEntity
+import core.domain.model.ProductAttribute
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
 import core.domain.model.RationalCost
@@ -41,6 +45,10 @@ class FakeCoreDatabase : TransactionRunner {
     val products = mutableMapOf<String, ProductMaster>()
     val pharmaceuticalDetails = mutableMapOf<String, PharmaceuticalDetail>()
     val productImages = mutableMapOf<String, ProductImage>()
+    val productIngredients = mutableMapOf<String, ProductIngredient>()
+    val productIdentifiers = mutableMapOf<String, ProductIdentifier>()
+    val productEntities = mutableMapOf<String, ProductEntity>()
+    val productAttributes = mutableMapOf<String, ProductAttribute>()
     val units = mutableMapOf<String, ProductUnit>()
     val priceConfigs = mutableMapOf<String, UnitPriceConfig>()
 
@@ -56,6 +64,10 @@ class FakeCoreDatabase : TransactionRunner {
         val snapProducts = products.toMap()
         val snapPharmaceuticalDetails = pharmaceuticalDetails.toMap()
         val snapProductImages = productImages.toMap()
+        val snapProductIngredients = productIngredients.toMap()
+        val snapProductIdentifiers = productIdentifiers.toMap()
+        val snapProductEntities = productEntities.toMap()
+        val snapProductAttributes = productAttributes.toMap()
         val snapUnits = units.toMap()
         val snapPriceConfigs = priceConfigs.toMap()
 
@@ -84,6 +96,14 @@ class FakeCoreDatabase : TransactionRunner {
             pharmaceuticalDetails.putAll(snapPharmaceuticalDetails)
             productImages.clear()
             productImages.putAll(snapProductImages)
+            productIngredients.clear()
+            productIngredients.putAll(snapProductIngredients)
+            productIdentifiers.clear()
+            productIdentifiers.putAll(snapProductIdentifiers)
+            productEntities.clear()
+            productEntities.putAll(snapProductEntities)
+            productAttributes.clear()
+            productAttributes.putAll(snapProductAttributes)
             units.clear()
             units.putAll(snapUnits)
             priceConfigs.clear()
@@ -459,6 +479,34 @@ class FakeCoreDatabase : TransactionRunner {
         override fun insertProductImage(image: ProductImage) {
             productImages[image.id] = image
         }
+
+        override fun insertProductIngredients(ingredients: List<ProductIngredient>) {
+            ingredients.forEach { productIngredients[it.id] = it }
+        }
+
+        override fun insertProductIdentifiers(identifiers: List<ProductIdentifier>) {
+            identifiers.forEach { productIdentifiers[it.id] = it }
+        }
+
+        override fun insertProductEntities(entities: List<ProductEntity>) {
+            entities.forEach { productEntities[it.id] = it }
+        }
+
+        override fun insertProductAttributes(attributes: List<ProductAttribute>) {
+            attributes.forEach { productAttributes[it.id] = it }
+        }
+
+        override fun getIngredientsForProduct(productId: String): List<ProductIngredient> =
+            productIngredients.values.filter { it.productId == productId }.sortedBy { it.sequence }
+
+        override fun getIdentifiersForProduct(productId: String): List<ProductIdentifier> =
+            productIdentifiers.values.filter { it.productId == productId }.sortedWith(compareByDescending<ProductIdentifier> { it.isPrimary }.thenBy { it.identifierType })
+
+        override fun getEntitiesForProduct(productId: String): List<ProductEntity> =
+            productEntities.values.filter { it.productId == productId }.sortedWith(compareBy<ProductEntity> { it.role }.thenBy { it.sequence })
+
+        override fun getAttributesForProduct(productId: String): List<ProductAttribute> =
+            productAttributes.values.filter { it.productId == productId }.sortedBy { it.definitionKey }
 
         override fun insertUnits(newUnits: List<ProductUnit>) {
             newUnits.forEach { units[it.id] = it }
