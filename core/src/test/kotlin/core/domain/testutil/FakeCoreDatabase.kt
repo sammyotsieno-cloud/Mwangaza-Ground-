@@ -489,7 +489,15 @@ class FakeCoreDatabase : TransactionRunner {
         }
 
         override fun insertProductIdentifiers(identifiers: List<ProductIdentifier>) {
-            identifiers.forEach { productIdentifiers[it.id] = it }
+            identifiers.forEach { identifier ->
+                if (productIdentifiers.values.any {
+                    it.identifierType == identifier.identifierType &&
+                        it.normalizedValue == identifier.normalizedValue
+                }) {
+                    throw IllegalStateException("Duplicate product identifier")
+                }
+                productIdentifiers[identifier.id] = identifier
+            }
         }
 
         override fun insertProductEntities(entities: List<ProductEntity>) {
