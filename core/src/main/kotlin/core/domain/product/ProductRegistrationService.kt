@@ -53,7 +53,7 @@ class ProductRegistrationService(
                 id = productId,
                 brandName = request.identity.brandName?.trim()?.ifBlank { null },
                 genericName = request.identity.genericName?.trim()?.ifBlank { null },
-                productType = request.identity.productType.keycode,
+                productType = request.identity.productType.name,
                 categoryId = request.identity.categoryId?.trim()?.ifBlank { null },
                 manufacturer = manufacturer?.trim()?.ifBlank { null },
                 description = request.identity.description?.trim()?.ifBlank { null },
@@ -158,8 +158,7 @@ class ProductRegistrationService(
                         activeIngredients = null,
                         strength = null,
                         dosageForm = request.identity.dosageForm?.trim()?.ifBlank { null },
-                        route = deriveRoute(request.identity.dosageForm)
-                            ?: request.identity.route?.trim()?.ifBlank { null },
+                        route = request.identity.route?.trim()?.ifBlank { null },
                         therapeuticCategory = request.identity.therapeuticCategory?.trim()?.ifBlank { null },
                         prescriptionClassification = request.identity.prescriptionClassification?.trim()?.ifBlank { null },
                         storageCondition = request.identity.storageCondition?.trim()?.ifBlank { null },
@@ -184,16 +183,4 @@ class ProductRegistrationService(
             product
         }
 
-    private fun deriveRoute(dosageForm: String?): String? =
-        when (dosageForm?.trim()?.lowercase(Locale.ROOT)) {
-            "tablet", "tablets", "capsule", "capsules", "syrup",
-            "suspension", "solution", "powder", "sachet" -> "Oral"
-            "cream", "ointment", "gel", "patch" -> "Topical"
-            "injection" -> "Parenteral"
-            "eye drops", "ophthalmic drops", "ophthalmic" -> "Ophthalmic"
-            "otic drops", "ear drops", "otic" -> "Otic"
-            "nasal drops", "nasal spray", "nasal" -> "Nasal"
-            "suppository", "rectal" -> "Rectal"
-            else -> null
-        }
 }
