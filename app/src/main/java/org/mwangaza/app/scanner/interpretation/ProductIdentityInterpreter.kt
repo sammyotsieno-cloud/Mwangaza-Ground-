@@ -50,6 +50,10 @@ object ProductIdentityInterpreter {
             "lozenge", "lozenges", "film", "emulsion", "eye drops", "ear drops",
             "nasal spray", "nasal drops"
         )
+        val dosageForm = dosageForms.firstOrNull {
+            Regex("\\b" + Regex.escape(it) + "\\b", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        }
+
         val explicitRoute = listOf(
             "Ophthalmic" to Regex("\\bophthalmic\\b|\\beye\\s+drops?\\b", RegexOption.IGNORE_CASE),
             "Otic" to Regex("\\botic\\b|\\bear\\s+drops?\\b", RegexOption.IGNORE_CASE),
@@ -61,6 +65,7 @@ object ProductIdentityInterpreter {
             "Vaginal" to Regex("\\bvaginal\\b|\\bintravaginal\\b", RegexOption.IGNORE_CASE),
             "Oral" to Regex("\\boral\\b|\\bby\\s+mouth\\b|\\bper\\s+os\\b", RegexOption.IGNORE_CASE)
         ).firstOrNull { it.second.containsMatchIn(text) }?.first
+
         val inferredRoute = when (dosageForm?.lowercase(Locale.ROOT)) {
             "tablet", "tablets", "tab", "tabs", "capsule", "capsules", "cap", "caps", "caplet", "caplets",
             "syrup", "suspension", "susp", "solution", "soln", "sol", "powder", "pwd", "sachet", "sachets", "granules",
@@ -79,10 +84,6 @@ object ProductIdentityInterpreter {
             explicitRoute != null -> "EXPLICIT"
             inferredRoute != null -> "INFERRED"
             else -> null
-        }
-
-        val dosageForm = dosageForms.firstOrNull {
-            Regex("\\b" + Regex.escape(it) + "\\b", RegexOption.IGNORE_CASE).containsMatchIn(text)
         }
 
         val brandCandidates = lines
@@ -131,7 +132,8 @@ object ProductIdentityInterpreter {
             productType = productType,
             manufacturer = manufacturer,
             dosageForm = dosageForm,
-            route = null,
+            route = route,
+            routeSource = routeSource,
             strength = strengthMatches.firstOrNull(),
             activeIngredients = active,
             prescriptionClassification = prescription,
@@ -143,7 +145,7 @@ object ProductIdentityInterpreter {
         val conflicts = brandCandidates.map { it.value }.distinct().drop(1)
         val candidates = brandCandidates.take(5).map {
             it.copy(conflictingValues = conflicts)
-        } + barcodes.map {
+        } + (manufacturer?.let { listOf(IdentityCandidate("manufacturer", it, 0.97f, listOf("MANUFACTURER_CUE"))) } ?: emptyList()) + (dosageForm?.let { listOf(IdentityCandidate("productForm", it, 0.93f, listOf("OCR_FORM_KEYWORD"))) } ?: emptyList()) + barcodes.map {
             IdentityCandidate(
                 field = "identifier",
                 value = it.rawValue,
