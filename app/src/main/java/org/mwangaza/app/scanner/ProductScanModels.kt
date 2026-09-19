@@ -85,5 +85,6 @@ data class ProductScanAnalysis(
     val ocrResults: List<OcrResult>,
     val barcodeResults: List<BarcodeResult>,
     val draft: ProductScanDraft,
+    val identityCandidates: List<org.mwangaza.app.scanner.interpretation.IdentityCandidate> = emptyList(),
     val processingNotes: List<String> = emptyList()
 )
