@@ -480,6 +480,10 @@ class FakeCoreDatabase : TransactionRunner {
             productImages[image.id] = image
         }
 
+        override fun insertProductImages(images: List<ProductImage>) {
+            images.forEach { productImages[it.id] = it }
+        }
+
         override fun insertProductIngredients(ingredients: List<ProductIngredient>) {
             ingredients.forEach { productIngredients[it.id] = it }
         }
