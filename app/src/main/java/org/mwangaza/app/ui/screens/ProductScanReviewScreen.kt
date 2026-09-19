@@ -42,6 +42,7 @@ fun ProductScanReviewScreen(
     var strength by remember { mutableStateOf(analysis.draft.strength.orEmpty()) }
     var dosageForm by remember { mutableStateOf(analysis.draft.dosageForm.orEmpty()) }
     var route by remember { mutableStateOf(analysis.draft.route.orEmpty()) }
+    var barcode by remember { mutableStateOf(analysis.draft.barcodeValue.orEmpty()) }
     val routeSource = analysis.draft.routeSource
     var therapeutic by remember { mutableStateOf(analysis.draft.therapeuticCategory.orEmpty()) }
     var prescription by remember { mutableStateOf(analysis.draft.prescriptionClassification.orEmpty()) }
@@ -55,6 +56,7 @@ fun ProductScanReviewScreen(
         dosageForm = dosageForm.trim().ifBlank { null },
         route = route.trim().ifBlank { null },
         routeSource = routeSource,
+        barcodeValue = barcode.trim().ifBlank { null },
         therapeuticCategory = therapeutic.trim().ifBlank { null },
         prescriptionClassification = prescription.trim().ifBlank { null },
         storageCondition = storage.trim().ifBlank { null },
@@ -85,9 +87,8 @@ fun ProductScanReviewScreen(
         OutlinedTextField(dosageForm, { dosageForm = it }, label = { Text("Dosage Form") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(manufacturer, { manufacturer = it }, label = { Text("Manufacturer") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(
-            value = analysis.draft.barcodeValue.orEmpty(),
-            onValueChange = { },
-            readOnly = true,
+            value = barcode,
+            onValueChange = { barcode = it },
             label = { Text("Barcode / Identifier") },
             modifier = Modifier.fillMaxWidth()
         )
