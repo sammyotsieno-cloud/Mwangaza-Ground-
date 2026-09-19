@@ -1115,6 +1115,8 @@ fun ProductsScreen(
                                         identity = verifiedIdentity,
                                         productId = productId,
                                         baseUnit = baseUnit,
+                                        quantityScale = quantityScale,
+                                        minimumTransactionIncrementStorageUnits = minimumIncrement,
                                         basePriceConfig = priceConfig,
                                         images = persistedImages
                                     )
