@@ -1,7 +1,7 @@
 package core.domain
 
 import core.domain.model.Money
-import core.domain.model.ProductMaster
+import core.domain.model.ProductIdentifier
 import core.domain.model.ProductType
 import core.domain.model.ProductUnit
 import core.domain.model.UnitPriceConfig
@@ -101,11 +101,18 @@ class ProductRegistrationServiceTest {
         )
         val identity = VerifiedProductIdentity(
             productType = ProductType.MEDICINE,
-            brandName = "Rollback Test"
+            brandName = "Rollback Test",
+            identifiers = listOf(
+                core.domain.product.ProductIdentifierIdentity(
+                    identifierType = "EAN_13",
+                    value = "1234567890123",
+                    normalizedValue = "1234567890123"
+                )
+            )
         )
         val service = ProductRegistrationService(db, db.productMasterDao)
 
-        db.productIdentifiers["existing"] = core.domain.model.ProductIdentifier(
+        db.productIdentifiers["existing"] = ProductIdentifier(
             id = "existing",
             productId = "OTHER",
             identifierType = "EAN_13",
