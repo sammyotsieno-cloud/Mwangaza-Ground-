@@ -12,14 +12,11 @@ import core.domain.model.QuantityScale
 import core.domain.model.UnitPriceConfig
 import core.domain.persistence.ProductMasterDao
 import core.domain.persistence.TransactionRunner
-import java.util.UUID
 import java.util.Locale
+import java.util.UUID
 
 /**
- * Atomic persistence boundary for a verified product identity.
- *
- * Scanner evidence never reaches this service directly. The caller must
- * provide a user-verified identity.
+ * Atomic persistence boundary for a user-verified product identity.
  */
 class ProductRegistrationService(
     private val transactionRunner: TransactionRunner,
@@ -40,7 +37,12 @@ class ProductRegistrationService(
             val now = System.currentTimeMillis()
             val productId = request.productId.trim()
             require(productId.isNotBlank()) { "Product id must not be blank" }
-            require(request.baseUnit.productId == productId) { "Base unit must reference the product being registered" }
+            require(request.baseUnit.productId == productId) {
+                "Base unit must reference the product being registered"
+            }
+            require(request.minimumTransactionIncrementStorageUnits > 0L) {
+                "Minimum transaction increment must be positive"
+            }
 
             val manufacturer = request.identity.manufacturer
                 ?: request.identity.entities
@@ -108,7 +110,7 @@ class ProductRegistrationService(
                             id = UUID.randomUUID().toString(),
                             productId = productId,
                             entityName = it.entityName.trim(),
-                            normalizedName = it.entityName.trim().uppercase(),
+                            normalizedName = it.entityName.trim().uppercase(Locale.ROOT),
                             role = it.role,
                             location = it.location?.trim()?.ifBlank { null },
                             address = it.address?.trim()?.ifBlank { null },
@@ -139,7 +141,7 @@ class ProductRegistrationService(
             }
 
             val hasPharmaceuticalData =
-                request.identity.productType.keycode == "MED" ||
+                request.identity.productType == core.domain.model.ProductType.MEDICINE ||
                     listOf(
                         request.identity.dosageForm,
                         request.identity.route,
@@ -156,7 +158,8 @@ class ProductRegistrationService(
                         activeIngredients = null,
                         strength = null,
                         dosageForm = request.identity.dosageForm?.trim()?.ifBlank { null },
-                        route = deriveRoute(request.identity.dosageForm) ?: request.identity.route?.trim()?.ifBlank { null },
+                        route = deriveRoute(request.identity.dosageForm)
+                            ?: request.identity.route?.trim()?.ifBlank { null },
                         therapeuticCategory = request.identity.therapeuticCategory?.trim()?.ifBlank { null },
                         prescriptionClassification = request.identity.prescriptionClassification?.trim()?.ifBlank { null },
                         storageCondition = request.identity.storageCondition?.trim()?.ifBlank { null },
@@ -167,24 +170,30 @@ class ProductRegistrationService(
             }
 
             productMasterDao.insertUnit(request.baseUnit.copy(productId = productId))
+
             request.basePriceConfig?.let {
                 productMasterDao.savePriceConfig(it.copy(productUnitId = request.baseUnit.id))
             }
+
             if (request.images.isNotEmpty()) {
-                productMasterDao.insertProductImages(request.images.map { it.copy(productId = productId) })
+                productMasterDao.insertProductImages(
+                    request.images.map { it.copy(productId = productId) }
+                )
             }
 
             product
-        private fun deriveRoute(dosageForm: String?): String? = when (dosageForm?.trim()?.lowercase(Locale.ROOT)) {
-        "tablet", "tablets", "capsule", "capsules", "syrup", "suspension", "solution", "powder", "sachet" -> "Oral"
-        "cream", "ointment", "gel", "patch" -> "Topical"
-        "injection" -> "Parenteral"
-        "eye drops", "ophthalmic drops", "ophthalmic" -> "Ophthalmic"
-        "otic drops", "ear drops", "otic" -> "Otic"
-        "nasal drops", "nasal spray", "nasal" -> "Nasal"
-        "suppository", "rectal" -> "Rectal"
-        else -> null
-    }
+        }
 
-    }
+    private fun deriveRoute(dosageForm: String?): String? =
+        when (dosageForm?.trim()?.lowercase(Locale.ROOT)) {
+            "tablet", "tablets", "capsule", "capsules", "syrup",
+            "suspension", "solution", "powder", "sachet" -> "Oral"
+            "cream", "ointment", "gel", "patch" -> "Topical"
+            "injection" -> "Parenteral"
+            "eye drops", "ophthalmic drops", "ophthalmic" -> "Ophthalmic"
+            "otic drops", "ear drops", "otic" -> "Otic"
+            "nasal drops", "nasal spray", "nasal" -> "Nasal"
+            "suppository", "rectal" -> "Rectal"
+            else -> null
+        }
 }
