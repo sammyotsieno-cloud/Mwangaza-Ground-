@@ -1033,9 +1033,10 @@ fun ProductsScreen(
                                 genericName = genericName
                                     .trim()
                                     .ifBlank { null },
-                                productType = productType
-                                    .trim()
-                                    .ifBlank { null },
+                                productType = ProductType.values()
+                                    .firstOrNull { it.displayName.equals(productType.trim(), ignoreCase = true) }
+                                    ?.name
+                                    ?: ProductType.OTHER_HEALTH_COMMODITY.name,
                                 manufacturer = manufacturer
                                     .trim()
                                     .ifBlank { null },
@@ -1088,6 +1089,7 @@ fun ProductsScreen(
                                     manufacturer = product.manufacturer,
                                     dosageForm = dosageForm.trim().ifBlank { null },
                                     route = route.trim().ifBlank { null },
+                                    routeSource = initialScanDraft?.routeSource,
                                     therapeuticCategory = therapeuticCategory.trim().ifBlank { null },
                                     prescriptionClassification = prescriptionClassification.trim().ifBlank { null },
                                     storageCondition = storageCondition.trim().ifBlank { null },
