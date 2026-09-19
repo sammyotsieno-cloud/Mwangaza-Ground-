@@ -138,11 +138,19 @@ fun ProductScannerScreen(
                             }.onSuccess {
                                 val combinedOcr = acceptedAnalyses.flatMap { item -> item.ocrResults } + it.ocrResults
                                 val combinedBarcodes = acceptedAnalyses.flatMap { item -> item.barcodeResults } + it.barcodeResults
+                                val interpretation = ProductIdentityInterpreter.interpret(
+                                    selectedProductType,
+                                    combinedOcr,
+                                    combinedBarcodes
+                                )
                                 analysis = it.copy(
                                     ocrResults = combinedOcr,
                                     barcodeResults = combinedBarcodes,
-                                    draft = ProductIdentityInterpreter.interpret(selectedProductType, combinedOcr, combinedBarcodes).draft.copy(productType = selectedProductType, sourceImageUris = acceptedImageUris + it.originalUri),
-                                    identityCandidates = ProductIdentityInterpreter.interpret(selectedProductType, combinedOcr, combinedBarcodes).candidates
+                                    draft = interpretation.draft.copy(
+                                        productType = selectedProductType,
+                                        sourceImageUris = acceptedImageUris + it.originalUri
+                                    ),
+                                    identityCandidates = interpretation.candidates
                                 )
                             }.onFailure {
                                 working.delete()
