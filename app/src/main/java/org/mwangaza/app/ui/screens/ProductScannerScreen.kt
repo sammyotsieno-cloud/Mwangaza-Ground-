@@ -141,7 +141,8 @@ fun ProductScannerScreen(
                                 analysis = it.copy(
                                     ocrResults = combinedOcr,
                                     barcodeResults = combinedBarcodes,
-                                    draft = ProductIdentityInterpreter.interpret(selectedProductType, combinedOcr, combinedBarcodes).draft.copy(productType = selectedProductType, sourceImageUris = acceptedImageUris + it.originalUri)
+                                    draft = ProductIdentityInterpreter.interpret(selectedProductType, combinedOcr, combinedBarcodes).draft.copy(productType = selectedProductType, sourceImageUris = acceptedImageUris + it.originalUri),
+                                    identityCandidates = ProductIdentityInterpreter.interpret(selectedProductType, combinedOcr, combinedBarcodes).candidates
                                 )
                             }.onFailure {
                                 working.delete()
