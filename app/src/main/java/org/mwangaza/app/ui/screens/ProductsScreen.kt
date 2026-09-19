@@ -65,6 +65,7 @@ import core.domain.model.ProductImage
 import org.mwangaza.app.scanner.ProductScanDraft
 import android.net.Uri
 import core.domain.model.ProductMaster
+import core.domain.model.ProductType
 import core.domain.model.ProductUnit
 import core.domain.model.QuantityScale
 import core.domain.model.UnitPriceConfig
@@ -85,7 +86,7 @@ data class ProductWithDetails(
 fun ProductsScreen(
     container: AppContainer,
     onBack: () -> Unit,
-    onScanProduct: () -> Unit,
+    onScanProduct: (ProductType) -> Unit,
     initialScanDraft: ProductScanDraft? = null,
     onScanDraftConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -99,6 +100,7 @@ fun ProductsScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     var showAddProductDialog by remember { mutableStateOf(initialScanDraft != null) }
+    var showProductTypeDialog by remember { mutableStateOf(false) }
     var selectedProductForDetails by remember { mutableStateOf<ProductWithDetails?>(null) }
     var showAddUnitDialogForProduct by remember { mutableStateOf<ProductMaster?>(null) }
     var showEditPriceDialogForUnit by remember {
@@ -193,7 +195,7 @@ fun ProductsScreen(
         ) {
 
             OutlinedButton(
-                onClick = onScanProduct,
+                onClick = { showProductTypeDialog = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp)
@@ -451,6 +453,33 @@ fun ProductsScreen(
                 }
             }
         }
+    }
+
+    if (showProductTypeDialog) {
+        AlertDialog(
+            onDismissRequest = { showProductTypeDialog = false },
+            title = { Text("Select Product Type") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ProductType.entries.forEach { type ->
+                        OutlinedButton(
+                            onClick = {
+                                showProductTypeDialog = false
+                                onScanProduct(type)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(type.displayName)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showProductTypeDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     selectedProductForDetails?.let { details ->
