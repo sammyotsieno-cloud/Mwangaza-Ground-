@@ -42,6 +42,7 @@ fun ProductScanReviewScreen(
     var strength by remember { mutableStateOf(analysis.draft.strength.orEmpty()) }
     var dosageForm by remember { mutableStateOf(analysis.draft.dosageForm.orEmpty()) }
     var route by remember { mutableStateOf(analysis.draft.route.orEmpty()) }
+    val routeSource = analysis.draft.routeSource
     var therapeutic by remember { mutableStateOf(analysis.draft.therapeuticCategory.orEmpty()) }
     var prescription by remember { mutableStateOf(analysis.draft.prescriptionClassification.orEmpty()) }
     var storage by remember { mutableStateOf(analysis.draft.storageCondition.orEmpty()) }
@@ -53,6 +54,7 @@ fun ProductScanReviewScreen(
         strength = strength.trim().ifBlank { null },
         dosageForm = dosageForm.trim().ifBlank { null },
         route = route.trim().ifBlank { null },
+        routeSource = routeSource,
         therapeuticCategory = therapeutic.trim().ifBlank { null },
         prescriptionClassification = prescription.trim().ifBlank { null },
         storageCondition = storage.trim().ifBlank { null },
@@ -81,8 +83,24 @@ fun ProductScanReviewScreen(
         OutlinedTextField(generic, { generic = it }, label = { Text("Generic / Active Ingredient") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(strength, { strength = it }, label = { Text("Strength") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(dosageForm, { dosageForm = it }, label = { Text("Dosage Form") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(route, { route = it }, label = { Text("Route") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(manufacturer, { manufacturer = it }, label = { Text("Manufacturer") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(
+            value = analysis.draft.barcodeValue.orEmpty(),
+            onValueChange = { },
+            readOnly = true,
+            label = { Text("Barcode / Identifier") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(route, { route = it }, label = { Text("Route") }, modifier = Modifier.fillMaxWidth())
+        Text(
+            "Route source: " + when (routeSource) {
+                "EXPLICIT" -> "Explicit on packaging"
+                "INFERRED" -> "Inferred from product form"
+                else -> "Not determined"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         OutlinedTextField(therapeutic, { therapeutic = it }, label = { Text("Therapeutic Category") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(prescription, { prescription = it }, label = { Text("Prescription Classification") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(storage, { storage = it }, label = { Text("Storage Condition") }, modifier = Modifier.fillMaxWidth())
