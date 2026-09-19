@@ -42,6 +42,7 @@ fun ProductScanReviewScreen(
     var strength by remember { mutableStateOf(analysis.draft.strength.orEmpty()) }
     var dosageForm by remember { mutableStateOf(analysis.draft.dosageForm.orEmpty()) }
     var route by remember { mutableStateOf(analysis.draft.route.orEmpty()) }
+    var routeSource by remember { mutableStateOf(analysis.draft.routeSource) }
     var barcode by remember { mutableStateOf(analysis.draft.barcodeValue.orEmpty()) }
     val routeSource = analysis.draft.routeSource
     var therapeutic by remember { mutableStateOf(analysis.draft.therapeuticCategory.orEmpty()) }
@@ -92,7 +93,7 @@ fun ProductScanReviewScreen(
             label = { Text("Barcode / Identifier") },
             modifier = Modifier.fillMaxWidth()
         )
-        OutlinedTextField(route, { route = it }, label = { Text("Route") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(route, { route = it; routeSource = if (it.trim().isBlank()) null else "EXPLICIT" }, label = { Text("Route") }, modifier = Modifier.fillMaxWidth())
         Text(
             "Route source: " + when (routeSource) {
                 "EXPLICIT" -> "Explicit on packaging"
