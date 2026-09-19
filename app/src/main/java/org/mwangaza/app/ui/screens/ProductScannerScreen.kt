@@ -134,14 +134,14 @@ fun ProductScannerScreen(
                         scope.launch {
                             val working = File(sessionDir, original.nameWithoutExtension + "_working.jpg")
                             runCatching {
-                                ProductScanEngine().process(context, original, working)
+                                ProductScanEngine().process(context, original, working, selectedProductType)
                             }.onSuccess {
                                 val combinedOcr = acceptedAnalyses.flatMap { item -> item.ocrResults } + it.ocrResults
                                 val combinedBarcodes = acceptedAnalyses.flatMap { item -> item.barcodeResults } + it.barcodeResults
                                 analysis = it.copy(
                                     ocrResults = combinedOcr,
                                     barcodeResults = combinedBarcodes,
-                                    draft = ProductIdentityInterpreter.interpret(selectedProductType, combinedOcr, combinedBarcodes).draft.copy(productType = selectedProductType.keycode, sourceImageUris = acceptedImageUris + it.originalUri)
+                                    draft = ProductIdentityInterpreter.interpret(selectedProductType, combinedOcr, combinedBarcodes).draft.copy(productType = selectedProductType, sourceImageUris = acceptedImageUris + it.originalUri)
                                 )
                             }.onFailure {
                                 working.delete()
