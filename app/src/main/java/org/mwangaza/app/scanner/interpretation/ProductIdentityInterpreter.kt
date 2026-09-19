@@ -48,7 +48,10 @@ object ProductIdentityInterpreter {
             "drops", "spray", "inhaler", "patch", "patches", "suppository", "suppositories",
             "supp", "pessary", "pessaries", "pess", "device", "kit", "strip", "strips",
             "lozenge", "lozenges", "film", "emulsion", "eye drops", "ear drops",
-            "nasal spray", "nasal drops"
+            "nasal spray", "nasal drops", "granule", "paste", "foam", "shampoo",
+            "mouthwash", "rinse", "elixir", "tincture", "liniment", "paint",
+            "dressing", "bandage", "gauze", "catheter", "cannula", "syringe",
+            "needle", "gloves", "mask", "condom"
         )
         val dosageForm = dosageForms.firstOrNull {
             Regex("\\b" + Regex.escape(it) + "\\b", RegexOption.IGNORE_CASE).containsMatchIn(text)
@@ -86,22 +89,38 @@ object ProductIdentityInterpreter {
             else -> null
         }
 
+        val ocrLines = ocr.flatMap { result ->
+            result.blocks.flatMap { block ->
+                block.lines.map { line ->
+                    Triple(line.text.trim(), line.bounds?.width()?.toFloat() ?: 0f, line.bounds?.top?.toFloat() ?: Float.MAX_VALUE)
+                }
+            }
+        }.filter { it.first.isNotBlank() }
+
+        val maxWidth = ocrLines.maxOfOrNull { it.second }?.takeIf { it > 0f } ?: 1f
+        val minTop = ocrLines.minOfOrNull { it.third }?.takeIf { it != Float.MAX_VALUE } ?: 0f
+        val maxTop = ocrLines.maxOfOrNull { it.third }?.takeIf { it != Float.MAX_VALUE } ?: minTop
+        val topRange = (maxTop - minTop).coerceAtLeast(1f)
+
         val brandCandidates = lines
             .filter { it.length in 3..80 }
             .filterNot { line ->
                 val l = line.lowercase(Locale.ROOT)
                 strengthRegex.containsMatchIn(line) ||
                     dosageForms.any { Regex("\\b" + Regex.escape(it) + "\\b", RegexOption.IGNORE_CASE).containsMatchIn(line) } ||
-                    listOf("manufactured", "manufacturer", "mfd.", "mfg.", "marketed", "distributed", "packed", "repacked", "storage", "batch", "expiry", "exp").any { l.contains(it) }
+                    listOf("manufactured", "manufacturer", "mfd.", "mfg.", "marketed", "distributed", "packed", "repacked", "produced", "made by", "licence", "license", "storage", "batch", "lot", "expiry", "exp", "mfg").any { l.contains(it) } ||
+                    Regex("\\b(?:contains?|each|per|net|volume|for\\s+oral\\s+use)\\b", RegexOption.IGNORE_CASE).containsMatchIn(line)
             }
             .map { line ->
-                val visualProminence = ocr.flatMap { it.blocks }.flatMap { it.lines }
-                    .firstOrNull { it.text.equals(line, ignoreCase = true) }
-                    ?.bounds?.let { it.width().toFloat() * it.height().toFloat() } ?: 0f
-                val score = (0.55f + (visualProminence / 5_000_000f).coerceIn(0f, 0.30f) +
-                    if (productType == ProductType.MEDICINE) 0.05f else 0f).coerceAtMost(0.95f)
-                IdentityCandidate("brandName", line, score, listOf("OCR_LINE", "VISUAL_PROMINENCE"))
+                val evidence = ocrLines.firstOrNull { it.first.equals(line, ignoreCase = true) }
+                val relativeWidth = ((evidence?.second ?: 0f) / maxWidth).coerceIn(0f, 1f)
+                val relativeTop = if (evidence == null || evidence.third == Float.MAX_VALUE) 0.5f else ((evidence.third - minTop) / topRange).coerceIn(0f, 1f)
+                val score = (0.32f + relativeWidth * 0.30f + (1f - relativeTop) * 0.20f +
+                    when { line.length in 3..24 -> 0.12f; line.length in 25..40 -> 0.05f; else -> 0f } -
+                    if (line.count { it == ' ' } > 7) 0.12f else 0f).coerceIn(0.05f, 0.97f)
+                IdentityCandidate("brandName", line, score, listOf("OCR_LINE", "RELATIVE_SIZE", "VERTICAL_POSITION", "NEGATIVE_FILTERS"))
             }
+            .distinctBy { it.value.lowercase(Locale.ROOT) }
             .sortedByDescending { it.confidence }
 
         val manufacturerCues = listOf(
