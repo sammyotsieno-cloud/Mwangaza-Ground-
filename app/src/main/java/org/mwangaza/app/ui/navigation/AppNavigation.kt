@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import org.mwangaza.app.data.AppContainer
+import core.domain.model.ProductType
 import org.mwangaza.app.ui.screens.DashboardScreen
 import org.mwangaza.app.scanner.ProductScanDraft
 import org.mwangaza.app.ui.screens.DispensingScreen
@@ -63,6 +64,7 @@ fun AppNavigation(
     var currentBottomTab by remember { mutableStateOf<BottomNavItem>(BottomNavItem.Dashboard) }
     var currentFeature by remember { mutableStateOf<String?>(null) }
     var pendingScanDraft by remember { mutableStateOf<ProductScanDraft?>(null) }
+    var selectedScanProductType by remember { mutableStateOf<ProductType?>(null) }
     var showExitConfirmation by remember { mutableStateOf(false) }
 
     BackHandler(enabled = currentFeature != null) {
@@ -144,13 +146,14 @@ fun AppNavigation(
                     ProductsScreen(
                         container = appContainer,
                         onBack = { currentFeature = null },
-                        onScanProduct = { currentFeature = "product-scanner" },
+                        onScanProduct = { productType -> selectedScanProductType = productType; currentFeature = "product-scanner" },
                         initialScanDraft = pendingScanDraft,
                         onScanDraftConsumed = { pendingScanDraft = null }
                     )
                 }
                 currentFeature == "product-scanner" -> {
                     ProductScannerScreen(
+                        selectedProductType = selectedScanProductType ?: ProductType.OTHER_HEALTH_COMMODITY,
                         onConfirmed = { draft ->
                             pendingScanDraft = draft
                             currentFeature = "products"
