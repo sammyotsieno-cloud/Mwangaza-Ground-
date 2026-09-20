@@ -61,8 +61,8 @@ object CategoryExtractionProfiles {
     private fun single(lines:List<String>)=matches(lines,singleUse).map{p("single_use","BOOLEAN",it,"SingleUseSignature",it)}
     private fun packs(lines:List<String>)=matches(lines,pack).map{p("pack_count","QUANTITY",it,"PackCountSignature",it)}
     private fun dims(lines:List<String>)=matches(lines,dimension).map{p("size","DIMENSION",it,"DimensionSignature",it)}
-    private fun vols(lines:List<String>,cues:List<String>)=(after(lines,cues)+lines.filter{volume.containsMatchIn(it)&&Regex("(?i)\b(?:volume|net|content|capacity|bottle|container|pack)\b").containsMatchIn(it)}.flatMap{volume.findAll(it).map{m->m.value}}).distinct().map{p("volume","QUANTITY",it,"VolumeSignature",it)}
-    private fun materials(lines:List<String>)=(after(lines,listOf("Material","Made of","Made from","Composition"))+lines.filter{Regex("(?i)\b(?:PVC|silicone|latex|polyurethane|polypropylene|polyethylene|stainless steel|cotton|non[- ]woven)\b").containsMatchIn(it)&&Regex("(?i)\b(?:material|made|composition)\b").containsMatchIn(it)}).distinct().map{p("material","TEXT",it,"MaterialSignature",it)}
+    private fun vols(lines:List<String>,cues:List<String>)=(after(lines,cues)+lines.filter{volume.containsMatchIn(it)&&Regex("""(?i)\b(?:volume|net|content|capacity|bottle|container|pack)\b""").containsMatchIn(it)}.flatMap{volume.findAll(it).map{m->m.value}}).distinct().map{p("volume","QUANTITY",it,"VolumeSignature",it)}
+    private fun materials(lines:List<String>)=(after(lines,listOf("Material","Made of","Made from","Composition"))+lines.filter{Regex("""(?i)\b(?:PVC|silicone|latex|polyurethane|polypropylene|polyethylene|stainless steel|cotton|non[- ]woven)\b""").containsMatchIn(it)&&Regex("""(?i)\b(?:material|made|composition)\b""").containsMatchIn(it)}).distinct().map{p("material","TEXT",it,"MaterialSignature",it)}
     private fun intended(lines:List<String>)=after(lines,listOf("Intended use","Purpose","Use","For")).map{p("intended_use","TEXT",it,"PurposeIntendedUseSignature",it)}
     private fun profile(type:ProductType):List<VariableRule>{
         fun d(k:String,t:String="TEXT",m:Boolean=false,e:(List<String>,String)->List<CategoryVariableProposal>)=VariableRule(k,t,m,e)
@@ -71,7 +71,7 @@ object CategoryExtractionProfiles {
                 d("generic_name"){l,_->after(l,listOf("Generic name","Generic","INN")).map{p("generic_name","TEXT",it,"GenericNameSignature","GENERIC_CUE")}},
                 d("strength","QUANTITY"){l,_->matches(l,strength).map{p("strength","QUANTITY",it,"StrengthSignature",it)}},
                 d("route"){l,_->after(l,listOf("Route","Route of administration")).map{p("route","TEXT",it,"RouteExplicitSignature","ROUTE_CUE")}},
-                d("prescription_classification"){_,t->Regex("(?i)\b(?:Prescription Only|Prescription Only Medicine|OTC|Over the Counter|Pharmacy Medicine)\b").findAll(t).map{p("prescription_classification","TEXT",it.value,"PrescriptionClassificationSignature","REGULATORY_CUE")}.toList()},
+                d("prescription_classification"){_,t->Regex("""(?i)\b(?:Prescription Only|Prescription Only Medicine|OTC|Over the Counter|Pharmacy Medicine)\b""").findAll(t).map{p("prescription_classification","TEXT",it.value,"PrescriptionClassificationSignature","REGULATORY_CUE")}.toList()},
                 d("therapeutic_category"){l,_->after(l,listOf("Therapeutic class","Therapeutic category")).map{p("therapeutic_category","TEXT",it,"TherapeuticCategorySignature","CLASSIFICATION_CUE")}},
                 d("storage_condition"){l,_->storage(l)},
                 d("pack_size","QUANTITY"){l,_->packs(l).map{it.copy(definitionKey="pack_size")}}
@@ -83,28 +83,28 @@ object CategoryExtractionProfiles {
                 d("method"){l,_->after(l,listOf("Method","Assay method","Principle","Test principle")).map{p("method","TEXT",it,"MethodSignature","METHOD_CUE")}},
                 d("pack_count","QUANTITY"){l,_->packs(l)},d("storage_condition"){l,_->storage(l)})
             ProductType.WOUND_CARE->listOf(
-                d("dressing_type"){l,_->matches(l,Regex("(?i)\b(?:gauze|adhesive dressing|non-adherent dressing|hydrocolloid|hydrogel|foam dressing|alginate|transparent film|absorbent dressing|wound pad)\b")).map{p("dressing_type","TEXT",it,"DressingTypeSignature","DRESSING_LEXICON")}},
+                d("dressing_type"){l,_->matches(l,Regex("""(?i)\b(?:gauze|adhesive dressing|non-adherent dressing|hydrocolloid|hydrogel|foam dressing|alginate|transparent film|absorbent dressing|wound pad)\b""")).map{p("dressing_type","TEXT",it,"DressingTypeSignature","DRESSING_LEXICON")}},
                 d("size","DIMENSION"){l,_->dims(l)},d("adhesive"){l,_->after(l,listOf("Adhesive")).map{p("adhesive","TEXT",it,"AdhesiveSignature","ADHESIVE_CUE")}},d("sterility"){l,_->sterility(l)},d("pack_count","QUANTITY"){l,_->packs(l)},d("material"){l,_->materials(l)})
             ProductType.ANTISEPTIC_DISINFECTANT->listOf(
                 d("active_concentration","QUANTITY"){l,_->matches(l,concentration).map{p("active_concentration","QUANTITY",it,"ConcentrationSignature",it)}},
-                d("intended_use"){l,_->intended(l)},d("dilution"){l,_->matches(l,Regex("(?i)\b\d+\s*:\s*\d+\b|\bdilute\s+1\s+in\s+\d+\b")).map{p("dilution","TEXT",it,"DilutionSignature",it)}},
+                d("intended_use"){l,_->intended(l)},d("dilution"){l,_->matches(l,Regex("""(?i)\b\d+\s*:\s*\d+\b|\bdilute\s+1\s+in\s+\d+\b""")).map{p("dilution","TEXT",it,"DilutionSignature",it)}},
                 d("volume","QUANTITY"){l,_->vols(l,listOf("Volume","Net content","Contents"))},d("storage_condition"){l,_->storage(l)})
             ProductType.PERSONAL_CARE_HYGIENE->listOf(
-                d("intended_use"){l,_->intended(l)},d("strength","QUANTITY"){l,_->matches(l,Regex("(?i)\b(?:\d+(?:[.,]\d+)?\s*%|SPF\s*\d+)\b")).filter{Regex("(?i)\b(?:alcohol|antibacterial|SPF)\b").containsMatchIn(it)}.map{p("strength","QUANTITY",it,"PersonalCareStrengthSignature",it)}},
+                d("intended_use"){l,_->intended(l)},d("strength","QUANTITY"){l,_->matches(l,Regex("""(?i)\b(?:\d+(?:[.,]\d+)?\s*%|SPF\s*\d+)\b""")).filter{Regex("""(?i)\b(?:alcohol|antibacterial|SPF)\b""").containsMatchIn(it)}.map{p("strength","QUANTITY",it,"PersonalCareStrengthSignature",it)}},
                 d("volume_pack_size","QUANTITY"){l,_->vols(l,listOf("Volume","Net content","Contents","Pack size")).map{it.copy(definitionKey="volume_pack_size")}},
-                d("variant"){l,_->matches(l,Regex("(?i)\b(?:lemon|mint|lavender|aloe vera|sensitive|extra fresh|original|kids|vanilla|chocolate|strawberry|orange|unflavoured|unflavored)\b")).map{p("variant","TEXT",it,"VariantSignature","VARIANT_LEXICON")}},d("storage_condition"){l,_->storage(l)})
+                d("variant"){l,_->matches(l,Regex("""(?i)\b(?:lemon|mint|lavender|aloe vera|sensitive|extra fresh|original|kids|vanilla|chocolate|strawberry|orange|unflavoured|unflavored)\b""")).map{p("variant","TEXT",it,"VariantSignature","VARIANT_LEXICON")}},d("storage_condition"){l,_->storage(l)})
             ProductType.MEDICAL_DEVICE_EQUIPMENT->listOf(
-                d("device_type"){l,_->matches(l,Regex("(?i)\b(?:blood pressure monitor|pulse oximeter|nebulizer|thermometer|infusion pump|wheelchair|stethoscope|suction machine)\b")).map{p("device_type","TEXT",it,"DeviceTypeSignature","DEVICE_LEXICON")}},
+                d("device_type"){l,_->matches(l,Regex("""(?i)\b(?:blood pressure monitor|pulse oximeter|nebulizer|thermometer|infusion pump|wheelchair|stethoscope|suction machine)\b""")).map{p("device_type","TEXT",it,"DeviceTypeSignature","DEVICE_LEXICON")}},
                 d("model_catalogue_no"){l,_->after(l,listOf("Model","Model No.","Model Number","REF","Ref.","Cat. No.","Catalogue No.")).map{p("model_catalogue_no","TEXT",it,"ModelReferenceSignature","MODEL_CUE")}},
                 d("single_use","BOOLEAN"){l,_->single(l)},d("sterility"){l,_->sterility(l)},d("size_configuration"){l,_->after(l,listOf("Size","Configuration")).map{p("size_configuration","TEXT",it,"DeviceSizeConfigurationSignature","CONFIGURATION_CUE")}})
             ProductType.LABORATORY_SPECIMEN_SUPPLY->listOf(
                 d("container_specimen_type"){l,_->after(l,listOf("Specimen","Container","Specimen type","For use with")).map{p("container_specimen_type","TEXT",it,"ContainerSpecimenSignature","CONTAINER_SPECIMEN_CUE")}},
-                d("additive_medium"){l,_->matches(l,Regex("(?i)\b(?:EDTA|sodium citrate|heparin|fluoride|oxalate|transport medium|viral transport medium|gel separator)\b")).filter{Regex("(?i)\b(?:tube|container|collection|medium|additive)\b").containsMatchIn(it)}.map{p("additive_medium","TEXT",it,"AdditiveMediumSignature","LAB_CONTEXT")}},
+                d("additive_medium"){l,_->matches(l,Regex("""(?i)\b(?:EDTA|sodium citrate|heparin|fluoride|oxalate|transport medium|viral transport medium|gel separator)\b""")).filter{Regex("""(?i)\b(?:tube|container|collection|medium|additive)\b""").containsMatchIn(it)}.map{p("additive_medium","TEXT",it,"AdditiveMediumSignature","LAB_CONTEXT")}},
                 d("volume_capacity","QUANTITY"){l,_->vols(l,listOf("Capacity","Volume")).map{it.copy(definitionKey="volume_capacity")}},d("pack_count","QUANTITY"){l,_->packs(l)},d("sterility"){l,_->sterility(l)},d("storage_condition"){l,_->storage(l)})
             ProductType.NUTRITION_THERAPEUTIC_FOOD->listOf(
-                d("purpose"){l,_->intended(l)},d("key_nutrients","QUANTITY",true){l,_->matches(l,Regex("(?i)\b(?:protein|iron|vitamin\s+[A-Za-z]+|calcium|zinc|sodium|potassium|fat|carbohydrate)\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|kcal)\b")).map{p("key_nutrients","QUANTITY",it,"NutrientSignature","NUTRIENT_PLUS_QUANTITY",true)}},
-                d("strength_per_serving","QUANTITY"){l,_->matches(l,Regex("(?i)\b\d+(?:[.,]\d+)?\s*(?:g|mg|kcal)\s*(?:per|/)\s*(?:serving|sachet|dose)\b")).map{p("strength_per_serving","QUANTITY",it,"ServingStrengthSignature","SERVING_DENOMINATOR")}},
-                d("flavour_variant"){l,_->matches(l,Regex("(?i)\b(?:vanilla|chocolate|strawberry|orange|unflavoured|unflavored)\b")).map{p("flavour_variant","TEXT",it,"VariantSignature","FLAVOUR_LEXICON")}},
+                d("purpose"){l,_->intended(l)},d("key_nutrients","QUANTITY",true){l,_->matches(l,Regex("""(?i)\b(?:protein|iron|vitamin\s+[A-Za-z]+|calcium|zinc|sodium|potassium|fat|carbohydrate)\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|kcal)\b""")).map{p("key_nutrients","QUANTITY",it,"NutrientSignature","NUTRIENT_PLUS_QUANTITY",true)}},
+                d("strength_per_serving","QUANTITY"){l,_->matches(l,Regex("""(?i)\b\d+(?:[.,]\d+)?\s*(?:g|mg|kcal)\s*(?:per|/)\s*(?:serving|sachet|dose)\b""")).map{p("strength_per_serving","QUANTITY",it,"ServingStrengthSignature","SERVING_DENOMINATOR")}},
+                d("flavour_variant"){l,_->matches(l,Regex("""(?i)\b(?:vanilla|chocolate|strawberry|orange|unflavoured|unflavored)\b""")).map{p("flavour_variant","TEXT",it,"VariantSignature","FLAVOUR_LEXICON")}},
                 d("net_content","QUANTITY"){l,_->vols(l,listOf("Net content","Net weight","Contents")).map{it.copy(definitionKey="net_content")}},d("storage_condition"){l,_->storage(l)})
             )
             ProductType.OTHER_HEALTH_COMMODITY->listOf(d("intended_use"){l,_->intended(l)},d("pack_size","QUANTITY"){l,_->packs(l).map{it.copy(definitionKey="pack_size")}},d("storage_condition"){l,_->storage(l)})
