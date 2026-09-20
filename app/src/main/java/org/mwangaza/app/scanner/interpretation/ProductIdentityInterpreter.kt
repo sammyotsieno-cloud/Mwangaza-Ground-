@@ -232,9 +232,10 @@ object ProductIdentityInterpreter {
         val b=one("brandName",draft{it.brandName})
         val m=one("manufacturer",cand("manufacturer")+draft{it.manufacturer})
         val f=one("productForm",cand("productForm")+draft{it.dosageForm})
-        val routeValues=draft{it.route}.mapIndexed { index, value ->
-            val source=xs[index].second.draft.routeSource ?: "UNKNOWN"
-            value.copy(evidence=value.evidence+source)
+        val routeValues=xs.mapNotNull { (observation, interpretation) ->
+            interpretation.draft.route?.trim()?.takeIf { it.isNotBlank() }?.let { value ->
+                FC(value, norm(value), observation.sourceImageUri, listOf(interpretation.draft.routeSource ?: "UNKNOWN"))
+            }
         }
         val explicitRoutes=routeValues.filter{it.evidence.contains("EXPLICIT")}
         val routePool=if(explicitRoutes.isNotEmpty()) explicitRoutes else routeValues
