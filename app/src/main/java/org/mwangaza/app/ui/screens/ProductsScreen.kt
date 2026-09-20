@@ -61,6 +61,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import core.domain.model.Money
 import core.domain.model.ProductImage
+import core.domain.model.ProductAttribute
+import core.domain.model.PharmaceuticalDetail
 import org.mwangaza.app.scanner.ProductScanDraft
 import android.net.Uri
 import core.domain.model.ProductMaster
@@ -78,11 +80,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
 import java.util.UUID
+import org.mwangaza.app.scanner.interpretation.CategoryExtractionProfiles
+import org.mwangaza.app.ui.components.CategoryVariableEditor
 
 data class ProductWithDetails(
     val product: ProductMaster,
     val units: List<ProductUnit>,
-    val priceConfigsByUnitId: Map<String, UnitPriceConfig>
+    val priceConfigsByUnitId: Map<String, UnitPriceConfig>,
+    val attributes: List<ProductAttribute> = emptyList(),
+    val pharmaceuticalDetail: PharmaceuticalDetail? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -127,7 +133,9 @@ fun ProductsScreen(
                     ProductWithDetails(
                         product = product,
                         units = unitsByProductId[product.id] ?: emptyList(),
-                        priceConfigsByUnitId = pricesByUnitId
+                        priceConfigsByUnitId = pricesByUnitId,
+                        attributes = container.productMasterDao.getAttributesForProduct(product.id),
+                        pharmaceuticalDetail = container.productMasterDao.getPharmaceuticalDetailForProduct(product.id)
                     )
                 }
             }
@@ -540,6 +548,49 @@ fun ProductsScreen(
                         )
                     }
 
+                    details.pharmaceuticalDetail?.let { pharmaceutical ->
+                        Text(
+                            "Pharmaceutical Details",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        listOf(
+                            "Active ingredients" to pharmaceutical.activeIngredients,
+                            "Strength" to pharmaceutical.strength,
+                            "Dosage form" to pharmaceutical.dosageForm,
+                            "Route" to pharmaceutical.route,
+                            "Therapeutic category" to pharmaceutical.therapeuticCategory,
+                            "Prescription classification" to pharmaceutical.prescriptionClassification,
+                            "Storage condition" to pharmaceutical.storageCondition
+                        ).forEach { (label, value) ->
+                            if (!value.isNullOrBlank()) {
+                                Text(label + ": " + value, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+
+                    if (details.attributes.isNotEmpty()) {
+                        Text(
+                            "Category Attributes",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        details.attributes.forEach { attribute ->
+                            Text(
+                                attribute.definitionKey.replace('_', ' ').replaceFirstChar { it.uppercase() } +
+                                    ": " + attribute.value,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if (!attribute.provenance.isNullOrBlank()) {
+                                Text(
+                                    "Source: " + attribute.provenance,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
@@ -741,7 +792,7 @@ fun ProductsScreen(
         var storageCondition by remember { mutableStateOf(initialScanDraft?.storageCondition ?: "") }
         var scannedImageUris by remember { mutableStateOf(initialScanDraft?.sourceImageUris ?: emptyList()) }
         var categoryValues by remember {
-            mutableStateOf(initialScanDraft?.categoryVariables?.associateBy { it.definitionKey } ?: emptyMap())
+            mutableStateOf(initialScanDraft?.categoryVariables ?: emptyList())
         }
 
         var baseUnitName by remember { mutableStateOf("") }
@@ -842,22 +893,44 @@ fun ProductsScreen(
                     OutlinedTextField(value = storageCondition, onValueChange = { storageCondition = it }, label = { Text("Storage Condition (Optional)") }, modifier = Modifier.fillMaxWidth())
 
                     initialScanDraft?.productType?.let { selectedType ->
-                        if (categoryValues.isNotEmpty()) {
+                        val definitions = CategoryExtractionProfiles.definitions(selectedType)
+                        val canonicalMedicineKeys = setOf(
+                            "generic_name",
+                            "strength",
+                            "route",
+                            "prescription_classification",
+                            "therapeutic_category",
+                            "storage_condition"
+                        )
+                        val editorDefinitions = if (selectedType == ProductType.MEDICINE) {
+                            definitions.filterNot { it.definitionKey in canonicalMedicineKeys }
+                        } else {
+                            definitions
+                        }
+                        val editorProposals = if (selectedType == ProductType.MEDICINE) {
+                            categoryValues.filterNot { it.definitionKey in canonicalMedicineKeys }
+                        } else {
+                            categoryValues
+                        }
+
+                        if (editorDefinitions.isNotEmpty() || editorProposals.isNotEmpty()) {
                             Text(
                                 text = selectedType.displayName + " — Category Variables",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
-                            categoryValues.toSortedMap().forEach { (key, proposal) ->
-                                OutlinedTextField(
-                                    value = proposal.value,
-                                    onValueChange = { edited ->
-                                        categoryValues = categoryValues + (key to proposal.copy(value = edited, normalizedValue = edited.trim().lowercase(), provenance = "USER_VERIFIED"))
-                                    },
-                                    label = { Text(key.replace('_', ' ').replaceFirstChar { it.uppercase() }) },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
+                            CategoryVariableEditor(
+                                definitions = editorDefinitions,
+                                proposals = editorProposals,
+                                onProposalsChange = { updated ->
+                                    categoryValues =
+                                        if (selectedType == ProductType.MEDICINE) {
+                                            categoryValues.filter { it.definitionKey in canonicalMedicineKeys } + updated
+                                        } else {
+                                            updated
+                                        }
+                                }
+                            )
                         }
                     }
 
@@ -1131,12 +1204,13 @@ fun ProductsScreen(
                                             sequence = index
                                         )
                                     }.orEmpty(),
-                                    attributes = categoryValues.values
+                                    attributes = categoryValues
                                         .filter { proposal ->
-                                            !(productType == ProductType.MEDICINE && proposal.definitionKey in setOf(
-                                                "generic_name", "strength", "route", "prescription_classification",
-                                                "therapeutic_category", "storage_condition"
-                                            ))
+                                            proposal.value.isNotBlank() &&
+                                                !(productType == ProductType.MEDICINE && proposal.definitionKey in setOf(
+                                                    "generic_name", "strength", "route", "prescription_classification",
+                                                    "therapeutic_category", "storage_condition"
+                                                ))
                                         }
                                         .map { proposal ->
                                             ProductAttributeIdentity(
