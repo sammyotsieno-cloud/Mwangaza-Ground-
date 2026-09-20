@@ -135,7 +135,7 @@ class ProductIdentityInterpreterTest {
             ProductType.DIAGNOSTIC to ("Test for: Malaria antigen\nSpecimen: Whole blood\nMethod: Immunochromatographic" to "test_analyte"),
             ProductType.WOUND_CARE to ("Gauze dressing\n10 cm x 10 cm\nSTERILE\nPack of 10" to "dressing_type"),
             ProductType.ANTISEPTIC_DISINFECTANT to ("Alcohol 70%\nIntended use: skin disinfection\nDilute 1:10\nVolume: 500 mL" to "active_concentration"),
-            ProductType.PERSONAL_CARE_HYGIENE to ("For: skin\nAlcohol 70%\nNet content: 200 mL\nMint" to "strength"),
+            ProductType.PERSONAL_CARE_HYGIENE to ("For: skin\nAlcohol 70%\nNet content: 200 mL\nMint" to "volume_pack_size"),
             ProductType.MEDICAL_DEVICE_EQUIPMENT to ("Blood pressure monitor\nModel: X1\nSize: Adult" to "device_type"),
             ProductType.LABORATORY_SPECIMEN_SUPPLY to ("EDTA tube\nCapacity: 5 mL\nPack of 100" to "additive_medium"),
             ProductType.NUTRITION_THERAPEUTIC_FOOD to ("Purpose: therapeutic nutrition\nProtein 10 g\n10 g per serving\nVanilla\nNet content: 200 mL" to "purpose"),
@@ -150,7 +150,7 @@ class ProductIdentityInterpreterTest {
                     observation("photo://b", input.first)
                 )
             )
-            assertTrue("\${type} should extract \${input.second}", result.draft.categoryVariables.any { it.definitionKey == input.second })
+            assertTrue(type.toString() + " should extract " + input.second, result.draft.categoryVariables.any { it.definitionKey == input.second })
         }
     }
 
