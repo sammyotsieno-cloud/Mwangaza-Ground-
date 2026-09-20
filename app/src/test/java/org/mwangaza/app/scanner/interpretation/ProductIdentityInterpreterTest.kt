@@ -128,6 +128,33 @@ class ProductIdentityInterpreterTest {
     }
 
     @Test
+    fun all_product_categories_use_category_extraction_in_multi_photo_path() {
+        val cases = listOf(
+            ProductType.MEDICINE to ("Amoxicillin 250 mg" to "strength"),
+            ProductType.MEDICAL_CONSUMABLE to ("Material: PVC\n23G x 10 cm\nSTERILE\nSINGLE USE\nPack of 10" to "material"),
+            ProductType.DIAGNOSTIC to ("Test for: Malaria antigen\nSpecimen: Whole blood\nMethod: Immunochromatographic" to "test_analyte"),
+            ProductType.WOUND_CARE to ("Gauze dressing\n10 cm x 10 cm\nSTERILE\nPack of 10" to "dressing_type"),
+            ProductType.ANTISEPTIC_DISINFECTANT to ("Alcohol 70%\nIntended use: skin disinfection\nDilute 1:10\nVolume: 500 mL" to "active_concentration"),
+            ProductType.PERSONAL_CARE_HYGIENE to ("For: skin\nAlcohol 70%\nNet content: 200 mL\nMint" to "strength"),
+            ProductType.MEDICAL_DEVICE_EQUIPMENT to ("Blood pressure monitor\nModel: X1\nSize: Adult" to "device_type"),
+            ProductType.LABORATORY_SPECIMEN_SUPPLY to ("EDTA tube\nCapacity: 5 mL\nPack of 100" to "additive_medium"),
+            ProductType.NUTRITION_THERAPEUTIC_FOOD to ("Purpose: therapeutic nutrition\nProtein 10 g\n10 g per serving\nVanilla\nNet content: 200 mL" to "purpose"),
+            ProductType.OTHER_HEALTH_COMMODITY to ("Intended use: wound cleaning\nPack of 10\nStore at 2–8°C" to "intended_use")
+        )
+
+        cases.forEach { (type, input) ->
+            val result = ProductIdentityInterpreter.interpret(
+                type,
+                listOf(
+                    observation("photo://a", input.first),
+                    observation("photo://b", input.first)
+                )
+            )
+            assertTrue("\${type} should extract \${input.second}", result.draft.categoryVariables.any { it.definitionKey == input.second })
+        }
+    }
+
+    @Test
     fun single_photo_path_remains_compatible() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.MEDICINE,
