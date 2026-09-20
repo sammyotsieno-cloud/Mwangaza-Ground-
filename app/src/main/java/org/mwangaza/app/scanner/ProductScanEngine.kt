@@ -47,16 +47,7 @@ class ProductScanEngine(
                         barcodeResults = barcodes
                     )
                 ),
-                reconciliationFindings = interpretation.candidates.map {
-                    ReconciledFinding(
-                        field = it.field,
-                        value = it.value,
-                        status = if (it.conflictingValues.isNotEmpty()) "CONFLICT" else "UNIQUE",
-                        sourceImageUris = listOf(Uri.fromFile(originalFile).toString()),
-                        evidence = it.evidence,
-                        conflictingValues = it.conflictingValues
-                    )
-                }
+                reconciliationFindings = interpretation.reconciliationFindings
             )
         }
 }
