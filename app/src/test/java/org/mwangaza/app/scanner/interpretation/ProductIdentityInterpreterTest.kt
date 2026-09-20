@@ -174,8 +174,6 @@ class ProductIdentityInterpreterTest {
             ProductType.MEDICINE,
             listOf(observation("photo://one", "Amoxicillin 250 mg/5 mL")),
             genericNames = emptyList()
-        ,
-            genericNames = emptyList()
         )
 
         assertEquals(ProductType.MEDICINE, result.draft.productType)
