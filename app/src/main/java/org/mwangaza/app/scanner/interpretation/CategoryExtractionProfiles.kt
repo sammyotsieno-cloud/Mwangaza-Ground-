@@ -413,10 +413,6 @@ object CategoryExtractionProfiles {
         val ingredientStrength=Regex(
             """(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|µg|g|kg|IU|mmol)(?:\s*/\s*(\d+(?:[.,]\d+)?)\s*(mL|L|g|kg|mg|mmol))?\b"""
         )
-        val inlineIngredientCue=Regex(
-            """(?i)^\s*(.+?)\s+\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|kg|IU|mmol)\s*/\s*\d+(?:[.,]\d+)?\s*(?:mL|L|g|kg|mg|mmol)\s*$"""
-        )
-
         val result=mutableListOf<ProductIngredientProposal>()
         var denominatorValue:String? = null
         var denominatorUnit:String? = null
@@ -438,13 +434,6 @@ object CategoryExtractionProfiles {
                 }
             }
 
-            if(contextMatch == null && activeMatch == null && inlineIngredientCue.matches(line)){
-                val strengthMatch=ingredientStrength.find(line) ?: continue
-                val name=line.substringBefore(strengthMatch.value).trim().trim(',', ';', ':', '-')
-                if(name.isNotBlank()){
-                    result += ProductIngredientProposal(name,strengthMatch.groupValues.getOrNull(1),strengthMatch.groupValues.getOrNull(2),strengthMatch.groupValues.getOrNull(3),strengthMatch.groupValues.getOrNull(4),listOf(line,"IngredientSignature"))
-                }
-            }
         }
 
         return result.distinctBy{"${it.ingredientName.lowercase(Locale.ROOT)}|${it.strengthValue}|${it.denominatorValue}"}
