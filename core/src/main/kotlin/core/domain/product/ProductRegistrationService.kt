@@ -155,8 +155,26 @@ class ProductRegistrationService(
                     PharmaceuticalDetail(
                         id = UUID.randomUUID().toString(),
                         productId = productId,
-                        activeIngredients = null,
-                        strength = null,
+                        activeIngredients = request.identity.ingredients
+                            .takeIf { it.isNotEmpty() }
+                            ?.joinToString(" + ") { it.ingredientName.trim() }
+                            ?.ifBlank { null },
+                        strength = request.identity.ingredients
+                            .takeIf { it.isNotEmpty() }
+                            ?.joinToString(" + ") { ingredient ->
+                                buildString {
+                                    append(ingredient.strengthValue?.trim().orEmpty())
+                                    append(" ")
+                                    append(ingredient.strengthUnit?.trim().orEmpty())
+                                    if (!ingredient.denominatorValue.isNullOrBlank()) {
+                                        append("/")
+                                        append(ingredient.denominatorValue.trim())
+                                        append(" ")
+                                        append(ingredient.denominatorUnit?.trim().orEmpty())
+                                    }
+                                }.trim()
+                            }
+                            ?.ifBlank { null },
                         dosageForm = request.identity.dosageForm?.trim()?.ifBlank { null },
                         route = request.identity.route?.trim()?.ifBlank { null },
                         therapeuticCategory = request.identity.therapeuticCategory?.trim()?.ifBlank { null },
