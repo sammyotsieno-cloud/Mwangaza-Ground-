@@ -34,7 +34,6 @@ import org.mwangaza.app.ui.components.CategoryVariableEditor
 import org.mwangaza.app.ui.components.unresolvedSingleDefinitionKeys
 
 private val medicineCanonicalKeys = setOf(
-    "generic_name",
     "strength",
     "route",
     "prescription_classification",
