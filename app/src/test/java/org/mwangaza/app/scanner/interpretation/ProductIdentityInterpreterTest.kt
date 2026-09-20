@@ -167,6 +167,33 @@ class ProductIdentityInterpreterTest {
     }
 
     @Test
+    fun user_entered_generic_name_overrides_ocr_inference() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.MEDICINE,
+            listOf(observation("photo://one", "Paracetamol 500 mg/5 mL")),
+            genericName = "Amoxicillin"
+        )
+
+        assertEquals("Amoxicillin", result.draft.genericName)
+    }
+
+    @Test
+    fun combination_generic_names_are_preserved_as_user_entered_context() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.MEDICINE,
+            listOf(
+                observation(
+                    "photo://one",
+                    "Amoxicillin 250 mg/5 mL\nClavulanic acid 125 mg/5 mL"
+                )
+            ),
+            genericName = "Amoxicillin + Clavulanic acid"
+        )
+
+        assertEquals("Amoxicillin + Clavulanic acid", result.draft.genericName)
+    }
+
+    @Test
     fun valid_ean13_ocr_identifier_becomes_identifier_candidate() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
