@@ -266,4 +266,54 @@ class ProductIdentityInterpreterTest {
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "20260920" })
     }
 
+    @Test
+    fun ocr_cannot_replace_user_declared_generic_name() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.MEDICINE,
+            listOf(observation("photo://one", "Paracetamol 500 mg")),
+            genericNames = listOf("Amoxicillin")
+        )
+
+        assertEquals(listOf("Amoxicillin"), result.draft.genericNames)
+    }
+
+    @Test
+    fun ocr_cannot_create_or_append_generic_identity() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.MEDICINE,
+            listOf(observation("photo://one", "Amoxicillin 250 mg
+Clavulanic acid 125 mg")),
+            genericNames = listOf("Amoxicillin")
+        )
+
+        assertEquals(listOf("Amoxicillin"), result.draft.genericNames)
+    }
+
+    @Test
+    fun multi_photo_reconciliation_preserves_all_declared_generic_names() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.MEDICINE,
+            listOf(
+                observation("photo://one", "Amoxicillin 250 mg/5 mL"),
+                observation("photo://two", "Clavulanic acid 125 mg/5 mL")
+            ),
+            genericNames = listOf("Amoxicillin", "Clavulanic acid")
+        )
+
+        assertEquals(listOf("Amoxicillin", "Clavulanic acid"), result.draft.genericNames)
+        assertEquals("250 mg/5 mL", result.draft.strength)
+    }
+
+    @Test
+    fun declared_generic_name_and_scanned_strength_remain_separate() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.MEDICINE,
+            listOf(observation("photo://one", "Amoxicillin 250 mg/5 mL")),
+            genericNames = listOf("Amoxicillin")
+        )
+
+        assertEquals(listOf("Amoxicillin"), result.draft.genericNames)
+        assertEquals("250 mg/5 mL", result.draft.strength)
+    }
+
 }
