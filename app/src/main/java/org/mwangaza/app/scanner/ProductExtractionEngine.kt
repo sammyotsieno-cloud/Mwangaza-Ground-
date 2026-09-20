@@ -11,4 +11,10 @@ object ProductExtractionEngine {
         barcodes: List<BarcodeResult>
     ): ProductIdentityInterpretation =
         ProductIdentityInterpreter.interpret(productType, ocr, barcodes)
+
+    fun extract(
+        productType: ProductType,
+        observations: List<ProductScanObservation>
+    ): ProductIdentityInterpretation =
+        ProductIdentityInterpreter.interpret(productType, observations)
 }
