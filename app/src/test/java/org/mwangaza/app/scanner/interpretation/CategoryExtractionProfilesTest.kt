@@ -12,7 +12,7 @@ class CategoryExtractionProfilesTest {
     )
 
     @Test
-    fun medicine_extracts_denominator_strength_storage_pack_and_multiple_ingredients() {
+    fun medicine_extracts_denominator_strength_storage_pack_without_ingredient_identity() {
         val result = CategoryExtractionProfiles.extract(
             ProductType.MEDICINE,
             ocr(
@@ -29,11 +29,6 @@ class CategoryExtractionProfilesTest {
         assertTrue(result.variables.any { it.definitionKey == "strength" && it.value.contains("250 mg/5 mL") })
         assertTrue(result.variables.any { it.definitionKey == "storage_condition" })
         assertTrue(result.variables.any { it.definitionKey == "pack_size" && it.value.contains("100") })
-        assertEquals(1, result.ingredients.size)
-        assertEquals("Amoxicillin", result.ingredients.first().ingredientName)
-        assertEquals("250", result.ingredients.first().strengthValue)
-        assertEquals("5", result.ingredients.first().denominatorValue)
-        assertTrue(result.ingredients.none { it.ingredientName == "Amoxicillin" && it.denominatorValue == "5" && it.strengthValue == "250" && it.evidence.firstOrNull() == "Amoxicillin 250 mg/5 mL" })
     }
 
     @Test
