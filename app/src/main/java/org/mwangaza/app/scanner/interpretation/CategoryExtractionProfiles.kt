@@ -45,7 +45,7 @@ private data class VariableRule(
 
 object CategoryExtractionProfiles {
     private val strength = Regex("""\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|kg|mL|L|mmol|IU|%)\b(?:\s*/\s*\d+(?:[.,]\d+)?\s*(?:mL|L|g|kg|mg|mmol)\b)?""", RegexOption.IGNORE_CASE)
-    private val concentration = Regex("""\b\d+(?:[.,]\d+)?\s*%(?:\s*(?:v/v|w/v))?\b|\b\d+(?:[.,]\d+)?\s*(?:mg|g)\s*/\s*(?:mL|L)\b""", RegexOption.IGNORE_CASE)
+    private val concentration = Regex("""\b\d+(?:[.,]\d+)?\s*%(?:\s*(?:v/v|w/v))?(?=\s|$|[^A-Za-z0-9_])|\b\d+(?:[.,]\d+)?\s*(?:mg|g)\s*/\s*(?:mL|L)\b""", RegexOption.IGNORE_CASE)
     private val dimension = Regex("""\b\d+(?:[.,]\d+)?\s*(?:mm|cm|in|")\s*(?:x|×)\s*\d+(?:[.,]\d+)?\s*(?:mm|cm|in|")\b|\b\d+(?:[.,]\d+)?\s*G\b""", RegexOption.IGNORE_CASE)
     private val storageCue = Regex("""(?i)\b(?:store|storage|protect from light|do not freeze|keep dry|keep refrigerated)\b""")
     private val storageTemp = Regex("""(?i)\b(?:below|under|at)\s*\d+(?:[.,]\d+)?\s*°?C(?:\s*(?:-|to)\s*\d+(?:[.,]\d+)?\s*°?C)?\b""")
@@ -69,7 +69,9 @@ object CategoryExtractionProfiles {
     private fun packs(lines:List<String>)=matches(lines,pack).map{p("pack_count","QUANTITY",it,"PackCountSignature",it)}
     private fun dims(lines:List<String>)=matches(lines,dimension).map{p("size","DIMENSION",it,"DimensionSignature",it)}
     private fun vols(lines:List<String>,cues:List<String>)=(after(lines,cues)+lines.filter{volume.containsMatchIn(it)&&Regex("""(?i)\b(?:volume|net|content|capacity|bottle|container|pack)\b""").containsMatchIn(it)}.flatMap{volume.findAll(it).map{m->m.value}}).distinct().map{p("volume","QUANTITY",it,"VolumeSignature",it)}
-    private fun materials(lines:List<String>)=(after(lines,listOf("Material","Made of","Made from","Composition"))+lines.filter{Regex("""(?i)\b(?:PVC|silicone|latex|polyurethane|polypropylene|polyethylene|stainless steel|cotton|non[- ]woven)\b""").containsMatchIn(it)&&Regex("""(?i)\b(?:material|made|composition)\b""").containsMatchIn(it)}).distinct().map{p("material","TEXT",it,"MaterialSignature",it)}
+    private val materialLexicon = Regex("""(?i)\b(?:PVC|silicone|latex|polyurethane|polypropylene|polyethylene|stainless steel|cotton|non[- ]woven)\b""")
+    private val materialContext = Regex("""(?i)\b(?:material|made|composition)\b""")
+    private fun materials(lines:List<String>)=(after(lines,listOf("Material","Made of","Made from","Composition"))+lines.filter{materialLexicon.containsMatchIn(it)&&materialContext.containsMatchIn(it)}.flatMap{line->materialLexicon.findAll(line).map{it.value}}).distinct().map{p("material","TEXT",it,"MaterialSignature",it)}
     private fun intended(lines:List<String>)=after(lines,listOf("Intended use","Purpose","Use","For")).map{p("intended_use","TEXT",it,"PurposeIntendedUseSignature",it)}
     private fun profile(type: ProductType): List<VariableRule> {
         fun d(
@@ -126,7 +128,13 @@ object CategoryExtractionProfiles {
             )
 
             ProductType.MEDICAL_CONSUMABLE -> listOf(
-                d("material") { lines, _ -> materials(lines) },
+                d("material") { lines, _ ->
+                    (materials(lines) + lines
+                        .filter { materialLexicon.containsMatchIn(it) }
+                        .flatMap { line -> materialLexicon.findAll(line).map { it.value } })
+                        .distinct()
+                        .map { p("material", "TEXT", it, "MedicalConsumableMaterialLexicon", it) }
+                },
                 d("size_gauge", "DIMENSION") { lines, _ ->
                     dims(lines).map { it.copy(definitionKey = "size_gauge") }
                 },
@@ -142,7 +150,9 @@ object CategoryExtractionProfiles {
                         .map { p("test_analyte", "TEXT", it, "AnalyteSignature", "TARGET_CUE") }
                 },
                 d("specimen_type") { lines, _ ->
-                    after(lines, listOf("Specimen", "Sample", "Sample type", "Specimen type", "For use with"))
+                    (after(lines, listOf("Specimen", "Sample", "Sample type", "Specimen type", "For use with")) +
+                        lines.filter { Regex("""(?i)\b.+\bspecimen\b""").matches(it) })
+                        .distinct()
                         .map { p("specimen_type", "TEXT", it, "SpecimenSignature", "SPECIMEN_CUE") }
                 },
                 d("method") { lines, _ ->
@@ -285,23 +295,21 @@ object CategoryExtractionProfiles {
                     }
                 },
                 d("additive_medium") { lines, _ ->
-                    matches(
-                        lines,
-                        Regex("""(?i)\b(?:EDTA|sodium citrate|heparin|fluoride|oxalate|transport medium|viral transport medium|gel separator)\b""")
-                    )
-                        .filter {
-                            Regex("""(?i)\b(?:tube|container|collection|medium|additive)\b""")
-                                .containsMatchIn(it)
-                        }
-                        .map {
-                            p(
-                                "additive_medium",
-                                "TEXT",
-                                it,
-                                "AdditiveMediumSignature",
-                                "LAB_CONTEXT"
-                            )
-                        }
+                    val additiveLexicon = Regex("""(?i)\b(?:EDTA|sodium citrate|heparin|fluoride|oxalate|transport medium|viral transport medium|gel separator)\b""")
+                    val labContext = Regex("""(?i)\b(?:tube|container|collection|medium|additive)\b""")
+                    lines.flatMap { line ->
+                        additiveLexicon.findAll(line)
+                            .filter { labContext.containsMatchIn(line) }
+                            .map { match ->
+                                p(
+                                    "additive_medium",
+                                    "TEXT",
+                                    match.value,
+                                    "AdditiveMediumSignature",
+                                    line
+                                )
+                            }
+                    }.distinctBy { it.value.lowercase(Locale.ROOT) }
                 },
                 d("volume_capacity", "QUANTITY") { lines, _ ->
                     vols(lines, listOf("Capacity", "Volume"))
@@ -385,14 +393,28 @@ object CategoryExtractionProfiles {
     }
 
     private fun extractIngredients(lines:List<String>):List<ProductIngredientProposal>{
-        val cue=Regex("""(?i)\b(?:active ingredients?|each (?:tablet|capsule|5 mL|dose) contains|contains)\s*[:\-]?\s*(.*)$""")
+        val cue=Regex("""(?i)\b(?:active ingredients?|each\s+(\d+(?:[.,]\d+)?)\s*(mL|L|g|kg|mg|mmol|tablet|capsule|dose)\s+contains|contains)\s*[:\-]?\s*(.*)$""")
         val result=mutableListOf<ProductIngredientProposal>()
+        var denominatorValue:String? = null
+        var denominatorUnit:String? = null
         for(line in lines){
-            val body=cue.find(line)?.groupValues?.get(1)?.trim() ?: continue
+            val match=cue.find(line) ?: continue
+            val body=match.groupValues.getOrNull(3)?.trim().orEmpty()
+            if(match.groupValues.getOrNull(1)?.isNotBlank() == true){
+                denominatorValue=match.groupValues[1]
+                denominatorUnit=match.groupValues[2]
+            }
             val s=Regex("""(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|µg|g|kg|IU|mmol)(?:\s*/\s*(\d+(?:[.,]\d+)?)\s*(mL|L|g|kg|mg|mmol))?\b""").find(body)
             val name=body.substringBefore(s?.value?:"").trim().trim(',', ';', ':', '-')
             if(name.isBlank()) continue
-            result += ProductIngredientProposal(name,s?.groupValues?.getOrNull(1),s?.groupValues?.getOrNull(2),s?.groupValues?.getOrNull(3),s?.groupValues?.getOrNull(4),listOf(line,"IngredientSignature"))
+            result += ProductIngredientProposal(
+                name,
+                s?.groupValues?.getOrNull(1),
+                s?.groupValues?.getOrNull(2),
+                s?.groupValues?.getOrNull(3) ?: denominatorValue,
+                s?.groupValues?.getOrNull(4) ?: denominatorUnit,
+                listOf(line,"IngredientSignature")
+            )
         }
         return result.distinctBy{"${it.ingredientName.lowercase(Locale.ROOT)}|${it.strengthValue}|${it.denominatorValue}"}
     }
