@@ -51,7 +51,7 @@ fun ProductScanReviewScreen(
     onConfirm: (ProductScanDraft) -> Unit
 ) {
     var brand by remember { mutableStateOf(analysis.draft.brandName.orEmpty()) }
-    var generic by remember { mutableStateOf(analysis.draft.genericName.orEmpty()) }
+    var genericNames by remember { mutableStateOf(analysis.draft.genericNames) }
     var manufacturer by remember { mutableStateOf(analysis.draft.manufacturer.orEmpty()) }
     var strength by remember { mutableStateOf(analysis.draft.strength.orEmpty()) }
     var dosageForm by remember { mutableStateOf(analysis.draft.dosageForm.orEmpty()) }
@@ -92,7 +92,7 @@ fun ProductScanReviewScreen(
 
     fun currentDraft(): ProductScanDraft = analysis.draft.copy(
         brandName = brand.trim().ifBlank { null },
-        genericName = generic.trim().ifBlank { null },
+        genericNames = genericNames.map { it.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() },
         manufacturer = manufacturer.trim().ifBlank { null },
         strength = strength.trim().ifBlank { null },
         dosageForm = dosageForm.trim().ifBlank { null },
@@ -142,7 +142,20 @@ fun ProductScanReviewScreen(
         analysis.barcodeResults.forEach { Text("Barcode: " + it.rawValue + " (" + it.format + ")") }
 
         OutlinedTextField(brand, { brand = it }, label = { Text("Brand / Trade Name") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(generic, { generic = it; updateCanonicalCategoryVariable("generic_name", it) }, label = { Text("Generic / Active Ingredient") }, modifier = Modifier.fillMaxWidth())
+        Text("Generic / Active Ingredients", style = MaterialTheme.typography.titleMedium)
+        genericNames.forEachIndexed { index, value ->
+            OutlinedTextField(
+                value = value,
+                onValueChange = { updated ->
+                    genericNames = genericNames.toMutableList().also { values -> values[index] = updated }
+                },
+                label = { Text("Generic / Active Ingredient " + (index + 1)) },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        if (genericNames.isEmpty()) {
+            Text("No user-declared generic/active ingredient is present.", color = MaterialTheme.colorScheme.error)
+        }
         OutlinedTextField(strength, { strength = it; updateCanonicalCategoryVariable("strength", it) }, label = { Text("Strength") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(dosageForm, { dosageForm = it }, label = { Text("Dosage Form") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(manufacturer, { manufacturer = it }, label = { Text("Manufacturer") }, modifier = Modifier.fillMaxWidth())
