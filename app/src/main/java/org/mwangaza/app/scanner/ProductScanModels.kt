@@ -21,12 +21,11 @@ data class ProductScanObservation(
 
 data class ProductScanDraft(
     val brandName: String? = null,
-    val genericName: String? = null,
+    val genericNames: List<String> = emptyList(),
     val productType: ProductType? = null,
     val manufacturer: String? = null,
     val description: String? = null,
     val activeIngredients: String? = null,
-    val ingredientProposals: List<org.mwangaza.app.scanner.interpretation.ProductIngredientProposal> = emptyList(),
     val strength: String? = null,
     val dosageForm: String? = null,
     val route: String? = null,
