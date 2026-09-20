@@ -476,6 +476,9 @@ class FakeCoreDatabase : TransactionRunner {
             pharmaceuticalDetails[detail.productId] = detail
         }
 
+        override fun getPharmaceuticalDetailForProduct(productId: String): PharmaceuticalDetail? =
+            pharmaceuticalDetails[productId]
+
         override fun insertProductImage(image: ProductImage) {
             productImages[image.id] = image
         }
