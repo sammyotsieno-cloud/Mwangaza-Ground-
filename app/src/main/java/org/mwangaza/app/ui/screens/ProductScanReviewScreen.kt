@@ -207,6 +207,13 @@ fun ProductScanReviewScreen(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
+            unresolvedReconciliation.forEach { finding ->
+                Text(
+                    finding.field + ": " + finding.conflictingValues.joinToString(" vs "),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
 
         Text("Detected text", style = MaterialTheme.typography.titleMedium)
