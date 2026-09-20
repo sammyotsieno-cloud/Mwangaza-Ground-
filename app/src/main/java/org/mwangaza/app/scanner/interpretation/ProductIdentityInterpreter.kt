@@ -228,7 +228,11 @@ object ProductIdentityInterpreter {
 
     private data class FC(val value:String,val norm:String,val uri:String,val evidence:List<String> = emptyList())
 
-    private fun reconcile(type: ProductType, xs: List<Pair<ProductScanObservation, ProductIdentityInterpretation>>): ProductIdentityInterpretation {
+    private fun reconcile(
+        type: ProductType,
+        xs: List<Pair<ProductScanObservation, ProductIdentityInterpretation>>,
+        userGenericName: String? = null
+    ): ProductIdentityInterpretation {
         fun draft(field:(ProductScanDraft)->String?) = xs.mapNotNull { (o,i) -> field(i.draft)?.trim()?.takeIf{it.isNotBlank()}?.let{FC(it,norm(it),o.sourceImageUri)} }
         fun cand(field:String) = xs.flatMap { (o,i) -> i.candidates.filter{it.field==field}.map{FC(it.value,norm(it.value),o.sourceImageUri,it.evidence)} }
         fun one(field:String, values:List<FC>): Pair<String?,ReconciledFinding?> {
