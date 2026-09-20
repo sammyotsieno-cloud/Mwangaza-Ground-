@@ -31,10 +31,21 @@ object ProductIdentityInterpreter {
             barcodeResults = barcodes
         )))
 
-    fun interpret(productType: ProductType, observations: List<ProductScanObservation>): ProductIdentityInterpretation {
-        if (observations.isEmpty()) return ProductIdentityInterpretation(ProductScanDraft(productType = productType), emptyList(), emptyList())
+    fun interpret(
+        productType: ProductType,
+        observations: List<ProductScanObservation>,
+        genericName: String? = null
+    ): ProductIdentityInterpretation {
+        val normalizedGenericName = genericName?.trim()?.ifBlank { null }
+        if (observations.isEmpty()) {
+            return ProductIdentityInterpretation(
+                ProductScanDraft(productType = productType, genericName = normalizedGenericName),
+                emptyList(),
+                emptyList()
+            )
+        }
         val interpreted = observations.map { it to interpretSingle(productType, it.ocrResults, it.barcodeResults) }
-        return reconcile(productType, interpreted)
+        return reconcile(productType, interpreted, normalizedGenericName)
     }
 
     private fun interpretSingle(
@@ -256,7 +267,10 @@ object ProductIdentityInterpreter {
         val strength=if(cats.second.firstOrNull{it.field=="strength"}?.status=="CONFLICT") null
             else cats.first.firstOrNull{it.definitionKey=="strength"}?.value
         val draft=ProductScanDraft(
-            brandName=b.first,genericName=ings.first.firstOrNull()?.ingredientName ?: xs.mapNotNull{it.second.draft.genericName}.firstOrNull(),
+            brandName=b.first,
+            genericName=userGenericName
+                ?: ings.first.firstOrNull()?.ingredientName
+                ?: xs.mapNotNull{it.second.draft.genericName}.firstOrNull(),
             productType=type,manufacturer=m.first,dosageForm=f.first,route=r.first,routeSource=routeSource,
             strength=strength,prescriptionClassification=pc.first,therapeuticCategory=tc.first,storageCondition=sc.first,
             activeIngredients=xs.mapNotNull{it.second.draft.activeIngredients}.firstOrNull(),ingredientProposals=ings.first,
