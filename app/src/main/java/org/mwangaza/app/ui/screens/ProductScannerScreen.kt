@@ -153,16 +153,7 @@ fun ProductScannerScreen(
                                         sourceImageUris = observations.map { item -> item.sourceImageUri }.distinct()
                                     ),
                                     identityCandidates = interpretation.candidates,
-                                    reconciliationFindings = interpretation.candidates.map { candidate ->
-                                        ReconciledFinding(
-                                            field = candidate.field,
-                                            value = candidate.value,
-                                            status = if (candidate.conflictingValues.isNotEmpty()) "CONFLICT" else "UNIQUE",
-                                            sourceImageUris = observations.map { item -> item.sourceImageUri }.distinct(),
-                                            evidence = candidate.evidence,
-                                            conflictingValues = candidate.conflictingValues
-                                        )
-                                    }
+                                    reconciliationFindings = interpretation.reconciliationFindings
                                 )
                             }.onFailure {
                                 working.delete()
