@@ -52,6 +52,7 @@ import java.util.Locale
 @Composable
 fun ProductScannerScreen(
     selectedProductType: ProductType,
+    genericNameContext: String? = null,
     modifier: Modifier = Modifier,
     onConfirmed: (ProductScanDraft) -> Unit = {}
 ) {
@@ -140,7 +141,8 @@ fun ProductScannerScreen(
                                 val observations = acceptedAnalyses.flatMap { item -> item.observations } + it.observations
                                 val interpretation = ProductExtractionEngine.extract(
                                     selectedProductType,
-                                    observations
+                                    observations,
+                                    genericNameContext
                                 )
                                 val combinedOcr = observations.flatMap { item -> item.ocrResults }
                                 val combinedBarcodes = observations.flatMap { item -> item.barcodeResults }
