@@ -40,6 +40,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import org.mwangaza.app.scanner.ProductScanAnalysis
 import org.mwangaza.app.scanner.ProductScanDraft
+import org.mwangaza.app.scanner.ReconciledFinding
 import org.mwangaza.app.scanner.ProductScanEngine
 import org.mwangaza.app.scanner.ProductExtractionEngine
 import core.domain.model.ProductType
