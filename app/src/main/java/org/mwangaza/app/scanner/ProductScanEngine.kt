@@ -16,7 +16,8 @@ class ProductScanEngine(
         context: Context,
         originalFile: File,
         workingFile: File,
-        productType: ProductType
+        productType: ProductType,
+        genericNames: List<String>
     ): ProductScanAnalysis =
         withContext(Dispatchers.Default) {
             val originalBitmap = android.graphics.BitmapFactory.decodeFile(originalFile.absolutePath)
@@ -30,7 +31,17 @@ class ProductScanEngine(
                 listOf(ocrAnalyzer.recognize(context, workingFile)).filter { it.text.isNotBlank() }
             }.getOrDefault(emptyList())
             val barcodes = runCatching { barcodeAnalyzer.scan(context, workingFile, ocr) }.getOrDefault(emptyList())
-            val interpretation = ProductExtractionEngine.extract(productType, ocr, barcodes)
+            val interpretation = ProductExtractionEngine.extract(
+                productType,
+                listOf(
+                    ProductScanObservation(
+                        sourceImageUri = Uri.fromFile(originalFile).toString(),
+                        ocrResults = ocr,
+                        barcodeResults = barcodes
+                    )
+                ),
+                genericNames
+            )
             ProductScanAnalysis(
                 originalUri = Uri.fromFile(originalFile).toString(),
                 workingUri = Uri.fromFile(workingFile).toString(),
