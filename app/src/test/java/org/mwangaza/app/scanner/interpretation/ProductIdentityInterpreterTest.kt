@@ -171,10 +171,10 @@ class ProductIdentityInterpreterTest {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.MEDICINE,
             listOf(observation("photo://one", "Paracetamol 500 mg/5 mL")),
-            genericName = "Amoxicillin"
+            genericNames = listOf("Amoxicillin")
         )
 
-        assertEquals("Amoxicillin", result.draft.genericName)
+        assertEquals(listOf("Amoxicillin"), result.draft.genericNames)
     }
 
     @Test
@@ -187,10 +187,10 @@ class ProductIdentityInterpreterTest {
                     "Amoxicillin 250 mg/5 mL\nClavulanic acid 125 mg/5 mL"
                 )
             ),
-            genericName = "Amoxicillin + Clavulanic acid"
+            genericNames = listOf("Amoxicillin", "Clavulanic acid")
         )
 
-        assertEquals("Amoxicillin + Clavulanic acid", result.draft.genericName)
+        assertEquals(listOf("Amoxicillin", "Clavulanic acid"), result.draft.genericNames)
     }
 
     @Test
