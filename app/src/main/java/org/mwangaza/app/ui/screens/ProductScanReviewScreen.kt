@@ -68,6 +68,28 @@ fun ProductScanReviewScreen(
         productType?.let { CategoryExtractionProfiles.definitions(it) }.orEmpty()
     }
 
+    fun updateCanonicalCategoryVariable(key: String, value: String) {
+        val trimmed = value.trim()
+        val existing = categoryValues.firstOrNull { it.definitionKey == key }
+        categoryValues = categoryValues.filterNot { it.definitionKey == key } +
+            if (trimmed.isBlank()) {
+                emptyList()
+            } else {
+                listOf(
+                    CategoryVariableProposal(
+                        definitionKey = key,
+                        valueType = definitions.firstOrNull { it.definitionKey == key }?.valueType ?: "TEXT",
+                        value = trimmed,
+                        normalizedValue = trimmed.lowercase(),
+                        provenance = "USER_VERIFIED",
+                        evidence = existing?.evidence.orEmpty(),
+                        ruleName = existing?.ruleName,
+                        multiValued = false
+                    )
+                )
+            }
+    }
+
     fun currentDraft(): ProductScanDraft = analysis.draft.copy(
         brandName = brand.trim().ifBlank { null },
         genericName = generic.trim().ifBlank { null },
@@ -117,8 +139,8 @@ fun ProductScanReviewScreen(
         analysis.barcodeResults.forEach { Text("Barcode: " + it.rawValue + " (" + it.format + ")") }
 
         OutlinedTextField(brand, { brand = it }, label = { Text("Brand / Trade Name") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(generic, { generic = it }, label = { Text("Generic / Active Ingredient") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(strength, { strength = it }, label = { Text("Strength") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(generic, { generic = it; updateCanonicalCategoryVariable("generic_name", it) }, label = { Text("Generic / Active Ingredient") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(strength, { strength = it; updateCanonicalCategoryVariable("strength", it) }, label = { Text("Strength") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(dosageForm, { dosageForm = it }, label = { Text("Dosage Form") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(manufacturer, { manufacturer = it }, label = { Text("Manufacturer") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(
@@ -129,7 +151,11 @@ fun ProductScanReviewScreen(
         )
         OutlinedTextField(
             route,
-            { route = it; routeSource = if (it.trim().isBlank()) null else "EXPLICIT" },
+            {
+                route = it
+                routeSource = if (it.trim().isBlank()) null else "EXPLICIT"
+                updateCanonicalCategoryVariable("route", it)
+            },
             label = { Text("Route") },
             modifier = Modifier.fillMaxWidth()
         )
@@ -142,9 +168,9 @@ fun ProductScanReviewScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        OutlinedTextField(therapeutic, { therapeutic = it }, label = { Text("Therapeutic Category") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(prescription, { prescription = it }, label = { Text("Prescription Classification") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(storage, { storage = it }, label = { Text("Storage Condition") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(therapeutic, { therapeutic = it; updateCanonicalCategoryVariable("therapeutic_category", it) }, label = { Text("Therapeutic Category") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(prescription, { prescription = it; updateCanonicalCategoryVariable("prescription_classification", it) }, label = { Text("Prescription Classification") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(storage, { storage = it; updateCanonicalCategoryVariable("storage_condition", it) }, label = { Text("Storage Condition") }, modifier = Modifier.fillMaxWidth())
 
         if (medicineDefinitions.isNotEmpty() || categoryProposalsForEditor.isNotEmpty()) {
             Text(
