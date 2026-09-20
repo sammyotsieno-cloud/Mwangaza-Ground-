@@ -107,6 +107,9 @@ fun ProductScanReviewScreen(
     )
 
     val unresolved = unresolvedSingleDefinitionKeys(definitions, categoryValues)
+    val unresolvedReconciliation = analysis.reconciliationFindings
+        .filter { it.status == "CONFLICT" || it.status == "AMBIGUOUS" }
+    val canFinalize = unresolved.isEmpty() && unresolvedReconciliation.isEmpty()
     val medicineDefinitions = if (productType == ProductType.MEDICINE) {
         definitions.filterNot { it.definitionKey in medicineCanonicalKeys }
     } else {
@@ -196,10 +199,11 @@ fun ProductScanReviewScreen(
             )
         }
 
-        if (unresolved.isNotEmpty()) {
+        if (unresolved.isNotEmpty() || unresolvedReconciliation.isNotEmpty()) {
             Text(
-                "Unresolved ambiguity: " + unresolved.joinToString(", ") +
-                    ". Select one candidate before registration.",
+                "Unresolved scanner findings: " +
+                    (unresolved + unresolvedReconciliation.map { it.field }).joinToString(", ") +
+                    ". Review and resolve the conflicting values before registration.",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
@@ -212,12 +216,12 @@ fun ProductScanReviewScreen(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onRetake) { Text("Retake") }
-            OutlinedButton(enabled = unresolved.isEmpty(), onClick = { onSaveAsIs(currentDraft()) }) { Text("Save As Is") }
+            OutlinedButton(enabled = canFinalize, onClick = { onSaveAsIs(currentDraft()) }) { Text("Save As Is") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onAddAnother) { Text("Add Another Photo") }
             Button(
-                enabled = unresolved.isEmpty(),
+                enabled = canFinalize,
                 onClick = { onConfirm(currentDraft()) }
             ) { Text("Use in Registration") }
         }
