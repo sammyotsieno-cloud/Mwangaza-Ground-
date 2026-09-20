@@ -27,6 +27,8 @@ class ProductIdentityInterpreterTest {
                 observation("photo://one", "ACME"),
                 observation("photo://two", "ACME")
             )
+        ,
+            genericNames = emptyList()
         )
 
         assertEquals("ACME", result.draft.brandName)
@@ -45,6 +47,8 @@ class ProductIdentityInterpreterTest {
                 observation("photo://one", "ACME"),
                 observation("photo://two", "Store at 2–8°C")
             )
+        ,
+            genericNames = emptyList()
         )
 
         assertTrue(result.draft.categoryVariables.any { it.definitionKey == "storage_condition" })
@@ -62,6 +66,8 @@ class ProductIdentityInterpreterTest {
                 observation("photo://one", "ACME\n250 mg/5 mL"),
                 observation("photo://two", "ACME\n500 mg/5 mL")
             )
+        ,
+            genericNames = emptyList()
         )
 
         assertNull(result.draft.strength)
@@ -86,6 +92,8 @@ class ProductIdentityInterpreterTest {
                 observation("photo://one", "ACME", listOf(barcode)),
                 observation("photo://two", "ACME", listOf(barcode2))
             )
+        ,
+            genericNames = emptyList()
         )
 
         assertEquals("1234567890123", result.draft.barcodeValue)
@@ -100,6 +108,8 @@ class ProductIdentityInterpreterTest {
                 observation("photo://one", "ACME", listOf(BarcodeResult("1234567890123", "EAN_13", sourceImageUri = "photo://one"))),
                 observation("photo://two", "ACME", listOf(BarcodeResult("9999999999999", "EAN_13", sourceImageUri = "photo://two")))
             )
+        ,
+            genericNames = emptyList()
         )
 
         assertNull(result.draft.barcodeValue)
@@ -118,6 +128,8 @@ class ProductIdentityInterpreterTest {
                     BarcodeResult("4006381333931", "EAN_13", sourceImageUri = "photo://two", validationState = "PLAUSIBLE")
                 ))
             )
+        ,
+            genericNames = emptyList()
         )
 
         val identifier = result.reconciliationFindings.first { it.field == "identifier" }
@@ -149,7 +161,9 @@ class ProductIdentityInterpreterTest {
                     observation("photo://a", input.first),
                     observation("photo://b", input.first)
                 )
-            )
+            ,
+            genericNames = emptyList()
+        )
             assertTrue(type.toString() + " should extract " + input.second, result.draft.categoryVariables.any { it.definitionKey == input.second })
         }
     }
@@ -158,8 +172,10 @@ class ProductIdentityInterpreterTest {
     fun single_photo_path_remains_compatible() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.MEDICINE,
-            listOf(OcrResult("Amoxicillin 250 mg/5 mL", 0.99f, "photo://one")),
-            emptyList()
+            listOf(observation("photo://one", "Amoxicillin 250 mg/5 mL")),
+            genericNames = emptyList()
+        ,
+            genericNames = emptyList()
         )
 
         assertEquals(ProductType.MEDICINE, result.draft.productType)
@@ -198,6 +214,8 @@ class ProductIdentityInterpreterTest {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
             listOf(observation("photo://one", "ACME\n4006381333931"))
+        ,
+            genericNames = emptyList()
         )
         assertTrue(result.candidates.any { it.field == "identifier" && it.value == "4006381333931" && it.evidence.contains("OCR_IDENTIFIER") })
     }
@@ -207,6 +225,8 @@ class ProductIdentityInterpreterTest {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
             listOf(observation("photo://one", "ACME\n4006381333930"))
+        ,
+            genericNames = emptyList()
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "4006381333930" })
         assertTrue(result.reconciliationFindings.none { it.field == "identifier" })
@@ -217,6 +237,8 @@ class ProductIdentityInterpreterTest {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
             listOf(observation("photo://one", "ACME\n96385074"))
+        ,
+            genericNames = emptyList()
         )
         assertTrue(result.candidates.any { it.field == "identifier" && it.value == "96385074" })
     }
@@ -226,6 +248,8 @@ class ProductIdentityInterpreterTest {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
             listOf(observation("photo://one", "ACME\n96385075"))
+        ,
+            genericNames = emptyList()
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "96385075" })
     }
@@ -235,6 +259,8 @@ class ProductIdentityInterpreterTest {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
             listOf(observation("photo://one", "ACME\n036000291452"))
+        ,
+            genericNames = emptyList()
         )
         assertTrue(result.candidates.any { it.field == "identifier" && it.value == "036000291452" })
     }
@@ -244,6 +270,8 @@ class ProductIdentityInterpreterTest {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
             listOf(observation("photo://one", "ACME\n036000291453"))
+        ,
+            genericNames = emptyList()
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "036000291453" })
     }
@@ -253,6 +281,8 @@ class ProductIdentityInterpreterTest {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
             listOf(observation("photo://one", "ACME\n1234567890"))
+        ,
+            genericNames = emptyList()
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "1234567890" })
     }
@@ -262,6 +292,8 @@ class ProductIdentityInterpreterTest {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
             listOf(observation("photo://one", "ACME\n20260920"))
+        ,
+            genericNames = emptyList()
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "20260920" })
     }
@@ -281,8 +313,7 @@ class ProductIdentityInterpreterTest {
     fun ocr_cannot_create_or_append_generic_identity() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.MEDICINE,
-            listOf(observation("photo://one", "Amoxicillin 250 mg
-Clavulanic acid 125 mg")),
+            listOf(observation("photo://one", "Amoxicillin 250 mg\nClavulanic acid 125 mg")),
             genericNames = listOf("Amoxicillin")
         )
 
