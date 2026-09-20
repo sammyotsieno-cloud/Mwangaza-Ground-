@@ -71,6 +71,9 @@ interface ProductMasterDao {
     @Query("SELECT * FROM product_attributes WHERE product_id = :productId ORDER BY definition_key ASC")
     fun getAttributesForProduct(productId: String): List<ProductAttribute>
 
+    @Query("SELECT * FROM pharmaceutical_details WHERE product_id = :productId LIMIT 1")
+    fun getPharmaceuticalDetailForProduct(productId: String): PharmaceuticalDetail?
+
     @Query("SELECT * FROM product_masters ORDER BY is_active DESC, brand_name ASC, generic_name ASC")
     fun getAllProducts(): List<ProductMaster>
 
