@@ -65,6 +65,7 @@ fun AppNavigation(
     var currentFeature by remember { mutableStateOf<String?>(null) }
     var pendingScanDraft by remember { mutableStateOf<ProductScanDraft?>(null) }
     var selectedScanProductType by remember { mutableStateOf<ProductType?>(null) }
+    var selectedScanGenericName by remember { mutableStateOf<String?>(null) }
     var showExitConfirmation by remember { mutableStateOf(false) }
 
     BackHandler(enabled = currentFeature != null) {
@@ -146,7 +147,11 @@ fun AppNavigation(
                     ProductsScreen(
                         container = appContainer,
                         onBack = { currentFeature = null },
-                        onScanProduct = { productType -> selectedScanProductType = productType; currentFeature = "product-scanner" },
+                        onScanProduct = { productType, genericName ->
+                            selectedScanProductType = productType
+                            selectedScanGenericName = genericName
+                            currentFeature = "product-scanner"
+                        },
                         initialScanDraft = pendingScanDraft,
                         onScanDraftConsumed = { pendingScanDraft = null }
                     )
@@ -154,8 +159,10 @@ fun AppNavigation(
                 currentFeature == "product-scanner" -> {
                     ProductScannerScreen(
                         selectedProductType = selectedScanProductType ?: ProductType.OTHER_HEALTH_COMMODITY,
+                        genericNameContext = selectedScanGenericName,
                         onConfirmed = { draft ->
                             pendingScanDraft = draft
+                            selectedScanGenericName = null
                             currentFeature = "products"
                         }
                     )
