@@ -963,8 +963,7 @@ fun ProductsScreen(
                     initialScanDraft?.productType?.let { selectedType ->
                         val definitions = CategoryExtractionProfiles.definitions(selectedType)
                         val canonicalMedicineKeys = setOf(
-                            "generic_name",
-                            "strength",
+                                                    "strength",
                             "route",
                             "prescription_classification",
                             "therapeutic_category",
