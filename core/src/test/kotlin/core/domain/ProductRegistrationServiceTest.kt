@@ -79,6 +79,7 @@ class ProductRegistrationServiceTest {
         assertEquals(productId, product.id)
         assertEquals(ProductType.MEDICINE.name, product.productType)
         assertEquals("Augmentin", product.brandName)
+        assertEquals("Amoxicillin + Clavulanic acid", product.genericName)
         assertEquals("Company A", product.manufacturer)
         assertEquals("1234567890128", db.productIdentifiers.values.single().value)
         assertEquals("Tablet", db.pharmaceuticalDetails.values.single().dosageForm)
