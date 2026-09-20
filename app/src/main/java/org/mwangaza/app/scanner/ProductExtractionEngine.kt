@@ -7,15 +7,8 @@ import org.mwangaza.app.scanner.interpretation.ProductIdentityInterpreter
 object ProductExtractionEngine {
     fun extract(
         productType: ProductType,
-        ocr: List<OcrResult>,
-        barcodes: List<BarcodeResult>
-    ): ProductIdentityInterpretation =
-        ProductIdentityInterpreter.interpret(productType, ocr, barcodes)
-
-    fun extract(
-        productType: ProductType,
         observations: List<ProductScanObservation>,
-        genericName: String? = null
+        genericNames: List<String>
     ): ProductIdentityInterpretation =
-        ProductIdentityInterpreter.interpret(productType, observations, genericName)
+        ProductIdentityInterpreter.interpret(productType, observations, genericNames)
 }
