@@ -18,7 +18,8 @@ data class IdentityCandidate(
 
 data class ProductIdentityInterpretation(
     val draft: ProductScanDraft,
-    val candidates: List<IdentityCandidate>
+    val candidates: List<IdentityCandidate>,
+    val reconciliationFindings: List<ReconciledFinding> = emptyList()
 )
 
 object ProductIdentityInterpreter {
@@ -30,7 +31,7 @@ object ProductIdentityInterpreter {
         )))
 
     fun interpret(productType: ProductType, observations: List<ProductScanObservation>): ProductIdentityInterpretation {
-        if (observations.isEmpty()) return ProductIdentityInterpretation(ProductScanDraft(productType = productType), emptyList())
+        if (observations.isEmpty()) return ProductIdentityInterpretation(ProductScanDraft(productType = productType), emptyList(), emptyList())
         val interpreted = observations.map { it to interpretSingle(productType, it.ocrResults, it.barcodeResults) }
         return reconcile(productType, interpreted)
     }
@@ -237,7 +238,7 @@ object ProductIdentityInterpreter {
             otherDetectedText=xs.mapNotNull{it.second.draft.otherDetectedText}.joinToString("\n").ifBlank{null},
             sourceImageUris=xs.map{it.first.sourceImageUri}.distinct())
         val out=findings.map{IdentityCandidate(it.field,it.value,if(it.status=="CONFLICT")0.5f else 0.9f,it.evidence.ifEmpty{listOf(it.status)},it.conflictingValues)}
-        return ProductIdentityInterpretation(draft,out)
+        return ProductIdentityInterpretation(draft,out,findings)
     }
 
     private fun reconcileCats(xs:List<Pair<ProductScanObservation,ProductIdentityInterpretation>>):Pair<List<org.mwangaza.app.scanner.interpretation.CategoryVariableProposal>,List<ReconciledFinding>>{
