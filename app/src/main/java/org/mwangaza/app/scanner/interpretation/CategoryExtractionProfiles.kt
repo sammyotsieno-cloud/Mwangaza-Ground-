@@ -405,13 +405,13 @@ object CategoryExtractionProfiles {
 
     private fun extractIngredients(lines:List<String>):List<ProductIngredientProposal>{
         val contextCue=Regex(
-            """(?i)^\\s*Each\\s+(\\d+(?:[.,]\\d+)?)\\s*(mL|L|g|kg|mg|mmol|tablet|capsule|dose)\\s+contains\\s*[:\\-]?\\s*(.*)$"""
+            """(?i)^\s*Each\s+(\d+(?:[.,]\d+)?)\s*(mL|L|g|kg|mg|mmol|tablet|capsule|dose)\s+contains\s*[:\-]?\s*(.*)$"""
         )
         val activeIngredientsCue=Regex(
-            """(?i)^\\s*(?:active ingredients?)\\s*[:\\-]?\\s*(.*)$"""
+            """(?i)^\s*(?:active ingredients?)\s*[:\-]?\s*(.*)$"""
         )
         val ingredientStrength=Regex(
-            """(?i)\\b(\\d+(?:[.,]\\d+)?)\\s*(mg|mcg|µg|g|kg|IU|mmol)(?:\\s*/\\s*(\\d+(?:[.,]\\d+)?)\\s*(mL|L|g|kg|mg|mmol))?\\b"""
+            """(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|µg|g|kg|IU|mmol)(?:\s*/\s*(\d+(?:[.,]\d+)?)\s*(mL|L|g|kg|mg|mmol))?\b"""
         )
 
         val result=mutableListOf<ProductIngredientProposal>()
