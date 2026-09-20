@@ -44,7 +44,9 @@ fun ProductScanReviewScreen(
     var route by remember { mutableStateOf(analysis.draft.route.orEmpty()) }
     var routeSource by remember { mutableStateOf(analysis.draft.routeSource) }
     var barcode by remember { mutableStateOf(analysis.draft.barcodeValue.orEmpty()) }
-    val routeSource = analysis.draft.routeSource
+    var categoryValues by remember {
+        mutableStateOf(analysis.draft.categoryVariables.associateBy { it.definitionKey })
+    }
     var therapeutic by remember { mutableStateOf(analysis.draft.therapeuticCategory.orEmpty()) }
     var prescription by remember { mutableStateOf(analysis.draft.prescriptionClassification.orEmpty()) }
     var storage by remember { mutableStateOf(analysis.draft.storageCondition.orEmpty()) }
@@ -61,6 +63,7 @@ fun ProductScanReviewScreen(
         therapeuticCategory = therapeutic.trim().ifBlank { null },
         prescriptionClassification = prescription.trim().ifBlank { null },
         storageCondition = storage.trim().ifBlank { null },
+        categoryVariables = categoryValues.values.toList(),
         sourceImageUris = listOf(analysis.originalUri)
     )
 
@@ -106,6 +109,28 @@ fun ProductScanReviewScreen(
         OutlinedTextField(therapeutic, { therapeutic = it }, label = { Text("Therapeutic Category") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(prescription, { prescription = it }, label = { Text("Prescription Classification") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(storage, { storage = it }, label = { Text("Storage Condition") }, modifier = Modifier.fillMaxWidth())
+        if (categoryValues.isNotEmpty()) {
+            Text(
+                "Category Variables",
+                style = MaterialTheme.typography.titleMedium
+            )
+            categoryValues.toSortedMap().forEach { (key, proposal) ->
+                OutlinedTextField(
+                    value = proposal.value,
+                    onValueChange = { edited ->
+                        categoryValues = categoryValues + (
+                            key to proposal.copy(
+                                value = edited,
+                                normalizedValue = edited.trim().lowercase(),
+                                provenance = "USER_VERIFIED"
+                            )
+                        )
+                    },
+                    label = { Text(key.replace('_', ' ').replaceFirstChar { it.uppercase() }) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
         Text("Detected text", style = MaterialTheme.typography.titleMedium)
         Text(analysis.ocrResults.joinToString("\n") { it.text }.ifBlank { "No readable text detected." })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
