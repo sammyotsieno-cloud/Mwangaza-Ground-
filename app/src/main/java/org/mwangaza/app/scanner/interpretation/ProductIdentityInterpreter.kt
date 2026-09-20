@@ -294,8 +294,5 @@ object ProductIdentityInterpreter {
 
     private fun norm(v:String)=v.trim().lowercase(Locale.ROOT).replace(Regex("\\s+")," ").replace(Regex("\\s*/\\s*"),"/")
     private fun normId(v:String)=v.filter(Char::isDigit).ifBlank{norm(v)}
-    private fun FC.normIdKey()=norm
-
-    }
-
+    private fun FC.normIdKey() = norm
 }
