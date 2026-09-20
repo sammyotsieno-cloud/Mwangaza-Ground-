@@ -129,11 +129,22 @@ object CategoryExtractionProfiles {
 
             ProductType.MEDICAL_CONSUMABLE -> listOf(
                 d("material") { lines, _ ->
-                    (materials(lines) + lines
-                        .filter { materialLexicon.containsMatchIn(it) }
-                        .flatMap { line -> materialLexicon.findAll(line).map { it.value } })
-                        .distinct()
-                        .map { p("material", "TEXT", it, "MedicalConsumableMaterialLexicon", it) }
+                    (
+                    materials(lines) +
+                        lines
+                            .filter { materialLexicon.containsMatchIn(it) }
+                            .flatMap { line ->
+                                materialLexicon.findAll(line).map { match ->
+                                    p(
+                                        "material",
+                                        "TEXT",
+                                        match.value,
+                                        "MedicalConsumableMaterialLexicon",
+                                        match.value
+                                    )
+                                }
+                            }
+                    ).distinct()
                 },
                 d("size_gauge", "DIMENSION") { lines, _ ->
                     dims(lines).map { it.copy(definitionKey = "size_gauge") }
