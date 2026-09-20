@@ -137,7 +137,7 @@ object ProductIdentityInterpreter {
 
         val active = lines.firstOrNull {
             it.lowercase(Locale.ROOT).contains("active ingredient")
-        }?.substringAfter(":", "").trim()?.ifBlank { null }
+        }?.substringAfter(":", "")?.trim()?.ifBlank { null }
 
         val prescription = when {
             Regex("\\bprescription only\\b|\\bPOM\\b", RegexOption.IGNORE_CASE).containsMatchIn(text) -> "Prescription Only"
