@@ -3,6 +3,22 @@ package org.mwangaza.app.scanner
 import android.graphics.Rect
 import core.domain.model.ProductType
 
+data class ReconciledFinding(
+    val field: String,
+    val value: String,
+    val normalizedValue: String? = null,
+    val status: String = "UNIQUE",
+    val sourceImageUris: List<String> = emptyList(),
+    val evidence: List<String> = emptyList(),
+    val conflictingValues: List<String> = emptyList()
+)
+
+data class ProductScanObservation(
+    val sourceImageUri: String,
+    val ocrResults: List<OcrResult> = emptyList(),
+    val barcodeResults: List<BarcodeResult> = emptyList()
+)
+
 data class ProductScanDraft(
     val brandName: String? = null,
     val genericName: String? = null,
@@ -43,5 +59,7 @@ data class ProductScanAnalysis(
     val originalUri: String, val workingUri: String, val detectedRegions: List<DetectedRegion>,
     val quality: ImageQualityResult, val ocrResults: List<OcrResult>, val barcodeResults: List<BarcodeResult>,
     val draft: ProductScanDraft, val identityCandidates: List<org.mwangaza.app.scanner.interpretation.IdentityCandidate> = emptyList(),
-    val processingNotes: List<String> = emptyList()
+    val processingNotes: List<String> = emptyList(),
+    val observations: List<ProductScanObservation> = emptyList(),
+    val reconciliationFindings: List<ReconciledFinding> = emptyList()
 )
