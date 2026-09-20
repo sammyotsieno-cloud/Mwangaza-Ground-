@@ -170,8 +170,7 @@ class ProductIdentityInterpreterTest {
     fun valid_ean13_ocr_identifier_becomes_identifier_candidate() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
-            listOf(observation("photo://one", "ACME\n4006381333931")),
-            emptyList()
+            listOf(observation("photo://one", "ACME\n4006381333931"))
         )
         assertTrue(result.candidates.any { it.field == "identifier" && it.value == "4006381333931" && it.evidence.contains("OCR_IDENTIFIER") })
     }
@@ -180,8 +179,7 @@ class ProductIdentityInterpreterTest {
     fun invalid_ean13_check_digit_is_rejected_from_ocr_identifier_candidates() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
-            listOf(observation("photo://one", "ACME\n4006381333930")),
-            emptyList()
+            listOf(observation("photo://one", "ACME\n4006381333930"))
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "4006381333930" })
         assertTrue(result.reconciliationFindings.none { it.field == "identifier" })
@@ -191,8 +189,7 @@ class ProductIdentityInterpreterTest {
     fun valid_ean8_ocr_identifier_becomes_identifier_candidate() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
-            listOf(observation("photo://one", "ACME\n96385074")),
-            emptyList()
+            listOf(observation("photo://one", "ACME\n96385074"))
         )
         assertTrue(result.candidates.any { it.field == "identifier" && it.value == "96385074" })
     }
@@ -201,8 +198,7 @@ class ProductIdentityInterpreterTest {
     fun invalid_ean8_check_digit_is_rejected_from_ocr_identifier_candidates() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
-            listOf(observation("photo://one", "ACME\n96385075")),
-            emptyList()
+            listOf(observation("photo://one", "ACME\n96385075"))
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "96385075" })
     }
@@ -211,8 +207,7 @@ class ProductIdentityInterpreterTest {
     fun valid_upca_ocr_identifier_becomes_identifier_candidate() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
-            listOf(observation("photo://one", "ACME\n036000291452")),
-            emptyList()
+            listOf(observation("photo://one", "ACME\n036000291452"))
         )
         assertTrue(result.candidates.any { it.field == "identifier" && it.value == "036000291452" })
     }
@@ -221,8 +216,7 @@ class ProductIdentityInterpreterTest {
     fun invalid_upca_check_digit_is_rejected_from_ocr_identifier_candidates() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
-            listOf(observation("photo://one", "ACME\n036000291453")),
-            emptyList()
+            listOf(observation("photo://one", "ACME\n036000291453"))
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "036000291453" })
     }
@@ -231,8 +225,7 @@ class ProductIdentityInterpreterTest {
     fun unsupported_numeric_length_is_rejected_from_ocr_identifier_candidates() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
-            listOf(observation("photo://one", "ACME\n1234567890")),
-            emptyList()
+            listOf(observation("photo://one", "ACME\n1234567890"))
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "1234567890" })
     }
@@ -241,8 +234,7 @@ class ProductIdentityInterpreterTest {
     fun unrelated_numeric_text_is_not_accepted_without_identifier_structure() {
         val result = ProductIdentityInterpreter.interpret(
             ProductType.OTHER_HEALTH_COMMODITY,
-            listOf(observation("photo://one", "ACME\n20260920")),
-            emptyList()
+            listOf(observation("photo://one", "ACME\n20260920"))
         )
         assertTrue(result.candidates.none { it.field == "identifier" && it.value == "20260920" })
     }
