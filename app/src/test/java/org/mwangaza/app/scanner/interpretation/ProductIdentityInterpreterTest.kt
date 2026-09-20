@@ -165,4 +165,86 @@ class ProductIdentityInterpreterTest {
         assertEquals(ProductType.MEDICINE, result.draft.productType)
         assertEquals("250 mg/5 mL", result.draft.strength)
     }
+
+    @Test
+    fun valid_ean13_ocr_identifier_becomes_identifier_candidate() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.OTHER_HEALTH_COMMODITY,
+            listOf(observation("photo://one", "ACME\n4006381333931")),
+            emptyList()
+        )
+        assertTrue(result.candidates.any { it.field == "identifier" && it.value == "4006381333931" && it.evidence.contains("OCR_IDENTIFIER") })
+    }
+
+    @Test
+    fun invalid_ean13_check_digit_is_rejected_from_ocr_identifier_candidates() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.OTHER_HEALTH_COMMODITY,
+            listOf(observation("photo://one", "ACME\n4006381333930")),
+            emptyList()
+        )
+        assertTrue(result.candidates.none { it.field == "identifier" && it.value == "4006381333930" })
+        assertTrue(result.reconciliationFindings.none { it.field == "identifier" })
+    }
+
+    @Test
+    fun valid_ean8_ocr_identifier_becomes_identifier_candidate() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.OTHER_HEALTH_COMMODITY,
+            listOf(observation("photo://one", "ACME\n96385074")),
+            emptyList()
+        )
+        assertTrue(result.candidates.any { it.field == "identifier" && it.value == "96385074" })
+    }
+
+    @Test
+    fun invalid_ean8_check_digit_is_rejected_from_ocr_identifier_candidates() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.OTHER_HEALTH_COMMODITY,
+            listOf(observation("photo://one", "ACME\n96385075")),
+            emptyList()
+        )
+        assertTrue(result.candidates.none { it.field == "identifier" && it.value == "96385075" })
+    }
+
+    @Test
+    fun valid_upca_ocr_identifier_becomes_identifier_candidate() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.OTHER_HEALTH_COMMODITY,
+            listOf(observation("photo://one", "ACME\n036000291452")),
+            emptyList()
+        )
+        assertTrue(result.candidates.any { it.field == "identifier" && it.value == "036000291452" })
+    }
+
+    @Test
+    fun invalid_upca_check_digit_is_rejected_from_ocr_identifier_candidates() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.OTHER_HEALTH_COMMODITY,
+            listOf(observation("photo://one", "ACME\n036000291453")),
+            emptyList()
+        )
+        assertTrue(result.candidates.none { it.field == "identifier" && it.value == "036000291453" })
+    }
+
+    @Test
+    fun unsupported_numeric_length_is_rejected_from_ocr_identifier_candidates() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.OTHER_HEALTH_COMMODITY,
+            listOf(observation("photo://one", "ACME\n1234567890")),
+            emptyList()
+        )
+        assertTrue(result.candidates.none { it.field == "identifier" && it.value == "1234567890" })
+    }
+
+    @Test
+    fun unrelated_numeric_text_is_not_accepted_without_identifier_structure() {
+        val result = ProductIdentityInterpreter.interpret(
+            ProductType.OTHER_HEALTH_COMMODITY,
+            listOf(observation("photo://one", "ACME\n20260920")),
+            emptyList()
+        )
+        assertTrue(result.candidates.none { it.field == "identifier" && it.value == "20260920" })
+    }
+
 }
