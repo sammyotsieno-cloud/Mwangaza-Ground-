@@ -328,7 +328,7 @@ class FakeCoreDatabase : TransactionRunner {
         }
 
         override fun insertMovements(movements: List<StockMovement>) {
-            this.movements.addAll(movements)
+            this@FakeCoreDatabase.movements.addAll(movements)
         }
 
         override fun getAllMovements(): List<StockMovement> =
@@ -376,7 +376,7 @@ class FakeCoreDatabase : TransactionRunner {
         override fun insertAllocations(
             allocations: List<StockAllocation>
         ) {
-            this.allocations.addAll(allocations)
+            this@FakeCoreDatabase.allocations.addAll(allocations)
         }
 
         override fun getAllocationsForSale(
@@ -524,7 +524,7 @@ class FakeCoreDatabase : TransactionRunner {
             productAttributes.values.filter { it.productId == productId }.sortedBy { it.definitionKey }
 
         override fun insertUnits(units: List<ProductUnit>) {
-            units.forEach { this.units[it.id] = it }
+            units.forEach { this@FakeCoreDatabase.units[it.id] = it }
         }
 
         override fun insertUnit(unit: ProductUnit) {
