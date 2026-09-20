@@ -212,7 +212,7 @@ fun ProductScanReviewScreen(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onRetake) { Text("Retake") }
-            OutlinedButton(onClick = { onSaveAsIs(currentDraft()) }) { Text("Save As Is") }
+            OutlinedButton(enabled = unresolved.isEmpty(), onClick = { onSaveAsIs(currentDraft()) }) { Text("Save As Is") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onAddAnother) { Text("Add Another Photo") }
