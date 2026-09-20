@@ -17,15 +17,15 @@ class ProductOcrAnalyzer {
             val blocks = text.textBlocks.map { block ->
                 OcrBlockEvidence(
                     text = block.text,
-                    bounds = block.boundingBox?.let(::android.graphics.Rect),
+                    bounds = block.boundingBox?.let { android.graphics.Rect(it) },
                     lines = block.lines.map { line ->
                         OcrLineEvidence(
                             text = line.text,
-                            bounds = line.boundingBox?.let(::android.graphics.Rect),
+                            bounds = line.boundingBox?.let { android.graphics.Rect(it) },
                             elements = line.elements.map { element ->
                                 OcrElementEvidence(
                                     text = element.text,
-                                    bounds = element.boundingBox?.let(::android.graphics.Rect)
+                                    bounds = element.boundingBox?.let { android.graphics.Rect(it) }
                                 )
                             }
                         )
