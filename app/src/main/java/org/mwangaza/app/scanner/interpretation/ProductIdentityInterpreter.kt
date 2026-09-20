@@ -145,6 +145,9 @@ object ProductIdentityInterpreter {
             else -> null
         }
 
+        val categoryExtraction = CategoryExtractionProfiles.extract(productType, ocr)
+        val categoryStrength = categoryExtraction.variables.firstOrNull { it.definitionKey == "strength" }?.value
+
         val draft = ProductScanDraft(
             brandName = brandCandidates.firstOrNull()?.value,
             genericName = if (productType == ProductType.MEDICINE) active else null,
@@ -153,9 +156,12 @@ object ProductIdentityInterpreter {
             dosageForm = dosageForm,
             route = route,
             routeSource = routeSource,
-            strength = strengthMatches.firstOrNull(),
+            strength = categoryStrength ?: strengthMatches.firstOrNull(),
             activeIngredients = active,
+            ingredientProposals = categoryExtraction.ingredients,
             prescriptionClassification = prescription,
+            storageCondition = categoryExtraction.variables.firstOrNull { it.definitionKey == "storage_condition" }?.value,
+            categoryVariables = categoryExtraction.variables,
             barcodeValue = barcodes.firstOrNull()?.rawValue,
             barcodeFormat = barcodes.firstOrNull()?.format,
             otherDetectedText = text.ifBlank { null }
