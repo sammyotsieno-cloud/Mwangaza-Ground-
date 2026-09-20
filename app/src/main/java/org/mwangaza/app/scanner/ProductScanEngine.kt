@@ -39,7 +39,24 @@ class ProductScanEngine(
                 ocrResults = ocr,
                 barcodeResults = barcodes,
                 draft = interpretation.draft,
-                identityCandidates = interpretation.candidates
+                identityCandidates = interpretation.candidates,
+                observations = listOf(
+                    ProductScanObservation(
+                        sourceImageUri = Uri.fromFile(originalFile).toString(),
+                        ocrResults = ocr,
+                        barcodeResults = barcodes
+                    )
+                ),
+                reconciliationFindings = interpretation.candidates.map {
+                    ReconciledFinding(
+                        field = it.field,
+                        value = it.value,
+                        status = if (it.conflictingValues.isNotEmpty()) "CONFLICT" else "UNIQUE",
+                        sourceImageUris = listOf(Uri.fromFile(originalFile).toString()),
+                        evidence = it.evidence,
+                        conflictingValues = it.conflictingValues
+                    )
+                }
             )
         }
 }
