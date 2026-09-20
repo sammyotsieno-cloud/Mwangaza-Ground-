@@ -39,9 +39,9 @@ class CategoryExtractionProfilesTest {
     fun diagnostic_requires_explicit_context_for_specimen() {
         val result = CategoryExtractionProfiles.extract(
             ProductType.DIAGNOSTIC,
-            ocr("Whole blood specimen
+            ocr("""Whole blood specimen
 Test for: Malaria antigen
-Method: Immunochromatographic")
+Method: Immunochromatographic""".trimIndent())
         )
         assertEquals("Whole blood specimen", result.variables.first { it.definitionKey == "specimen_type" }.value)
         assertEquals("Malaria antigen", result.variables.first { it.definitionKey == "test_analyte" }.value)
@@ -52,9 +52,9 @@ Method: Immunochromatographic")
     fun laboratory_supply_requires_lab_context_for_edta() {
         val result = CategoryExtractionProfiles.extract(
             ProductType.LABORATORY_SPECIMEN_SUPPLY,
-            ocr("EDTA tube
+            ocr("""EDTA tube
 Capacity: 5 mL
-Pack of 100")
+Pack of 100""".trimIndent())
         )
         assertEquals("EDTA", result.variables.first { it.definitionKey == "additive_medium" }.value)
         assertTrue(result.variables.any { it.definitionKey == "volume_capacity" && it.value == "5 mL" })
@@ -74,11 +74,11 @@ Pack of 100")
     fun medical_consumable_distinguishes_dimension_sterility_and_single_use() {
         val result = CategoryExtractionProfiles.extract(
             ProductType.MEDICAL_CONSUMABLE,
-            ocr("PVC catheter
+            ocr("""PVC catheter
 23G x 10 cm
 STERILE
 SINGLE USE
-Pack of 10")
+Pack of 10""".trimIndent())
         )
         assertTrue(result.variables.any { it.definitionKey == "material" })
         assertTrue(result.variables.any { it.definitionKey == "size_gauge" })
