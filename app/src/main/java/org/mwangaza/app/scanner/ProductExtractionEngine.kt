@@ -14,7 +14,8 @@ object ProductExtractionEngine {
 
     fun extract(
         productType: ProductType,
-        observations: List<ProductScanObservation>
+        observations: List<ProductScanObservation>,
+        genericName: String? = null
     ): ProductIdentityInterpretation =
-        ProductIdentityInterpreter.interpret(productType, observations)
+        ProductIdentityInterpreter.interpret(productType, observations, genericName)
 }
