@@ -43,7 +43,6 @@ import org.mwangaza.app.scanner.ProductScanDraft
 import org.mwangaza.app.scanner.ProductScanEngine
 import org.mwangaza.app.scanner.ProductExtractionEngine
 import core.domain.model.ProductType
-import org.mwangaza.app.scanner.interpretation.ProductIdentityInterpreter
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -137,21 +136,32 @@ fun ProductScannerScreen(
                             runCatching {
                                 ProductScanEngine().process(context, original, working, selectedProductType)
                             }.onSuccess {
-                                val combinedOcr = acceptedAnalyses.flatMap { item -> item.ocrResults } + it.ocrResults
-                                val combinedBarcodes = acceptedAnalyses.flatMap { item -> item.barcodeResults } + it.barcodeResults
+                                val observations = acceptedAnalyses.flatMap { item -> item.observations } + it.observations
                                 val interpretation = ProductExtractionEngine.extract(
                                     selectedProductType,
-                                    combinedOcr,
-                                    combinedBarcodes
+                                    observations
                                 )
+                                val combinedOcr = observations.flatMap { item -> item.ocrResults }
+                                val combinedBarcodes = observations.flatMap { item -> item.barcodeResults }
                                 analysis = it.copy(
                                     ocrResults = combinedOcr,
                                     barcodeResults = combinedBarcodes,
+                                    observations = observations,
                                     draft = interpretation.draft.copy(
                                         productType = selectedProductType,
-                                        sourceImageUris = acceptedImageUris + it.originalUri
+                                        sourceImageUris = observations.map { item -> item.sourceImageUri }.distinct()
                                     ),
-                                    identityCandidates = interpretation.candidates
+                                    identityCandidates = interpretation.candidates,
+                                    reconciliationFindings = interpretation.candidates.map { candidate ->
+                                        ReconciledFinding(
+                                            field = candidate.field,
+                                            value = candidate.value,
+                                            status = if (candidate.conflictingValues.isNotEmpty()) "CONFLICT" else "UNIQUE",
+                                            sourceImageUris = observations.map { item -> item.sourceImageUri }.distinct(),
+                                            evidence = candidate.evidence,
+                                            conflictingValues = candidate.conflictingValues
+                                        )
+                                    }
                                 )
                             }.onFailure {
                                 working.delete()
