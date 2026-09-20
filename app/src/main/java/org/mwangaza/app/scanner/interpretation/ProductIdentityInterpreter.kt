@@ -24,22 +24,18 @@ data class ProductIdentityInterpretation(
 )
 
 object ProductIdentityInterpreter {
-    fun interpret(productType: ProductType, ocr: List<OcrResult>, barcodes: List<BarcodeResult>): ProductIdentityInterpretation =
-        interpret(productType, listOf(ProductScanObservation(
-            sourceImageUri = ocr.firstOrNull()?.sourceImageUri ?: barcodes.firstOrNull()?.sourceImageUri ?: "unknown://observation",
-            ocrResults = ocr,
-            barcodeResults = barcodes
-        )))
-
     fun interpret(
         productType: ProductType,
         observations: List<ProductScanObservation>,
-        genericName: String? = null
+        genericNames: List<String>
     ): ProductIdentityInterpretation {
-        val normalizedGenericName = genericName?.trim()?.ifBlank { null }
+        val normalizedGenericNames = genericNames
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase(Locale.ROOT) }
         if (observations.isEmpty()) {
             return ProductIdentityInterpretation(
-                ProductScanDraft(productType = productType, genericName = normalizedGenericName),
+                ProductScanDraft(productType = productType, genericNames = normalizedGenericNames),
                 emptyList(),
                 emptyList()
             )
@@ -177,9 +173,7 @@ object ProductIdentityInterpreter {
 
         val draft = ProductScanDraft(
             brandName = brandCandidates.firstOrNull()?.value,
-            genericName = if (productType == ProductType.MEDICINE) {
-                categoryExtraction.ingredients.firstOrNull()?.ingredientName ?: active
-            } else null,
+            genericNames = emptyList(),
             productType = productType,
             manufacturer = manufacturer,
             dosageForm = dosageForm,
@@ -187,7 +181,6 @@ object ProductIdentityInterpreter {
             routeSource = routeSource,
             strength = categoryStrength ?: strengthMatches.firstOrNull(),
             activeIngredients = active,
-            ingredientProposals = categoryExtraction.ingredients,
             prescriptionClassification = prescription,
             storageCondition = categoryExtraction.variables.firstOrNull { it.definitionKey == "storage_condition" }?.value,
             categoryVariables = categoryExtraction.variables,
@@ -231,7 +224,7 @@ object ProductIdentityInterpreter {
     private fun reconcile(
         type: ProductType,
         xs: List<Pair<ProductScanObservation, ProductIdentityInterpretation>>,
-        userGenericName: String? = null
+        userGenericNames: List<String>
     ): ProductIdentityInterpretation {
         fun draft(field:(ProductScanDraft)->String?) = xs.mapNotNull { (o,i) -> field(i.draft)?.trim()?.takeIf{it.isNotBlank()}?.let{FC(it,norm(it),o.sourceImageUri)} }
         fun cand(field:String) = xs.flatMap { (o,i) -> i.candidates.filter{it.field==field}.map{FC(it.value,norm(it.value),o.sourceImageUri,it.evidence)} }
@@ -263,8 +256,7 @@ object ProductIdentityInterpreter {
         val idValue=if(idConflict)null else ids.firstOrNull()?.value
         val idFinding=ids.takeIf{it.isNotEmpty()}?.let{ReconciledFinding("identifier",it.first().value,if(idConflict)null else it.first().norm,if(idConflict)"CONFLICT" else if(it.size>1)"AGREEMENT" else "UNIQUE",it.map{v->v.uri}.distinct(),it.flatMap{v->v.evidence}.distinct(),if(idConflict)ig.values.map{v->v.first().value}else emptyList())}
         val cats=reconcileCats(xs)
-        val ings=reconcileIngs(xs)
-        val findings=listOfNotNull(b.second,m.second,f.second,r.second,pc.second,tc.second,sc.second,idFinding)+cats.second+ings.second
+        val findings=listOfNotNull(b.second,m.second,f.second,r.second,pc.second,tc.second,sc.second,idFinding)+cats.second
         val routeSource=if(r.first!=null) {
             routePool.firstOrNull{norm(it.value)==norm(r.first!!)}?.evidence?.lastOrNull{it=="EXPLICIT"||it=="INFERRED"}
         } else null
@@ -272,12 +264,10 @@ object ProductIdentityInterpreter {
             else cats.first.firstOrNull{it.definitionKey=="strength"}?.value
         val draft=ProductScanDraft(
             brandName=b.first,
-            genericName=userGenericName
-                ?: ings.first.firstOrNull()?.ingredientName
-                ?: xs.mapNotNull{it.second.draft.genericName}.firstOrNull(),
+            genericNames=userGenericNames,
             productType=type,manufacturer=m.first,dosageForm=f.first,route=r.first,routeSource=routeSource,
             strength=strength,prescriptionClassification=pc.first,therapeuticCategory=tc.first,storageCondition=sc.first,
-            activeIngredients=xs.mapNotNull{it.second.draft.activeIngredients}.firstOrNull(),ingredientProposals=ings.first,
+            activeIngredients=null,
             categoryVariables=cats.first,barcodeValue=idValue,
             barcodeFormat=xs.flatMap{it.second.draft.barcodeFormat?.let{v->listOf(v)}.orEmpty()}.distinct().singleOrNull(),
             otherDetectedText=xs.mapNotNull{it.second.draft.otherDetectedText}.joinToString("\n").ifBlank{null},
@@ -297,18 +287,6 @@ object ProductIdentityInterpreter {
         return out to f
     }
 
-    private fun reconcileIngs(xs:List<Pair<ProductScanObservation,ProductIdentityInterpretation>>):Pair<List<ProductIngredientProposal>,List<ReconciledFinding>>{
-        val e=xs.flatMap{(o,i)->i.draft.ingredientProposals.map{o to it}}
-        val out=mutableListOf<ProductIngredientProposal>();val f=mutableListOf<ReconciledFinding>()
-        e.groupBy{norm(it.second.ingredientName)}.forEach{(name,items)->
-            val sg=items.groupBy{norm(listOfNotNull(it.second.strengthValue,it.second.strengthUnit,it.second.denominatorValue,it.second.denominatorUnit).joinToString("/"))}
-            val conflict=sg.size>1
-            val x=items.first().second
-            out+=if(conflict)x.copy(strengthValue=null,strengthUnit=null,denominatorValue=null,denominatorUnit=null) else x
-            f+=ReconciledFinding("ingredient:$name",x.ingredientName,name,if(conflict)"CONFLICT" else if(items.size>1)"AGREEMENT" else "UNIQUE",items.map{it.first.sourceImageUri}.distinct(),items.flatMap{it.second.evidence}.distinct(),if(conflict)sg.values.map{g->g.first().second.let{listOfNotNull(it.strengthValue,it.strengthUnit,it.denominatorValue,it.denominatorUnit).joinToString("/")}}else emptyList())
-        }
-        return out to f
-    }
 
     private fun norm(v:String)=v.trim().lowercase(Locale.ROOT).replace(Regex("\\s+")," ").replace(Regex("\\s*/\\s*"),"/")
     private fun normId(v:String)=v.filter(Char::isDigit).ifBlank{norm(v)}
