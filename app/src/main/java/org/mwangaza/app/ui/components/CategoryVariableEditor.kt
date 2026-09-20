@@ -58,7 +58,7 @@ fun CategoryVariableEditor(
 
             if (definition.multiValued) {
                 MultiValueEditor(definition, items) { replacement ->
-                    onProposalsChange(proposals.filterNot { it.definitionKey == key } + replacement)
+                    onProposalsChange(replaceCategoryDefinitionValues(proposals, key, replacement))
                 }
             } else {
                 SingleValueEditor(
