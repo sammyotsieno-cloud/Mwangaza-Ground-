@@ -229,10 +229,16 @@ object ProductIdentityInterpreter {
                 sourceImageUris=values.map{it.uri}.distinct(),evidence=values.flatMap{it.evidence}.distinct(),
                 conflictingValues=if(conflict)g.values.map{it.first().value}else emptyList())
         }
-        val b=one("brandName",cand("brandName")+draft{it.brandName})
+        val b=one("brandName",draft{it.brandName})
         val m=one("manufacturer",cand("manufacturer")+draft{it.manufacturer})
         val f=one("productForm",cand("productForm")+draft{it.dosageForm})
-        val r=one("route",draft{it.route})
+        val routeValues=draft{it.route}.mapIndexed { index, value ->
+            val source=xs[index].second.draft.routeSource ?: "UNKNOWN"
+            value.copy(evidence=value.evidence+source)
+        }
+        val explicitRoutes=routeValues.filter{it.evidence.contains("EXPLICIT")}
+        val routePool=if(explicitRoutes.isNotEmpty()) explicitRoutes else routeValues
+        val r=one("route",routePool)
         val pc=one("prescriptionClassification",draft{it.prescriptionClassification})
         val tc=one("therapeuticCategory",draft{it.therapeuticCategory})
         val sc=one("storageCondition",draft{it.storageCondition})
@@ -243,7 +249,9 @@ object ProductIdentityInterpreter {
         val cats=reconcileCats(xs)
         val ings=reconcileIngs(xs)
         val findings=listOfNotNull(b.second,m.second,f.second,r.second,pc.second,tc.second,sc.second,idFinding)+cats.second+ings.second
-        val routeSource=xs.mapNotNull{it.second.draft.routeSource}.distinct().singleOrNull()
+        val routeSource=if(r.first!=null) {
+            routePool.firstOrNull{norm(it.value)==norm(r.first!!)}?.evidence?.lastOrNull{it=="EXPLICIT"||it=="INFERRED"}
+        } else null
         val strength=cats.first.firstOrNull{it.definitionKey=="strength"}?.value
         val draft=ProductScanDraft(
             brandName=b.first,genericName=ings.first.firstOrNull()?.ingredientName ?: xs.mapNotNull{it.second.draft.genericName}.firstOrNull(),
