@@ -31,6 +31,7 @@ import org.mwangaza.app.scanner.ProductScanDraft
 import org.mwangaza.app.scanner.interpretation.CategoryExtractionProfiles
 import org.mwangaza.app.scanner.interpretation.CategoryVariableProposal
 import org.mwangaza.app.ui.components.CategoryVariableEditor
+import org.mwangaza.app.ui.components.unresolvedSingleDefinitionKeys
 
 private val medicineCanonicalKeys = setOf(
     "generic_name",
@@ -40,20 +41,6 @@ private val medicineCanonicalKeys = setOf(
     "therapeutic_category",
     "storage_condition"
 )
-
-private fun unresolvedSingleCandidates(
-    productType: ProductType?,
-    proposals: List<CategoryVariableProposal>
-): List<String> {
-    if (productType == null) return emptyList()
-    val definitions = CategoryExtractionProfiles.definitions(productType)
-    return definitions
-        .filter { !it.multiValued }
-        .mapNotNull { definition ->
-            val count = proposals.count { it.definitionKey == definition.definitionKey && it.value.isNotBlank() }
-            if (count > 1) definition.definitionKey else null
-        }
-}
 
 @Composable
 fun ProductScanReviewScreen(
@@ -97,7 +84,7 @@ fun ProductScanReviewScreen(
         sourceImageUris = listOf(analysis.originalUri)
     )
 
-    val unresolved = unresolvedSingleCandidates(productType, categoryValues)
+    val unresolved = unresolvedSingleDefinitionKeys(definitions, categoryValues)
     val medicineDefinitions = if (productType == ProductType.MEDICINE) {
         definitions.filterNot { it.definitionKey in medicineCanonicalKeys }
     } else {
