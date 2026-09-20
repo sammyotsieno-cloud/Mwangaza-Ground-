@@ -253,7 +253,8 @@ object ProductIdentityInterpreter {
         val routeSource=if(r.first!=null) {
             routePool.firstOrNull{norm(it.value)==norm(r.first!!)}?.evidence?.lastOrNull{it=="EXPLICIT"||it=="INFERRED"}
         } else null
-        val strength=cats.first.firstOrNull{it.definitionKey=="strength"}?.value
+        val strength=if(cats.second.firstOrNull{it.field=="strength"}?.status=="CONFLICT") null
+            else cats.first.firstOrNull{it.definitionKey=="strength"}?.value
         val draft=ProductScanDraft(
             brandName=b.first,genericName=ings.first.firstOrNull()?.ingredientName ?: xs.mapNotNull{it.second.draft.genericName}.firstOrNull(),
             productType=type,manufacturer=m.first,dosageForm=f.first,route=r.first,routeSource=routeSource,
