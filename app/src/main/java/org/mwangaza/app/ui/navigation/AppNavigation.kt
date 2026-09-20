@@ -65,11 +65,13 @@ fun AppNavigation(
     var currentFeature by remember { mutableStateOf<String?>(null) }
     var pendingScanDraft by remember { mutableStateOf<ProductScanDraft?>(null) }
     var selectedScanProductType by remember { mutableStateOf<ProductType?>(null) }
-    var selectedScanGenericName by remember { mutableStateOf<String?>(null) }
+    var selectedScanGenericNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var showExitConfirmation by remember { mutableStateOf(false) }
 
     BackHandler(enabled = currentFeature != null) {
         currentFeature = if (currentFeature == "product-scanner") {
+            selectedScanProductType = null
+            selectedScanGenericNames = emptyList()
             "products"
         } else {
             null
@@ -147,9 +149,9 @@ fun AppNavigation(
                     ProductsScreen(
                         container = appContainer,
                         onBack = { currentFeature = null },
-                        onScanProduct = { productType, genericName ->
+                        onScanProduct = { productType, genericNames ->
                             selectedScanProductType = productType
-                            selectedScanGenericName = genericName
+                            selectedScanGenericNames = genericNames
                             currentFeature = "product-scanner"
                         },
                         initialScanDraft = pendingScanDraft,
@@ -159,10 +161,11 @@ fun AppNavigation(
                 currentFeature == "product-scanner" -> {
                     ProductScannerScreen(
                         selectedProductType = selectedScanProductType ?: ProductType.OTHER_HEALTH_COMMODITY,
-                        genericNameContext = selectedScanGenericName,
+                        genericNamesContext = selectedScanGenericNames,
                         onConfirmed = { draft ->
                             pendingScanDraft = draft
-                            selectedScanGenericName = null
+                            selectedScanProductType = null
+                            selectedScanGenericNames = emptyList()
                             currentFeature = "products"
                         }
                     )
