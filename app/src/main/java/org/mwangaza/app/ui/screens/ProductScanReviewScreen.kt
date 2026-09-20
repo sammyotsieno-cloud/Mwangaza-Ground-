@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,8 +25,35 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
+import core.domain.model.ProductType
 import org.mwangaza.app.scanner.ProductScanAnalysis
 import org.mwangaza.app.scanner.ProductScanDraft
+import org.mwangaza.app.scanner.interpretation.CategoryExtractionProfiles
+import org.mwangaza.app.scanner.interpretation.CategoryVariableProposal
+import org.mwangaza.app.ui.components.CategoryVariableEditor
+
+private val medicineCanonicalKeys = setOf(
+    "generic_name",
+    "strength",
+    "route",
+    "prescription_classification",
+    "therapeutic_category",
+    "storage_condition"
+)
+
+private fun unresolvedSingleCandidates(
+    productType: ProductType?,
+    proposals: List<CategoryVariableProposal>
+): List<String> {
+    if (productType == null) return emptyList()
+    val definitions = CategoryExtractionProfiles.definitions(productType)
+    return definitions
+        .filter { !it.multiValued }
+        .mapNotNull { definition ->
+            val count = proposals.count { it.definitionKey == definition.definitionKey && it.value.isNotBlank() }
+            if (count > 1) definition.definitionKey else null
+        }
+}
 
 @Composable
 fun ProductScanReviewScreen(
@@ -44,14 +71,17 @@ fun ProductScanReviewScreen(
     var route by remember { mutableStateOf(analysis.draft.route.orEmpty()) }
     var routeSource by remember { mutableStateOf(analysis.draft.routeSource) }
     var barcode by remember { mutableStateOf(analysis.draft.barcodeValue.orEmpty()) }
-    var categoryValues by remember {
-        mutableStateOf(analysis.draft.categoryVariables.associateBy { it.definitionKey })
-    }
     var therapeutic by remember { mutableStateOf(analysis.draft.therapeuticCategory.orEmpty()) }
     var prescription by remember { mutableStateOf(analysis.draft.prescriptionClassification.orEmpty()) }
     var storage by remember { mutableStateOf(analysis.draft.storageCondition.orEmpty()) }
+    var categoryValues by remember { mutableStateOf(analysis.draft.categoryVariables) }
 
-    fun currentDraft() = analysis.draft.copy(
+    val productType = analysis.draft.productType
+    val definitions = remember(productType) {
+        productType?.let { CategoryExtractionProfiles.definitions(it) }.orEmpty()
+    }
+
+    fun currentDraft(): ProductScanDraft = analysis.draft.copy(
         brandName = brand.trim().ifBlank { null },
         genericName = generic.trim().ifBlank { null },
         manufacturer = manufacturer.trim().ifBlank { null },
@@ -63,9 +93,21 @@ fun ProductScanReviewScreen(
         therapeuticCategory = therapeutic.trim().ifBlank { null },
         prescriptionClassification = prescription.trim().ifBlank { null },
         storageCondition = storage.trim().ifBlank { null },
-        categoryVariables = categoryValues.values.toList(),
+        categoryVariables = categoryValues.filter { it.value.isNotBlank() },
         sourceImageUris = listOf(analysis.originalUri)
     )
+
+    val unresolved = unresolvedSingleCandidates(productType, categoryValues)
+    val medicineDefinitions = if (productType == ProductType.MEDICINE) {
+        definitions.filterNot { it.definitionKey in medicineCanonicalKeys }
+    } else {
+        definitions
+    }
+    val categoryProposalsForEditor = if (productType == ProductType.MEDICINE) {
+        categoryValues.filterNot { it.definitionKey in medicineCanonicalKeys }
+    } else {
+        categoryValues
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -81,10 +123,12 @@ fun ProductScanReviewScreen(
                 modifier = Modifier.fillMaxWidth().height(280.dp)
             )
         }
+
         Text(
             "Quality: " + analysis.quality.warnings.ifEmpty { listOf("No quality warnings") }.joinToString()
         )
-        analysis.barcodeResults.forEach { Text("Barcode: ${it.rawValue} (${it.format})") }
+        analysis.barcodeResults.forEach { Text("Barcode: " + it.rawValue + " (" + it.format + ")") }
+
         OutlinedTextField(brand, { brand = it }, label = { Text("Brand / Trade Name") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(generic, { generic = it }, label = { Text("Generic / Active Ingredient") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(strength, { strength = it }, label = { Text("Strength") }, modifier = Modifier.fillMaxWidth())
@@ -96,7 +140,12 @@ fun ProductScanReviewScreen(
             label = { Text("Barcode / Identifier") },
             modifier = Modifier.fillMaxWidth()
         )
-        OutlinedTextField(route, { route = it; routeSource = if (it.trim().isBlank()) null else "EXPLICIT" }, label = { Text("Route") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(
+            route,
+            { route = it; routeSource = if (it.trim().isBlank()) null else "EXPLICIT" },
+            label = { Text("Route") },
+            modifier = Modifier.fillMaxWidth()
+        )
         Text(
             "Route source: " + when (routeSource) {
                 "EXPLICIT" -> "Explicit on packaging"
@@ -109,37 +158,55 @@ fun ProductScanReviewScreen(
         OutlinedTextField(therapeutic, { therapeutic = it }, label = { Text("Therapeutic Category") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(prescription, { prescription = it }, label = { Text("Prescription Classification") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(storage, { storage = it }, label = { Text("Storage Condition") }, modifier = Modifier.fillMaxWidth())
-        if (categoryValues.isNotEmpty()) {
+
+        if (medicineDefinitions.isNotEmpty() || categoryProposalsForEditor.isNotEmpty()) {
             Text(
-                "Category Variables",
+                (productType?.displayName ?: "Product") + " — Category Variables",
                 style = MaterialTheme.typography.titleMedium
             )
-            categoryValues.toSortedMap().forEach { (key, proposal) ->
-                OutlinedTextField(
-                    value = proposal.value,
-                    onValueChange = { edited ->
-                        categoryValues = categoryValues + (
-                            key to proposal.copy(
-                                value = edited,
-                                normalizedValue = edited.trim().lowercase(),
-                                provenance = "USER_VERIFIED"
-                            )
-                        )
-                    },
-                    label = { Text(key.replace('_', ' ').replaceFirstChar { it.uppercase() }) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            Text(
+                "Values below are proposals from the scanner. Review them before registration; no category inference is performed by this screen.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            CategoryVariableEditor(
+                definitions = medicineDefinitions,
+                proposals = categoryProposalsForEditor,
+                onProposalsChange = { updated ->
+                    categoryValues =
+                        if (productType == ProductType.MEDICINE) {
+                            categoryValues.filter { it.definitionKey in medicineCanonicalKeys } + updated
+                        } else {
+                            updated
+                        }
+                }
+            )
         }
+
+        if (unresolved.isNotEmpty()) {
+            Text(
+                "Unresolved ambiguity: " + unresolved.joinToString(", ") +
+                    ". Select one candidate before registration.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
         Text("Detected text", style = MaterialTheme.typography.titleMedium)
-        Text(analysis.ocrResults.joinToString("\n") { it.text }.ifBlank { "No readable text detected." })
+        Text(
+            analysis.ocrResults.joinToString("\n") { it.text }.ifBlank { "No readable text detected." }
+        )
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onRetake) { Text("Retake") }
             OutlinedButton(onClick = { onSaveAsIs(currentDraft()) }) { Text("Save As Is") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onAddAnother) { Text("Add Another Photo") }
-            Button(onClick = { onConfirm(currentDraft()) }) { Text("Use in Registration") }
+            Button(
+                enabled = unresolved.isEmpty(),
+                onClick = { onConfirm(currentDraft()) }
+            ) { Text("Use in Registration") }
         }
     }
 }
