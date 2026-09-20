@@ -80,7 +80,7 @@ object ProductIdentityInterpreter {
             "nasal spray", "nasal drops" -> "Nasal"
             "suppository", "suppositories", "supp" -> "Rectal"
             "pessary", "pessaries", "pess" -> "Vaginal"
-            else -> if (productType == ProductType.MEDICINE && dosageForm == null) "Oral" else null
+            else -> null
         }
         val route = explicitRoute ?: inferredRoute
         val routeSource = when {
@@ -150,7 +150,9 @@ object ProductIdentityInterpreter {
 
         val draft = ProductScanDraft(
             brandName = brandCandidates.firstOrNull()?.value,
-            genericName = if (productType == ProductType.MEDICINE) active else null,
+            genericName = if (productType == ProductType.MEDICINE) {
+                categoryExtraction.ingredients.firstOrNull()?.ingredientName ?: active
+            } else null,
             productType = productType,
             manufacturer = manufacturer,
             dosageForm = dosageForm,
