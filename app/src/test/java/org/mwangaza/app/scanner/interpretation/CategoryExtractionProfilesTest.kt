@@ -33,6 +33,7 @@ class CategoryExtractionProfilesTest {
         assertEquals("Amoxicillin", result.ingredients.first().ingredientName)
         assertEquals("250", result.ingredients.first().strengthValue)
         assertEquals("5", result.ingredients.first().denominatorValue)
+        assertTrue(result.ingredients.none { it.ingredientName == "Amoxicillin" && it.denominatorValue == "5" && it.strengthValue == "250" && it.evidence.firstOrNull() == "Amoxicillin 250 mg/5 mL" })
     }
 
     @Test
