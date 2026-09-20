@@ -44,7 +44,7 @@ class ProductBarcodeAnalyzer {
                 12 -> "UPC_A"
                 else -> return@mapNotNull null
             }
-            if (!validateByFormat(format, raw)) return@mapNotNull null
+            if (!ProductIdentifierValidator.isValid(format, raw)) return@mapNotNull null
             BarcodeResult(raw, format, sourceImageUri = Uri.fromFile(imageFile).toString(), validationState = "PLAUSIBLE")
         }
     }
