@@ -1199,9 +1199,11 @@ fun ProductsScreen(
                                 brandName = brandName
                                     .trim()
                                     .ifBlank { null },
-                                genericName = genericName
-                                    .trim()
-                                    .ifBlank { null },
+                                genericName = initialScanDraft?.genericNames
+                                    ?.joinToString(" + ")
+                                    ?.trim()
+                                    ?.ifBlank { null }
+                                    ?: genericName.trim().ifBlank { null },
                                 productType = productType.name,
                                 manufacturer = manufacturer
                                     .trim()
