@@ -15,6 +15,13 @@ data class CategoryVariableProposal(
     val multiValued: Boolean = false
 )
 
+/** Presentation-neutral metadata exposed to the review layer from the authoritative category profile. */
+data class CategoryVariableDefinition(
+    val definitionKey: String,
+    val valueType: String,
+    val multiValued: Boolean
+)
+
 data class ProductIngredientProposal(
     val ingredientName: String,
     val strengthValue: String? = null,
@@ -110,6 +117,16 @@ object CategoryExtractionProfiles {
             ProductType.OTHER_HEALTH_COMMODITY->listOf(d("intended_use"){l,_->intended(l)},d("pack_size","QUANTITY"){l,_->packs(l).map{it.copy(definitionKey="pack_size")}},d("storage_condition"){l,_->storage(l)})
         }
     }
+
+    /** Returns the exact variable contract for a product type without exposing extraction internals. */
+    fun definitions(productType: ProductType): List<CategoryVariableDefinition> =
+        profile(productType).map { rule ->
+            CategoryVariableDefinition(
+                definitionKey = rule.key,
+                valueType = rule.type,
+                multiValued = rule.multi
+            )
+        }
 
     fun extract(productType: ProductType, ocr: List<OcrResult>): CategoryExtractionResult {
         val lines=ocr.flatMap{r->r.blocks.flatMap{b->b.lines.map{it.text}}.ifEmpty{r.text.lines()}}.map(String::trim).filter(String::isNotBlank).distinct()
