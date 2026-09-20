@@ -198,6 +198,8 @@ object ProductIdentityInterpreter {
         }
 
         return ProductIdentityInterpretation(draft, candidates)
+    }
+
     private data class FC(val value:String,val norm:String,val uri:String,val evidence:List<String> = emptyList())
 
     private fun reconcile(type: ProductType, xs: List<Pair<ProductScanObservation, ProductIdentityInterpretation>>): ProductIdentityInterpretation {
