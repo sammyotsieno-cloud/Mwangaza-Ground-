@@ -52,7 +52,7 @@ import java.util.Locale
 @Composable
 fun ProductScannerScreen(
     selectedProductType: ProductType,
-    genericNameContext: String? = null,
+    genericNamesContext: List<String> = emptyList(),
     modifier: Modifier = Modifier,
     onConfirmed: (ProductScanDraft) -> Unit = {}
 ) {
@@ -136,13 +136,13 @@ fun ProductScannerScreen(
                         scope.launch {
                             val working = File(sessionDir, original.nameWithoutExtension + "_working.jpg")
                             runCatching {
-                                ProductScanEngine().process(context, original, working, selectedProductType)
+                                ProductScanEngine().process(context, original, working, selectedProductType, genericNamesContext)
                             }.onSuccess {
                                 val observations = acceptedAnalyses.flatMap { item -> item.observations } + it.observations
                                 val interpretation = ProductExtractionEngine.extract(
                                     selectedProductType,
                                     observations,
-                                    genericNameContext
+                                    genericNamesContext
                                 )
                                 val combinedOcr = observations.flatMap { item -> item.ocrResults }
                                 val combinedBarcodes = observations.flatMap { item -> item.barcodeResults }
