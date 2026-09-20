@@ -49,7 +49,6 @@ object ProductIdentityInterpreter {
         }.filter { it.isNotBlank() }.distinct()
 
         val text = lines.joinToString("\n")
-        val lower = text.lowercase(Locale.ROOT)
 
         val strengthRegex = Regex(
             """\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|kg|ml|%)(?:\s*/\s*\d+(?:[.,]\d+)?\s*(?:ml|mL|g))?\b""",
