@@ -70,6 +70,8 @@ import core.domain.model.QuantityScale
 import core.domain.model.UnitPriceConfig
 import core.domain.product.ProductRegistrationService
 import core.domain.product.ProductIdentifierIdentity
+import core.domain.product.ProductIngredientIdentity
+import core.domain.product.ProductAttributeIdentity
 import core.domain.product.VerifiedProductIdentity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -738,6 +740,9 @@ fun ProductsScreen(
         var prescriptionClassification by remember { mutableStateOf(initialScanDraft?.prescriptionClassification ?: "") }
         var storageCondition by remember { mutableStateOf(initialScanDraft?.storageCondition ?: "") }
         var scannedImageUris by remember { mutableStateOf(initialScanDraft?.sourceImageUris ?: emptyList()) }
+        var categoryValues by remember {
+            mutableStateOf(initialScanDraft?.categoryVariables?.associateBy { it.definitionKey } ?: emptyMap())
+        }
 
         var baseUnitName by remember { mutableStateOf("") }
         var baseUnitAbbr by remember { mutableStateOf("") }
@@ -835,6 +840,26 @@ fun ProductsScreen(
                     OutlinedTextField(value = therapeuticCategory, onValueChange = { therapeuticCategory = it }, label = { Text("Therapeutic Category (Optional)") }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = prescriptionClassification, onValueChange = { prescriptionClassification = it }, label = { Text("Prescription Classification (Optional)") }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = storageCondition, onValueChange = { storageCondition = it }, label = { Text("Storage Condition (Optional)") }, modifier = Modifier.fillMaxWidth())
+
+                    initialScanDraft?.productType?.let { selectedType ->
+                        if (categoryValues.isNotEmpty()) {
+                            Text(
+                                text = selectedType.displayName + " — Category Variables",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            categoryValues.toSortedMap().forEach { (key, proposal) ->
+                                OutlinedTextField(
+                                    value = proposal.value,
+                                    onValueChange = { edited ->
+                                        categoryValues = categoryValues + (key to proposal.copy(value = edited, normalizedValue = edited.trim().lowercase(), provenance = "USER_VERIFIED"))
+                                    },
+                                    label = { Text(key.replace('_', ' ').replaceFirstChar { it.uppercase() }) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
 
                     OutlinedTextField(
                         value = description,
@@ -1096,6 +1121,32 @@ fun ProductsScreen(
                                             )
                                         )
                                     }.orEmpty(),
+                                    ingredients = initialScanDraft?.ingredientProposals?.mapIndexed { index, item ->
+                                        ProductIngredientIdentity(
+                                            ingredientName = item.ingredientName,
+                                            strengthValue = item.strengthValue,
+                                            strengthUnit = item.strengthUnit,
+                                            denominatorValue = item.denominatorValue,
+                                            denominatorUnit = item.denominatorUnit,
+                                            sequence = index
+                                        )
+                                    }.orEmpty(),
+                                    attributes = categoryValues.values
+                                        .filter { proposal ->
+                                            !(productType == ProductType.MEDICINE && proposal.definitionKey in setOf(
+                                                "generic_name", "strength", "route", "prescription_classification",
+                                                "therapeutic_category", "storage_condition"
+                                            ))
+                                        }
+                                        .map { proposal ->
+                                            ProductAttributeIdentity(
+                                                definitionKey = proposal.definitionKey,
+                                                valueType = proposal.valueType,
+                                                value = proposal.value.trim(),
+                                                normalizedValue = proposal.normalizedValue,
+                                                provenance = proposal.provenance
+                                            )
+                                        },
                                     dosageForm = dosageForm.trim().ifBlank { null },
                                     route = route.trim().ifBlank { null },
                                     routeSource = initialScanDraft?.routeSource,
