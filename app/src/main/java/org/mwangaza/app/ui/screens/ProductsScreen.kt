@@ -96,7 +96,7 @@ data class ProductWithDetails(
 fun ProductsScreen(
     container: AppContainer,
     onBack: () -> Unit,
-    onScanProduct: (ProductType) -> Unit,
+    onScanProduct: (ProductType, String) -> Unit,
     initialScanDraft: ProductScanDraft? = null,
     onScanDraftConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -111,6 +111,9 @@ fun ProductsScreen(
 
     var showAddProductDialog by remember { mutableStateOf(initialScanDraft != null) }
     var showProductTypeDialog by remember { mutableStateOf(false) }
+    var showGenericNameDialog by remember { mutableStateOf(false) }
+    var selectedScanProductType by remember { mutableStateOf<ProductType?>(null) }
+    var scanGenericNameInput by remember { mutableStateOf("") }
     var selectedProductForDetails by remember { mutableStateOf<ProductWithDetails?>(null) }
     var showAddUnitDialogForProduct by remember { mutableStateOf<ProductMaster?>(null) }
     var showEditPriceDialogForUnit by remember {
@@ -467,6 +470,69 @@ fun ProductsScreen(
         }
     }
 
+    if (showGenericNameDialog) {
+        val enteredGenericNames = scanGenericNameInput
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+
+        AlertDialog(
+            onDismissRequest = {
+                showGenericNameDialog = false
+                selectedScanProductType = null
+                scanGenericNameInput = ""
+            },
+            title = { Text("Enter Generic Name") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Enter the generic/active ingredient name. For combination products, enter one generic name per line."
+                    )
+                    OutlinedTextField(
+                        value = scanGenericNameInput,
+                        onValueChange = { scanGenericNameInput = it },
+                        label = { Text("Generic Name(s)") },
+                        placeholder = {
+                            Text("e.g. Amoxicillin\nClavulanic acid")
+                        },
+                        minLines = 2,
+                        maxLines = 5,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = enteredGenericNames.isNotEmpty() && selectedScanProductType != null,
+                    onClick = {
+                        val productType = selectedScanProductType ?: return@Button
+                        val genericName = enteredGenericNames.joinToString(" + ")
+                        showGenericNameDialog = false
+                        selectedScanProductType = null
+                        scanGenericNameInput = ""
+                        onScanProduct(productType, genericName)
+                    }
+                ) {
+                    Text("Continue to Scanner")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showGenericNameDialog = false
+                        selectedScanProductType = null
+                        scanGenericNameInput = ""
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     if (showProductTypeDialog) {
         AlertDialog(
             onDismissRequest = { showProductTypeDialog = false },
@@ -477,7 +543,9 @@ fun ProductsScreen(
                         OutlinedButton(
                             onClick = {
                                 showProductTypeDialog = false
-                                onScanProduct(type)
+                                selectedScanProductType = type
+                                scanGenericNameInput = ""
+                                showGenericNameDialog = true
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
