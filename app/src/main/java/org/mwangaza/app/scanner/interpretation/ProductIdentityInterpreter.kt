@@ -5,6 +5,7 @@ import org.mwangaza.app.scanner.BarcodeResult
 import org.mwangaza.app.scanner.OcrResult
 import org.mwangaza.app.scanner.ProductScanDraft
 import org.mwangaza.app.scanner.ProductScanObservation
+import org.mwangaza.app.scanner.ProductIdentifierValidator
 import org.mwangaza.app.scanner.ReconciledFinding
 import java.util.Locale
 
@@ -188,7 +189,7 @@ object ProductIdentityInterpreter {
         val ocrIdentifierCandidates = Regex("""(?<!\d)\d{8,14}(?!\d)""")
             .findAll(text)
             .map { it.value }
-            .filter { isPlausibleOcrIdentifier(it) }
+            .filter { ProductIdentifierValidator.isPlausibleOcrIdentifier(it) }
             .distinct()
             .map { raw ->
                 IdentityCandidate(
