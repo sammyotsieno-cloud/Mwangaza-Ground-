@@ -22,18 +22,8 @@ data class CategoryVariableDefinition(
     val multiValued: Boolean
 )
 
-data class ProductIngredientProposal(
-    val ingredientName: String,
-    val strengthValue: String? = null,
-    val strengthUnit: String? = null,
-    val denominatorValue: String? = null,
-    val denominatorUnit: String? = null,
-    val evidence: List<String> = emptyList()
-)
-
 data class CategoryExtractionResult(
-    val variables: List<CategoryVariableProposal> = emptyList(),
-    val ingredients: List<ProductIngredientProposal> = emptyList()
+    val variables: List<CategoryVariableProposal> = emptyList()
 )
 
 private data class VariableRule(
@@ -83,10 +73,6 @@ object CategoryExtractionProfiles {
 
         return when (type) {
             ProductType.MEDICINE -> listOf(
-                d("generic_name") { lines, _ ->
-                    after(lines, listOf("Generic name", "Generic", "INN"))
-                        .map { p("generic_name", "TEXT", it, "GenericNameSignature", "GENERIC_CUE") }
-                },
                 d("strength", "QUANTITY") { lines, _ ->
                     matches(lines, strength)
                         .map { p("strength", "QUANTITY", it, "StrengthSignature", it) }
@@ -399,43 +385,8 @@ object CategoryExtractionProfiles {
         val lines=ocr.flatMap{r->r.blocks.flatMap{b->b.lines.map{it.text}}.ifEmpty{r.text.lines()}}.map(String::trim).filter(String::isNotBlank).distinct()
         val text=lines.joinToString("\n")
         val variables=profile(productType).flatMap{rule->rule.extractor(lines,text).map{it.copy(definitionKey=rule.key,valueType=rule.type,multiValued=rule.multi)}}
-        val ingredients=if(productType==ProductType.MEDICINE) extractIngredients(lines) else emptyList()
-        return CategoryExtractionResult(variables,ingredients)
+        return CategoryExtractionResult(variables)
     }
 
-    private fun extractIngredients(lines:List<String>):List<ProductIngredientProposal>{
-        val contextCue=Regex(
-            """(?i)^\s*Each\s+(\d+(?:[.,]\d+)?)\s*(mL|L|g|kg|mg|mmol|tablet|capsule|dose)\s+contains\s*[:\-]?\s*(.*)$"""
-        )
-        val activeIngredientsCue=Regex(
-            """(?i)^\s*(?:active ingredients?)\s*[:\-]?\s*(.*)$"""
-        )
-        val ingredientStrength=Regex(
-            """(?i)\b(\d+(?:[.,]\d+)?)\s*(mg|mcg|µg|g|kg|IU|mmol)(?:\s*/\s*(\d+(?:[.,]\d+)?)\s*(mL|L|g|kg|mg|mmol))?\b"""
-        )
-        val result=mutableListOf<ProductIngredientProposal>()
-        var denominatorValue:String? = null
-        var denominatorUnit:String? = null
 
-        for(line in lines){
-            val contextMatch=contextCue.find(line)
-            if(contextMatch != null){
-                denominatorValue=contextMatch.groupValues[1]
-                denominatorUnit=contextMatch.groupValues[2]
-            }
-
-            val activeMatch=activeIngredientsCue.find(line)
-            val body=contextMatch?.groupValues?.get(3)?.trim() ?: activeMatch?.groupValues?.get(1)?.trim()
-            if(body != null && body.isNotBlank()){
-                val strengthMatch=ingredientStrength.find(body)
-                val name=body.substringBefore(strengthMatch?.value?:"").trim().trim(',', ';', ':', '-')
-                if(name.isNotBlank()){
-                    result += ProductIngredientProposal(name,strengthMatch?.groupValues?.getOrNull(1),strengthMatch?.groupValues?.getOrNull(2),strengthMatch?.groupValues?.getOrNull(3) ?: denominatorValue,strengthMatch?.groupValues?.getOrNull(4) ?: denominatorUnit,listOf(line,"IngredientSignature"))
-                }
-            }
-
-        }
-
-        return result.distinctBy{"${it.ingredientName.lowercase(Locale.ROOT)}|${it.strengthValue}|${it.denominatorValue}"}
-    }
 }
