@@ -4,6 +4,8 @@ import core.domain.model.ProductType
 import org.mwangaza.app.scanner.BarcodeResult
 import org.mwangaza.app.scanner.OcrResult
 import org.mwangaza.app.scanner.ProductScanDraft
+import org.mwangaza.app.scanner.ProductScanObservation
+import org.mwangaza.app.scanner.ReconciledFinding
 import java.util.Locale
 
 data class IdentityCandidate(
@@ -20,7 +22,20 @@ data class ProductIdentityInterpretation(
 )
 
 object ProductIdentityInterpreter {
-    fun interpret(
+    fun interpret(productType: ProductType, ocr: List<OcrResult>, barcodes: List<BarcodeResult>): ProductIdentityInterpretation =
+        interpret(productType, listOf(ProductScanObservation(
+            sourceImageUri = ocr.firstOrNull()?.sourceImageUri ?: barcodes.firstOrNull()?.sourceImageUri ?: "unknown://observation",
+            ocrResults = ocr,
+            barcodeResults = barcodes
+        )))
+
+    fun interpret(productType: ProductType, observations: List<ProductScanObservation>): ProductIdentityInterpretation {
+        if (observations.isEmpty()) return ProductIdentityInterpretation(ProductScanDraft(productType = productType), emptyList())
+        val interpreted = observations.map { it to interpretSingle(productType, it.ocrResults, it.barcodeResults) }
+        return reconcile(productType, interpreted)
+    }
+
+    private fun interpretSingle(
         productType: ProductType,
         ocr: List<OcrResult>,
         barcodes: List<BarcodeResult>
@@ -182,6 +197,77 @@ object ProductIdentityInterpreter {
         }
 
         return ProductIdentityInterpretation(draft, candidates)
+    private data class FC(val value:String,val norm:String,val uri:String,val evidence:List<String> = emptyList())
+
+    private fun reconcile(type: ProductType, xs: List<Pair<ProductScanObservation, ProductIdentityInterpretation>>): ProductIdentityInterpretation {
+        fun draft(field:(ProductScanDraft)->String?) = xs.mapNotNull { (o,i) -> field(i.draft)?.trim()?.takeIf{it.isNotBlank()}?.let{FC(it,norm(it),o.sourceImageUri)} }
+        fun cand(field:String) = xs.flatMap { (o,i) -> i.candidates.filter{it.field==field}.map{FC(it.value,norm(it.value),o.sourceImageUri,it.evidence)} }
+        fun one(field:String, values:List<FC>): Pair<String?,ReconciledFinding?> {
+            if(values.isEmpty()) return null to null
+            val g=values.groupBy{it.norm}; val conflict=g.size>1
+            return (if(conflict)null else values.first().value) to ReconciledFinding(
+                field=field,value=values.first().value,normalizedValue=if(conflict)null else values.first().norm,
+                status=if(conflict)"CONFLICT" else if(values.size>1)"AGREEMENT" else "UNIQUE",
+                sourceImageUris=values.map{it.uri}.distinct(),evidence=values.flatMap{it.evidence}.distinct(),
+                conflictingValues=if(conflict)g.values.map{it.first().value}else emptyList())
+        }
+        val b=one("brandName",cand("brandName")+draft{it.brandName})
+        val m=one("manufacturer",cand("manufacturer")+draft{it.manufacturer})
+        val f=one("productForm",cand("productForm")+draft{it.dosageForm})
+        val r=one("route",draft{it.route})
+        val pc=one("prescriptionClassification",draft{it.prescriptionClassification})
+        val tc=one("therapeuticCategory",draft{it.therapeuticCategory})
+        val sc=one("storageCondition",draft{it.storageCondition})
+        val ids=xs.flatMap{(o,i)->i.candidates.filter{it.field=="identifier"}.map{FC(it.value,normId(it.value),o.sourceImageUri,it.evidence)}}
+        val ig=ids.groupBy{it.normIdKey()}; val idConflict=ig.size>1
+        val idValue=if(idConflict)null else ids.firstOrNull()?.value
+        val idFinding=ids.takeIf{it.isNotEmpty()}?.let{ReconciledFinding("identifier",it.first().value,if(idConflict)null else it.first().norm,if(idConflict)"CONFLICT" else if(it.size>1)"AGREEMENT" else "UNIQUE",it.map{v->v.uri}.distinct(),it.flatMap{v->v.evidence}.distinct(),if(idConflict)ig.values.map{v->v.first().value}else emptyList())}
+        val cats=reconcileCats(xs)
+        val ings=reconcileIngs(xs)
+        val findings=listOfNotNull(b.second,m.second,f.second,r.second,pc.second,tc.second,sc.second,idFinding)+cats.second+ings.second
+        val routeSource=xs.mapNotNull{it.second.draft.routeSource}.distinct().singleOrNull()
+        val strength=cats.first.firstOrNull{it.definitionKey=="strength"}?.value
+        val draft=ProductScanDraft(
+            brandName=b.first,genericName=ings.first.firstOrNull()?.ingredientName ?: xs.mapNotNull{it.second.draft.genericName}.firstOrNull(),
+            productType=type,manufacturer=m.first,dosageForm=f.first,route=r.first,routeSource=routeSource,
+            strength=strength,prescriptionClassification=pc.first,therapeuticCategory=tc.first,storageCondition=sc.first,
+            activeIngredients=xs.mapNotNull{it.second.draft.activeIngredients}.firstOrNull(),ingredientProposals=ings.first,
+            categoryVariables=cats.first,barcodeValue=idValue,
+            barcodeFormat=xs.flatMap{it.second.draft.barcodeFormat?.let{v->listOf(v)}.orEmpty()}.distinct().singleOrNull(),
+            otherDetectedText=xs.mapNotNull{it.second.draft.otherDetectedText}.joinToString("\n").ifBlank{null},
+            sourceImageUris=xs.map{it.first.sourceImageUri}.distinct())
+        val out=findings.map{IdentityCandidate(it.field,it.value,if(it.status=="CONFLICT")0.5f else 0.9f,it.evidence.ifEmpty{listOf(it.status)},it.conflictingValues)}
+        return ProductIdentityInterpretation(draft,out)
+    }
+
+    private fun reconcileCats(xs:List<Pair<ProductScanObservation,ProductIdentityInterpretation>>):Pair<List<org.mwangaza.app.scanner.interpretation.CategoryVariableProposal>,List<ReconciledFinding>>{
+        val e=xs.flatMap{(o,i)->i.draft.categoryVariables.map{o to it}}
+        val out=mutableListOf<org.mwangaza.app.scanner.interpretation.CategoryVariableProposal>(); val f=mutableListOf<ReconciledFinding>()
+        e.groupBy{it.second.definitionKey}.forEach{(k,items)->
+            val g=items.groupBy{norm(it.second.value)}; g.values.forEach{grp->val x=grp.first().second;out+=x.copy(evidence=(grp.flatMap{it.second.evidence}+grp.map{it.first.sourceImageUri}).distinct())}
+            val conflict=g.size>1&&!items.first().second.multiValued
+            f+=ReconciledFinding(k,items.first().second.value,if(conflict)null else norm(items.first().second.value),if(conflict)"CONFLICT" else if(items.size>1)"AGREEMENT" else "UNIQUE",items.map{it.first.sourceImageUri}.distinct(),items.flatMap{it.second.evidence}.distinct(),if(conflict)g.values.map{it.first().second.value}else emptyList())
+        }
+        return out to f
+    }
+
+    private fun reconcileIngs(xs:List<Pair<ProductScanObservation,ProductIdentityInterpretation>>):Pair<List<ProductIngredientProposal>,List<ReconciledFinding>>{
+        val e=xs.flatMap{(o,i)->i.draft.ingredientProposals.map{o to it}}
+        val out=mutableListOf<ProductIngredientProposal>();val f=mutableListOf<ReconciledFinding>()
+        e.groupBy{norm(it.second.ingredientName)}.forEach{(name,items)->
+            val sg=items.groupBy{norm(listOfNotNull(it.second.strengthValue,it.second.strengthUnit,it.second.denominatorValue,it.second.denominatorUnit).joinToString("/"))}
+            val conflict=sg.size>1
+            val x=items.first().second
+            out+=if(conflict)x.copy(strengthValue=null,strengthUnit=null,denominatorValue=null,denominatorUnit=null) else x
+            f+=ReconciledFinding("ingredient:$name",x.ingredientName,name,if(conflict)"CONFLICT" else if(items.size>1)"AGREEMENT" else "UNIQUE",items.map{it.first.sourceImageUri}.distinct(),items.flatMap{it.second.evidence}.distinct(),if(conflict)sg.values.map{g->g.first().second.let{listOfNotNull(it.strengthValue,it.strengthUnit,it.denominatorValue,it.denominatorUnit).joinToString("/")}}else emptyList())
+        }
+        return out to f
+    }
+
+    private fun norm(v:String)=v.trim().lowercase(Locale.ROOT).replace(Regex("\\s+")," ").replace(Regex("\\s*/\\s*"),"/")
+    private fun normId(v:String)=v.filter(Char::isDigit).ifBlank{norm(v)}
+    private fun FC.normIdKey()=norm
+
     }
 
 }
