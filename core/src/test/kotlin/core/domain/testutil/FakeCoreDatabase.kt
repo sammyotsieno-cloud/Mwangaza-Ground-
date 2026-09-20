@@ -173,8 +173,8 @@ class FakeCoreDatabase : TransactionRunner {
             batches[batch.id] = batch
         }
 
-        override fun insertBatches(newBatches: List<StockBatch>) {
-            newBatches.forEach { insertBatch(it) }
+        override fun insertBatches(batches: List<StockBatch>) {
+            batches.forEach { insertBatch(it) }
         }
 
         override fun getAllBatches(): List<StockBatch> =
@@ -327,8 +327,8 @@ class FakeCoreDatabase : TransactionRunner {
             movements.add(movement)
         }
 
-        override fun insertMovements(newMovements: List<StockMovement>) {
-            movements.addAll(newMovements)
+        override fun insertMovements(movements: List<StockMovement>) {
+            this.movements.addAll(movements)
         }
 
         override fun getAllMovements(): List<StockMovement> =
@@ -374,9 +374,9 @@ class FakeCoreDatabase : TransactionRunner {
         }
 
         override fun insertAllocations(
-            newAllocations: List<StockAllocation>
+            allocations: List<StockAllocation>
         ) {
-            allocations.addAll(newAllocations)
+            this.allocations.addAll(allocations)
         }
 
         override fun getAllocationsForSale(
@@ -523,8 +523,8 @@ class FakeCoreDatabase : TransactionRunner {
         override fun getAttributesForProduct(productId: String): List<ProductAttribute> =
             productAttributes.values.filter { it.productId == productId }.sortedBy { it.definitionKey }
 
-        override fun insertUnits(newUnits: List<ProductUnit>) {
-            newUnits.forEach { units[it.id] = it }
+        override fun insertUnits(units: List<ProductUnit>) {
+            units.forEach { this.units[it.id] = it }
         }
 
         override fun insertUnit(unit: ProductUnit) {
