@@ -41,7 +41,7 @@ object ProductIdentityInterpreter {
             )
         }
         val interpreted = observations.map { it to interpretSingle(productType, it.ocrResults, it.barcodeResults) }
-        return reconcile(productType, interpreted, normalizedGenericName)
+        return reconcile(productType, interpreted, normalizedGenericNames)
     }
 
     private fun interpretSingle(
