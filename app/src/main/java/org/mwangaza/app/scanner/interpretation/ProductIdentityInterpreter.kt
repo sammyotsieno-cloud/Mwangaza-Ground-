@@ -185,10 +185,25 @@ object ProductIdentityInterpreter {
             otherDetectedText = text.ifBlank { null }
         )
 
+        val ocrIdentifierCandidates = Regex("""(?<!\d)\d{8,14}(?!\d)""")
+            .findAll(text)
+            .map { it.value }
+            .filter { isPlausibleOcrIdentifier(it) }
+            .distinct()
+            .map { raw ->
+                IdentityCandidate(
+                    field = "identifier",
+                    value = raw,
+                    confidence = 0.85f,
+                    evidence = listOf("OCR_IDENTIFIER")
+                )
+            }
+            .toList()
+
         val conflicts = brandCandidates.map { it.value }.distinct().drop(1)
         val candidates = brandCandidates.take(5).map {
             it.copy(conflictingValues = conflicts)
-        } + (manufacturer?.let { listOf(IdentityCandidate("manufacturer", it, 0.97f, listOf("MANUFACTURER_CUE"))) } ?: emptyList()) + (dosageForm?.let { listOf(IdentityCandidate("productForm", it, 0.93f, listOf("OCR_FORM_KEYWORD"))) } ?: emptyList()) + barcodes.map {
+        } + (manufacturer?.let { listOf(IdentityCandidate("manufacturer", it, 0.97f, listOf("MANUFACTURER_CUE"))) } ?: emptyList()) + (dosageForm?.let { listOf(IdentityCandidate("productForm", it, 0.93f, listOf("OCR_FORM_KEYWORD"))) } ?: emptyList()) + ocrIdentifierCandidates + barcodes.map {
             IdentityCandidate(
                 field = "identifier",
                 value = it.rawValue,
