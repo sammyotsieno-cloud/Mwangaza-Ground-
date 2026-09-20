@@ -96,7 +96,7 @@ data class ProductWithDetails(
 fun ProductsScreen(
     container: AppContainer,
     onBack: () -> Unit,
-    onScanProduct: (ProductType, String) -> Unit,
+    onScanProduct: (ProductType, List<String>) -> Unit,
     initialScanDraft: ProductScanDraft? = null,
     onScanDraftConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -509,11 +509,11 @@ fun ProductsScreen(
                     enabled = enteredGenericNames.isNotEmpty() && selectedScanProductType != null,
                     onClick = {
                         val productType = selectedScanProductType ?: return@Button
-                        val genericName = enteredGenericNames.joinToString(" + ")
+                        val genericNames = enteredGenericNames
                         showGenericNameDialog = false
                         selectedScanProductType = null
                         scanGenericNameInput = ""
-                        onScanProduct(productType, genericName)
+                        onScanProduct(productType, genericNames)
                     }
                 ) {
                     Text("Continue to Scanner")
@@ -845,7 +845,7 @@ fun ProductsScreen(
     if (showAddProductDialog) {
 
         var brandName by remember { mutableStateOf(initialScanDraft?.brandName ?: "") }
-        var genericName by remember { mutableStateOf(initialScanDraft?.genericName ?: "") }
+        var genericName by remember { mutableStateOf(initialScanDraft?.genericNames?.joinToString("\n") ?: "") }
         var productType by remember { mutableStateOf(initialScanDraft?.productType ?: ProductType.OTHER_HEALTH_COMMODITY) }
         var manufacturer by remember { mutableStateOf(initialScanDraft?.manufacturer ?: "") }
         var barcodeValue by remember { mutableStateOf(initialScanDraft?.barcodeValue ?: "") }
@@ -1262,13 +1262,9 @@ fun ProductsScreen(
                                             )
                                         )
                                     }.orEmpty(),
-                                    ingredients = initialScanDraft?.ingredientProposals?.mapIndexed { index, item ->
+                                    ingredients = initialScanDraft?.genericNames?.mapIndexed { index, name ->
                                         ProductIngredientIdentity(
-                                            ingredientName = item.ingredientName,
-                                            strengthValue = item.strengthValue,
-                                            strengthUnit = item.strengthUnit,
-                                            denominatorValue = item.denominatorValue,
-                                            denominatorUnit = item.denominatorUnit,
+                                            ingredientName = name,
                                             sequence = index
                                         )
                                     }.orEmpty(),
