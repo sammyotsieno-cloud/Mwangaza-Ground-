@@ -3,7 +3,7 @@ package org.mwangaza.app.scanner
 import android.content.Context
 import android.net.Uri
 import com.google.android.gms.tasks.Tasks
-import com.google.mlkit.vision.barcode.Barcode
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 import java.io.File
@@ -18,7 +18,7 @@ class ProductBarcodeAnalyzer {
                     BarcodeResult(
                         rawValue = raw,
                         format = formatName(barcode.format),
-                        bounds = barcode.boundingBox?.let(::android.graphics.Rect),
+                        bounds = barcode.boundingBox?.let { android.graphics.Rect(it) },
                         cornerPoints = barcode.cornerPoints?.map { it.x to it.y }.orEmpty(),
                         sourceImageUri = Uri.fromFile(imageFile).toString(),
                         validationState = if (isPlausibleIdentifier(barcode.format, raw)) "PLAUSIBLE" else "UNVALIDATED"
