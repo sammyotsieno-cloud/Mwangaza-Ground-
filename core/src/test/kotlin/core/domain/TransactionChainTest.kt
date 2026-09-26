@@ -74,7 +74,7 @@ class TransactionChainTest {
             id = "PROD-PARACETAMOL",
             brandName = "Paracetamol",
             genericName = "Paracetamol 500mg",
-            productType = "Tablet",
+            productType = core.domain.model.ProductType.MEDICINE.name,
             createdAt = testTimestamp,
             updatedAt = testTimestamp
         )

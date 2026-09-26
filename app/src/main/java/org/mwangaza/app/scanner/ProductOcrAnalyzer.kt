@@ -14,7 +14,30 @@ class ProductOcrAnalyzer {
         return try {
             val image = InputImage.fromFilePath(context, Uri.fromFile(imageFile))
             val text = Tasks.await(recognizer.process(image))
-            OcrResult(text.text.trim(), null, Uri.fromFile(imageFile).toString())
+            val blocks = text.textBlocks.map { block ->
+                OcrBlockEvidence(
+                    text = block.text,
+                    bounds = block.boundingBox?.let { android.graphics.Rect(it) },
+                    lines = block.lines.map { line ->
+                        OcrLineEvidence(
+                            text = line.text,
+                            bounds = line.boundingBox?.let { android.graphics.Rect(it) },
+                            elements = line.elements.map { element ->
+                                OcrElementEvidence(
+                                    text = element.text,
+                                    bounds = element.boundingBox?.let { android.graphics.Rect(it) }
+                                )
+                            }
+                        )
+                    }
+                )
+            }
+            OcrResult(
+                text = text.text.trim(),
+                confidence = null,
+                sourceImageUri = Uri.fromFile(imageFile).toString(),
+                blocks = blocks
+            )
         } finally {
             recognizer.close()
         }

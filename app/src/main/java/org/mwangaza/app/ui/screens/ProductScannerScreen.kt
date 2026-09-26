@@ -40,8 +40,10 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import org.mwangaza.app.scanner.ProductScanAnalysis
 import org.mwangaza.app.scanner.ProductScanDraft
+import org.mwangaza.app.scanner.ReconciledFinding
 import org.mwangaza.app.scanner.ProductScanEngine
 import org.mwangaza.app.scanner.ProductExtractionEngine
+import core.domain.model.ProductType
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -49,6 +51,8 @@ import java.util.Locale
 
 @Composable
 fun ProductScannerScreen(
+    selectedProductType: ProductType,
+    genericNamesContext: List<String> = emptyList(),
     modifier: Modifier = Modifier,
     onConfirmed: (ProductScanDraft) -> Unit = {}
 ) {
@@ -132,14 +136,26 @@ fun ProductScannerScreen(
                         scope.launch {
                             val working = File(sessionDir, original.nameWithoutExtension + "_working.jpg")
                             runCatching {
-                                ProductScanEngine().process(context, original, working)
+                                ProductScanEngine().process(context, original, working, selectedProductType, genericNamesContext)
                             }.onSuccess {
-                                val combinedOcr = acceptedAnalyses.flatMap { item -> item.ocrResults } + it.ocrResults
-                                val combinedBarcodes = acceptedAnalyses.flatMap { item -> item.barcodeResults } + it.barcodeResults
+                                val observations = acceptedAnalyses.flatMap { item -> item.observations } + it.observations
+                                val interpretation = ProductExtractionEngine.extract(
+                                    selectedProductType,
+                                    observations,
+                                    genericNamesContext
+                                )
+                                val combinedOcr = observations.flatMap { item -> item.ocrResults }
+                                val combinedBarcodes = observations.flatMap { item -> item.barcodeResults }
                                 analysis = it.copy(
                                     ocrResults = combinedOcr,
                                     barcodeResults = combinedBarcodes,
-                                    draft = ProductExtractionEngine.extract(combinedOcr, combinedBarcodes)
+                                    observations = observations,
+                                    draft = interpretation.draft.copy(
+                                        productType = selectedProductType,
+                                        sourceImageUris = observations.map { item -> item.sourceImageUri }.distinct()
+                                    ),
+                                    identityCandidates = interpretation.candidates,
+                                    reconciliationFindings = interpretation.reconciliationFindings
                                 )
                             }.onFailure {
                                 working.delete()

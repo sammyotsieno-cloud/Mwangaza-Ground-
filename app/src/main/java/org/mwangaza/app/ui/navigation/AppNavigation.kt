@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import org.mwangaza.app.data.AppContainer
+import core.domain.model.ProductType
 import org.mwangaza.app.ui.screens.DashboardScreen
 import org.mwangaza.app.scanner.ProductScanDraft
 import org.mwangaza.app.ui.screens.DispensingScreen
@@ -63,10 +64,14 @@ fun AppNavigation(
     var currentBottomTab by remember { mutableStateOf<BottomNavItem>(BottomNavItem.Dashboard) }
     var currentFeature by remember { mutableStateOf<String?>(null) }
     var pendingScanDraft by remember { mutableStateOf<ProductScanDraft?>(null) }
+    var selectedScanProductType by remember { mutableStateOf<ProductType?>(null) }
+    var selectedScanGenericNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var showExitConfirmation by remember { mutableStateOf(false) }
 
     BackHandler(enabled = currentFeature != null) {
         currentFeature = if (currentFeature == "product-scanner") {
+            selectedScanProductType = null
+            selectedScanGenericNames = emptyList()
             "products"
         } else {
             null
@@ -144,15 +149,23 @@ fun AppNavigation(
                     ProductsScreen(
                         container = appContainer,
                         onBack = { currentFeature = null },
-                        onScanProduct = { currentFeature = "product-scanner" },
+                        onScanProduct = { productType, genericNames ->
+                            selectedScanProductType = productType
+                            selectedScanGenericNames = genericNames
+                            currentFeature = "product-scanner"
+                        },
                         initialScanDraft = pendingScanDraft,
                         onScanDraftConsumed = { pendingScanDraft = null }
                     )
                 }
                 currentFeature == "product-scanner" -> {
                     ProductScannerScreen(
+                        selectedProductType = selectedScanProductType ?: ProductType.OTHER_HEALTH_COMMODITY,
+                        genericNamesContext = selectedScanGenericNames,
                         onConfirmed = { draft ->
                             pendingScanDraft = draft
+                            selectedScanProductType = null
+                            selectedScanGenericNames = emptyList()
                             currentFeature = "products"
                         }
                     )

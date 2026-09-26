@@ -96,3 +96,21 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }
+
+// Diagnostic-only configuration for JVM unit-test tasks.
+// Keep test execution semantics unchanged while exposing complete failure evidence.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    testLogging {
+        events(
+            "failed",
+            "skipped",
+            "standard_out",
+            "standard_error"
+        )
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStandardStreams = true
+    }
+}

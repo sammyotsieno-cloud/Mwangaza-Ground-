@@ -60,24 +60,35 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import core.domain.model.Money
-import core.domain.model.PharmaceuticalDetail
 import core.domain.model.ProductImage
+import core.domain.model.ProductAttribute
+import core.domain.model.PharmaceuticalDetail
 import org.mwangaza.app.scanner.ProductScanDraft
 import android.net.Uri
 import core.domain.model.ProductMaster
+import core.domain.model.ProductType
 import core.domain.model.ProductUnit
 import core.domain.model.QuantityScale
 import core.domain.model.UnitPriceConfig
+import core.domain.product.ProductRegistrationService
+import core.domain.product.ProductIdentifierIdentity
+import core.domain.product.ProductIngredientIdentity
+import core.domain.product.ProductAttributeIdentity
+import core.domain.product.VerifiedProductIdentity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
 import java.util.UUID
+import org.mwangaza.app.scanner.interpretation.CategoryExtractionProfiles
+import org.mwangaza.app.ui.components.CategoryVariableEditor
 
 data class ProductWithDetails(
     val product: ProductMaster,
     val units: List<ProductUnit>,
-    val priceConfigsByUnitId: Map<String, UnitPriceConfig>
+    val priceConfigsByUnitId: Map<String, UnitPriceConfig>,
+    val attributes: List<ProductAttribute> = emptyList(),
+    val pharmaceuticalDetail: PharmaceuticalDetail? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,7 +96,7 @@ data class ProductWithDetails(
 fun ProductsScreen(
     container: AppContainer,
     onBack: () -> Unit,
-    onScanProduct: () -> Unit,
+    onScanProduct: (ProductType, List<String>) -> Unit,
     initialScanDraft: ProductScanDraft? = null,
     onScanDraftConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -99,6 +110,10 @@ fun ProductsScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     var showAddProductDialog by remember { mutableStateOf(initialScanDraft != null) }
+    var showProductTypeDialog by remember { mutableStateOf(false) }
+    var showGenericNameDialog by remember { mutableStateOf(false) }
+    var selectedScanProductType by remember { mutableStateOf<ProductType?>(null) }
+    var scanGenericNameInput by remember { mutableStateOf("") }
     var selectedProductForDetails by remember { mutableStateOf<ProductWithDetails?>(null) }
     var showAddUnitDialogForProduct by remember { mutableStateOf<ProductMaster?>(null) }
     var showEditPriceDialogForUnit by remember {
@@ -121,7 +136,9 @@ fun ProductsScreen(
                     ProductWithDetails(
                         product = product,
                         units = unitsByProductId[product.id] ?: emptyList(),
-                        priceConfigsByUnitId = pricesByUnitId
+                        priceConfigsByUnitId = pricesByUnitId,
+                        attributes = container.productMasterDao.getAttributesForProduct(product.id),
+                        pharmaceuticalDetail = container.productMasterDao.getPharmaceuticalDetailForProduct(product.id)
                     )
                 }
             }
@@ -193,7 +210,7 @@ fun ProductsScreen(
         ) {
 
             OutlinedButton(
-                onClick = onScanProduct,
+                onClick = { showProductTypeDialog = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp)
@@ -453,6 +470,98 @@ fun ProductsScreen(
         }
     }
 
+    if (showGenericNameDialog) {
+        val enteredGenericNames = scanGenericNameInput
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+
+        AlertDialog(
+            onDismissRequest = {
+                showGenericNameDialog = false
+                selectedScanProductType = null
+                scanGenericNameInput = ""
+            },
+            title = { Text("Enter Generic Name") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Enter the generic/active ingredient name. For combination products, enter one generic name per line."
+                    )
+                    OutlinedTextField(
+                        value = scanGenericNameInput,
+                        onValueChange = { scanGenericNameInput = it },
+                        label = { Text("Generic Name(s)") },
+                        placeholder = {
+                            Text("e.g. Amoxicillin\nClavulanic acid")
+                        },
+                        minLines = 2,
+                        maxLines = 5,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = enteredGenericNames.isNotEmpty() && selectedScanProductType != null,
+                    onClick = {
+                        val productType = selectedScanProductType ?: return@Button
+                        val genericNames = enteredGenericNames
+                        showGenericNameDialog = false
+                        selectedScanProductType = null
+                        scanGenericNameInput = ""
+                        onScanProduct(productType, genericNames)
+                    }
+                ) {
+                    Text("Continue to Scanner")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showGenericNameDialog = false
+                        selectedScanProductType = null
+                        scanGenericNameInput = ""
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showProductTypeDialog) {
+        AlertDialog(
+            onDismissRequest = { showProductTypeDialog = false },
+            title = { Text("Select Product Type") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ProductType.values().forEach { type ->
+                        OutlinedButton(
+                            onClick = {
+                                showProductTypeDialog = false
+                                selectedScanProductType = type
+                                scanGenericNameInput = ""
+                                showGenericNameDialog = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(type.displayName)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showProductTypeDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     selectedProductForDetails?.let { details ->
 
         val product = details.product
@@ -505,6 +614,49 @@ fun ProductsScreen(
                             "Description: ${product.description}",
                             style = MaterialTheme.typography.bodyMedium
                         )
+                    }
+
+                    details.pharmaceuticalDetail?.let { pharmaceutical ->
+                        Text(
+                            "Pharmaceutical Details",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        listOf(
+                            "Active ingredients" to pharmaceutical.activeIngredients,
+                            "Strength" to pharmaceutical.strength,
+                            "Dosage form" to pharmaceutical.dosageForm,
+                            "Route" to pharmaceutical.route,
+                            "Therapeutic category" to pharmaceutical.therapeuticCategory,
+                            "Prescription classification" to pharmaceutical.prescriptionClassification,
+                            "Storage condition" to pharmaceutical.storageCondition
+                        ).forEach { (label, value) ->
+                            if (!value.isNullOrBlank()) {
+                                Text(label + ": " + value, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+
+                    if (details.attributes.isNotEmpty()) {
+                        Text(
+                            "Category Attributes",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        details.attributes.forEach { attribute ->
+                            Text(
+                                attribute.definitionKey.replace('_', ' ').replaceFirstChar { it.uppercase() } +
+                                    ": " + attribute.value,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if (!attribute.provenance.isNullOrBlank()) {
+                                Text(
+                                    "Source: " + attribute.provenance,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -693,9 +845,10 @@ fun ProductsScreen(
     if (showAddProductDialog) {
 
         var brandName by remember { mutableStateOf(initialScanDraft?.brandName ?: "") }
-        var genericName by remember { mutableStateOf(initialScanDraft?.genericName ?: "") }
-        var productType by remember { mutableStateOf(initialScanDraft?.productType ?: "") }
+        var genericName by remember { mutableStateOf(initialScanDraft?.genericNames?.joinToString("\n") ?: "") }
+        var productType by remember { mutableStateOf(initialScanDraft?.productType ?: ProductType.OTHER_HEALTH_COMMODITY) }
         var manufacturer by remember { mutableStateOf(initialScanDraft?.manufacturer ?: "") }
+        var barcodeValue by remember { mutableStateOf(initialScanDraft?.barcodeValue ?: "") }
         var description by remember { mutableStateOf(initialScanDraft?.description ?: "") }
 
         var activeIngredients by remember { mutableStateOf(initialScanDraft?.activeIngredients ?: "") }
@@ -706,6 +859,9 @@ fun ProductsScreen(
         var prescriptionClassification by remember { mutableStateOf(initialScanDraft?.prescriptionClassification ?: "") }
         var storageCondition by remember { mutableStateOf(initialScanDraft?.storageCondition ?: "") }
         var scannedImageUris by remember { mutableStateOf(initialScanDraft?.sourceImageUris ?: emptyList()) }
+        var categoryValues by remember {
+            mutableStateOf(initialScanDraft?.categoryVariables ?: emptyList())
+        }
 
         var baseUnitName by remember { mutableStateOf("") }
         var baseUnitAbbr by remember { mutableStateOf("") }
@@ -766,17 +922,10 @@ fun ProductsScreen(
                     )
 
                     OutlinedTextField(
-                        value = productType,
-                        onValueChange = {
-                            productType = it
-                        },
-                        label = {
-                            Text("Product Type")
-                        },
-                        placeholder = {
-                            Text("e.g. Tablet, Capsule, Syrup, Vial")
-                        },
-                        singleLine = true,
+                        value = productType.displayName,
+                        onValueChange = { },
+                        readOnly = true,
+                        label = { Text("Product Type") },
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -795,6 +944,14 @@ fun ProductsScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    OutlinedTextField(
+                        value = barcodeValue,
+                        onValueChange = { barcodeValue = it },
+                        label = { Text("Barcode / Identifier") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     OutlinedTextField(value = activeIngredients, onValueChange = { activeIngredients = it }, label = { Text("Active Ingredient(s) (Optional)") }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = strength, onValueChange = { strength = it }, label = { Text("Strength (Optional)") }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = dosageForm, onValueChange = { dosageForm = it }, label = { Text("Dosage Form (Optional)") }, modifier = Modifier.fillMaxWidth())
@@ -802,6 +959,47 @@ fun ProductsScreen(
                     OutlinedTextField(value = therapeuticCategory, onValueChange = { therapeuticCategory = it }, label = { Text("Therapeutic Category (Optional)") }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = prescriptionClassification, onValueChange = { prescriptionClassification = it }, label = { Text("Prescription Classification (Optional)") }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = storageCondition, onValueChange = { storageCondition = it }, label = { Text("Storage Condition (Optional)") }, modifier = Modifier.fillMaxWidth())
+
+                    initialScanDraft?.productType?.let { selectedType ->
+                        val definitions = CategoryExtractionProfiles.definitions(selectedType)
+                        val canonicalMedicineKeys = setOf(
+                                                    "strength",
+                            "route",
+                            "prescription_classification",
+                            "therapeutic_category",
+                            "storage_condition"
+                        )
+                        val editorDefinitions = if (selectedType == ProductType.MEDICINE) {
+                            definitions.filterNot { it.definitionKey in canonicalMedicineKeys }
+                        } else {
+                            definitions
+                        }
+                        val editorProposals = if (selectedType == ProductType.MEDICINE) {
+                            categoryValues.filterNot { it.definitionKey in canonicalMedicineKeys }
+                        } else {
+                            categoryValues
+                        }
+
+                        if (editorDefinitions.isNotEmpty() || editorProposals.isNotEmpty()) {
+                            Text(
+                                text = selectedType.displayName + " — Category Variables",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            CategoryVariableEditor(
+                                definitions = editorDefinitions,
+                                proposals = editorProposals,
+                                onProposalsChange = { updated ->
+                                    categoryValues =
+                                        if (selectedType == ProductType.MEDICINE) {
+                                            categoryValues.filter { it.definitionKey in canonicalMedicineKeys } + updated
+                                        } else {
+                                            updated
+                                        }
+                                }
+                            )
+                        }
+                    }
 
                     OutlinedTextField(
                         value = description,
@@ -1000,12 +1198,12 @@ fun ProductsScreen(
                                 brandName = brandName
                                     .trim()
                                     .ifBlank { null },
-                                genericName = genericName
-                                    .trim()
-                                    .ifBlank { null },
-                                productType = productType
-                                    .trim()
-                                    .ifBlank { null },
+                                genericName = initialScanDraft?.genericNames
+                                    ?.joinToString(" + ")
+                                    ?.trim()
+                                    ?.ifBlank { null }
+                                    ?: genericName.trim().ifBlank { null },
+                                productType = productType.name,
                                 manufacturer = manufacturer
                                     .trim()
                                     .ifBlank { null },
@@ -1049,47 +1247,82 @@ fun ProductsScreen(
                             )
 
                             withContext(Dispatchers.IO) {
-                                container.productMasterDao.insertProduct(product)
-                                container.productMasterDao.insertUnit(baseUnit)
-                                container.productMasterDao.savePriceConfig(priceConfig)
-
-                                if (listOf(activeIngredients, strength, dosageForm, route, therapeuticCategory, prescriptionClassification, storageCondition).any { it.isNotBlank() }) {
-                                    container.productMasterDao.insertPharmaceuticalDetail(
-                                        PharmaceuticalDetail(
-                                            id = UUID.randomUUID().toString(),
-                                            productId = productId,
-                                            activeIngredients = activeIngredients.trim().ifBlank { null },
-                                            strength = strength.trim().ifBlank { null },
-                                            dosageForm = dosageForm.trim().ifBlank { null },
-                                            route = route.trim().ifBlank { null },
-                                            therapeuticCategory = therapeuticCategory.trim().ifBlank { null },
-                                            prescriptionClassification = prescriptionClassification.trim().ifBlank { null },
-                                            storageCondition = storageCondition.trim().ifBlank { null },
-                                            createdAt = now,
-                                            updatedAt = now
+                                val verifiedIdentity = VerifiedProductIdentity(
+                                    productType = initialScanDraft?.productType ?: ProductType.values().firstOrNull { it.name == product.productType } ?: ProductType.OTHER_HEALTH_COMMODITY,
+                                    brandName = product.brandName,
+                                    genericName = product.genericName,
+                                    categoryId = product.categoryId,
+                                    description = product.description,
+                                    manufacturer = product.manufacturer,
+                                    identifiers = barcodeValue.trim().ifBlank { null }?.let {
+                                        listOf(
+                                            ProductIdentifierIdentity(
+                                                identifierType = initialScanDraft?.barcodeFormat ?: "IDENTIFIER",
+                                                value = it,
+                                                isPrimary = true
+                                            )
                                         )
+                                    }.orEmpty(),
+                                    ingredients = initialScanDraft?.genericNames?.mapIndexed { index, name ->
+                                        ProductIngredientIdentity(
+                                            ingredientName = name,
+                                            sequence = index
+                                        )
+                                    }.orEmpty(),
+                                    attributes = categoryValues
+                                        .filter { proposal ->
+                                            proposal.value.isNotBlank() &&
+                                                !(productType == ProductType.MEDICINE && proposal.definitionKey in setOf(
+                                                    "generic_name", "strength", "route", "prescription_classification",
+                                                    "therapeutic_category", "storage_condition"
+                                                ))
+                                        }
+                                        .map { proposal ->
+                                            ProductAttributeIdentity(
+                                                definitionKey = proposal.definitionKey,
+                                                valueType = proposal.valueType,
+                                                value = proposal.value.trim(),
+                                                normalizedValue = proposal.normalizedValue,
+                                                provenance = proposal.provenance
+                                            )
+                                        },
+                                    dosageForm = dosageForm.trim().ifBlank { null },
+                                    route = route.trim().ifBlank { null },
+                                    routeSource = initialScanDraft?.routeSource,
+                                    therapeuticCategory = therapeuticCategory.trim().ifBlank { null },
+                                    prescriptionClassification = prescriptionClassification.trim().ifBlank { null },
+                                    storageCondition = storageCondition.trim().ifBlank { null },
+                                    sourceImageUris = scannedImageUris
+                                )
+                                val persistedImages = scannedImageUris.mapIndexedNotNull { index, uriString ->
+                                    val source = java.io.File(Uri.parse(uriString).path ?: "")
+                                    if (!source.exists()) return@mapIndexedNotNull null
+                                    val imageDir = java.io.File(context.filesDir, "product_images").apply { mkdirs() }
+                                    val destination = java.io.File(imageDir, productId + "_" + index + ".jpg")
+                                    source.copyTo(destination, overwrite = true)
+                                    ProductImage(
+                                        id = UUID.randomUUID().toString(),
+                                        productId = productId,
+                                        imageUri = Uri.fromFile(destination).toString(),
+                                        imageSource = ProductImage.SOURCE_SCANNER_OUTPUT,
+                                        isPrimary = index == 0,
+                                        sortOrder = index,
+                                        createdAt = now
                                     )
                                 }
 
-                                scannedImageUris.forEachIndexed { index, uriString ->
-                                    val source = java.io.File(Uri.parse(uriString).path ?: "")
-                                    if (source.exists()) {
-                                        val imageDir = java.io.File(context.filesDir, "product_images").apply { mkdirs() }
-                                        val destination = java.io.File(imageDir, productId + "_" + index + ".jpg")
-                                        source.copyTo(destination, overwrite = true)
-                                        container.productMasterDao.insertProductImage(
-                                            ProductImage(
-                                                id = UUID.randomUUID().toString(),
-                                                productId = productId,
-                                                imageUri = Uri.fromFile(destination).toString(),
-                                                imageSource = ProductImage.SOURCE_SCANNER_OUTPUT,
-                                                isPrimary = index == 0,
-                                                sortOrder = index,
-                                                createdAt = now
-                                            )
-                                        )
-                                    }
-                                }
+                                container.productRegistrationService.register(
+                                    ProductRegistrationService.RegistrationRequest(
+                                        identity = verifiedIdentity,
+                                        productId = productId,
+                                        baseUnit = baseUnit,
+                                        quantityScale = quantityScale,
+                                        minimumTransactionIncrementStorageUnits = minimumIncrement,
+                                        basePriceConfig = priceConfig,
+                                        images = persistedImages
+                                    )
+                                )
+
                             }
 
                             showAddProductDialog = false
