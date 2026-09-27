@@ -27,6 +27,8 @@ class ProductScanEngine(
             }.getOrDefault(emptyList())
             val barcodes = runCatching { barcodeAnalyzer.scan(context, workingFile) }.getOrDefault(emptyList())
             val draft = ProductExtractionEngine.extract(ocr, barcodes)
+            val observations = ProductObservationFactory.fromOcr(ocr) + ProductObservationFactory.fromBarcodes(barcodes)
+            val identification = ProductIdentificationEngine.identify(observations)
             ProductScanAnalysis(
                 originalUri = Uri.fromFile(originalFile).toString(),
                 workingUri = Uri.fromFile(workingFile).toString(),
@@ -34,7 +36,8 @@ class ProductScanEngine(
                 quality = quality,
                 ocrResults = ocr,
                 barcodeResults = barcodes,
-                draft = draft
+                draft = draft,
+                identification = identification
             )
         }
 }
