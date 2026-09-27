@@ -37,6 +37,8 @@ object EmbeddedOfflineProductKnowledge : OfflineProductKnowledge {
         KnowledgeConcept(id, type, canonical, aliases, category?.let { setOf(it) } ?: emptySet())
 
     private val all = listOf(
+        c("amoxicillin", KnowledgeConceptType.SUBSTANCE, "AMOXICILLIN", setOf("amoxicillin"), ProductKnowledgeCategory.MEDICINE),
+        c("paracetamol", KnowledgeConceptType.SUBSTANCE, "PARACETAMOL", setOf("paracetamol","acetaminophen"), ProductKnowledgeCategory.MEDICINE),
         c("tablet", KnowledgeConceptType.DOSAGE_FORM, "TABLET", setOf("tablet","tablets","tab","tabs"), ProductKnowledgeCategory.MEDICINE),
         c("capsule", KnowledgeConceptType.DOSAGE_FORM, "CAPSULE", setOf("capsule","capsules","cap","caps"), ProductKnowledgeCategory.MEDICINE),
         c("syrup", KnowledgeConceptType.DOSAGE_FORM, "SYRUP", setOf("syrup"), ProductKnowledgeCategory.MEDICINE),
