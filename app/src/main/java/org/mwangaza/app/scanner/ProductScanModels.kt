@@ -48,5 +48,6 @@ data class ProductScanAnalysis(
     val ocrResults: List<OcrResult>,
     val barcodeResults: List<BarcodeResult>,
     val draft: ProductScanDraft,
-    val processingNotes: List<String> = emptyList()
+    val processingNotes: List<String> = emptyList(),
+    val identification: ProductIdentificationResult? = null
 )
