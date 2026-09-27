@@ -18,6 +18,7 @@ object ProductMasterMatcher : FacilityProductMatcher {
                     "genericName" -> same(value, product.genericName)
                     "manufacturer" -> same(value, product.manufacturer)
                     "productType" -> same(value, product.productType)
+                    "dosageForm" -> same(value, product.productType)
                     else -> false
                 }
             }
@@ -122,6 +123,7 @@ object ProductIdentificationEngine {
         firstConcept(KnowledgeConceptType.PRODUCT_TYPE)?.let { attributes["productType"] = it }
         firstConcept(KnowledgeConceptType.DOSAGE_FORM)?.let { attributes["dosageForm"] = it }
         firstConcept(KnowledgeConceptType.ROUTE)?.let { attributes["route"] = it }
+        firstConcept(KnowledgeConceptType.SUBSTANCE)?.let { attributes["genericName"] = it }
         Regex("""\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|ug|g|kg|ml|mL|%)\b""", RegexOption.IGNORE_CASE)
             .find(text)?.value?.let { attributes["strength"] = it.replace(",", ".") }
         return IdentificationCandidate(classification.category, attributes, classification.supportingObservations)
