@@ -57,6 +57,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mwangaza.app.data.AppContainer
+import org.mwangaza.app.ui.components.VitalityCard
+import org.mwangaza.app.ui.components.VitalityState
 import org.mwangaza.app.ui.formatters.MoneyDisplayFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -217,7 +219,6 @@ fun InventoryScreen(
                                         activeLayers.filter {
                                             it.stockBatchId == batch.id
                                         }
-
                                     BatchStockSummary(
                                         batch = batch,
                                         physicalUnits = batchUnits,
@@ -417,134 +418,40 @@ fun InventoryScreen(
                                 }
                             ) { summary ->
 
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            selectedSummaryForDetail =
-                                                summary
-                                        },
-
-                                    colors =
-                                        CardDefaults.cardColors(
-                                            containerColor =
-                                                MaterialTheme.colorScheme
-                                                    .surface
-                                        )
-                                ) {
-
-                                    Column(
-                                        modifier =
-                                            Modifier.padding(16.dp)
-                                    ) {
-
-                                        Row(
-                                            modifier =
-                                                Modifier.fillMaxWidth(),
-                                            horizontalArrangement =
-                                                Arrangement.SpaceBetween,
-                                            verticalAlignment =
-                                                Alignment.CenterVertically
-                                        ) {
-
-                                            Column(
-                                                modifier =
-                                                    Modifier.weight(1f)
-                                            ) {
-
-                                                Text(
-                                                    text =
-                                                        summary.product
-                                                            .displayName,
-                                                    style =
-                                                        MaterialTheme.typography
-                                                            .titleMedium,
-                                                    fontWeight =
-                                                        FontWeight.SemiBold
-                                                )
-
-                                                val unitLabel =
-                                                    summary.baseUnit?.name
-                                                        ?: "units"
-
-                                                Text(
-                                                    text =
-                                                        "On Hand: ${summary.physicalStockUnits} $unitLabel",
-                                                    style =
-                                                        MaterialTheme.typography
-                                                            .bodyLarge,
-                                                    fontWeight =
-                                                        FontWeight.Bold,
-                                                    color =
-                                                        if (
-                                                            summary.physicalStockUnits >
-                                                            0
-                                                        ) {
-                                                            MaterialTheme.colorScheme
-                                                                .primary
-                                                        } else {
-                                                            MaterialTheme.colorScheme
-                                                                .error
-                                                        }
-                                                )
-                                            }
-
-                                            Column(
-                                                horizontalAlignment =
-                                                    Alignment.End
-                                            ) {
-
-                                                Text(
-                                                    text = "Valuation",
-                                                    style =
-                                                        MaterialTheme.typography
-                                                            .labelSmall,
-                                                    color =
-                                                        MaterialTheme.colorScheme
-                                                            .onSurfaceVariant
-                                                )
-
-                                                Text(
-                                                    text =
-                                                        MoneyDisplayFormatter
-                                                            .formatRationalCost(
-                                                                summary.valuation
-                                                            ),
-                                                    style =
-                                                        MaterialTheme.typography
-                                                            .titleSmall,
-                                                    fontWeight =
-                                                        FontWeight.Bold,
-                                                    color =
-                                                        MaterialTheme.colorScheme
-                                                            .secondary
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(
-                                            modifier =
-                                                Modifier.height(6.dp)
-                                        )
-
-                                        Text(
-                                            text =
-                                                "Batches on record: ${
-                                                    summary.batches.size
-                                                } | Active batches with stock: ${
-                                                    summary.batches.count {
-                                                        it.physicalUnits > 0
-                                                    }
-                                                }",
-                                            style =
-                                                MaterialTheme.typography
-                                                    .bodySmall,
-                                            color =
-                                                MaterialTheme.colorScheme
-                                                    .onSurfaceVariant
-                                        )
-                                    }
+                                // Simple vitality logic based on stock and expiry.
+                                val vitalityState = when {
+                                    summary.physicalStockUnits <= 0 ->
+                                        VitalityState.GHOST
+                                    summary.physicalStockUnits < 15 ->
+                                        VitalityState.CRITICAL
+                                    summary.batches.any {
+                                        it.batch.expiryDateInt < 202412
+                                    } ->
+                                        VitalityState.WARNING
+                                    else ->
+                                        VitalityState.HEALTHY
                                 }
+
+                                VitalityCard(
+                                    medicineName =
+                                        summary.product.displayName,
+                                    dosage =
+                                        summary.product.genericName ?: "N/A",
+                                    stock =
+                                        summary.physicalStockUnits.toInt(),
+                                    expiry =
+                                        summary.batches.firstOrNull()
+                                            ?.batch
+                                            ?.expiryDateInt
+                                            ?.toString()
+                                            ?: "N/A",
+                                    state = vitalityState,
+                                    onClick = {
+                                        selectedSummaryForDetail = summary
+                                    },
+                                    modifier =
+                                        Modifier.animateItemPlacement()
+                                )
                             }
                         }
                     }
@@ -697,7 +604,6 @@ fun InventoryScreen(
                                                     MaterialTheme.colorScheme
                                                         .error
                                                 },
-
                                             style =
                                                 MaterialTheme.typography
                                                     .titleSmall
