@@ -103,7 +103,7 @@ fun DashboardScreen(
         GlassDock(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 30.dp),
+                .padding(0.dp, 0.dp, 0.dp, 30.dp),
             onNavigate = onFeatureClick
         )
     }
