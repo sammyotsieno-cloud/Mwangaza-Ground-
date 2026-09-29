@@ -693,6 +693,7 @@ fun InventoryScreen(
                                             color =
                                                 MaterialTheme.colorScheme
                                                     .onSurfaceVariant
+                                        )
                                     }
                                 }
                             }
