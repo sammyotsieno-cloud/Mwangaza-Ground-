@@ -59,7 +59,7 @@ fun DashboardScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 50.dp, bottom = 100.dp)
+                .padding(0.dp, 50.dp, 0.dp, 100.dp)
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 24.dp),
@@ -85,7 +85,7 @@ fun DashboardScreen(
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(horizontal = 20.dp, bottom = 24.dp),
+                contentPadding = PaddingValues(20.dp, 0.dp, 20.dp, 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
