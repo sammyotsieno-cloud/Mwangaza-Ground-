@@ -27,7 +27,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainActivityContent() {
-    var showSplash by remember { mutableStateOf(true) }
+    // rememberSaveable keeps the post-splash destination through Android
+    // configuration recreation (for example portrait <-> landscape).
+    var showSplash by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(true)
+    }
 
     if (showSplash) {
         SamilliMedSplashScreen(
