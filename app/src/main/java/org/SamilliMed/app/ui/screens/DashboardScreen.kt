@@ -1,5 +1,6 @@
 package org.SamilliMed.app.ui.screens
 
+import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,9 +23,17 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -35,6 +44,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,18 +52,38 @@ import androidx.compose.ui.unit.sp
 import org.SamilliMed.app.ui.theme.OatBackground
 import org.SamilliMed.app.ui.theme.SagePrimary
 
+private const val PREFS_NAME = "samillimed_dashboard"
+private const val FACILITY_NAME_KEY = "facility_name"
+private const val DEFAULT_FACILITY_NAME = "SamilliMed Medical Centre"
+
 private val Amber = Color(0xFFD39A55)
 private val AmberLight = Color(0xFFF0C987)
 private val Sage = Color(0xFF64856A)
 private val SageLight = Color(0xFF9EB9A1)
 private val TextDark = Color(0xFF171714)
-private val TileWhite = Color(0xFFF8F5EC).copy(alpha = 0.78f)
+private val TileFace = Color(0xFFF8F5EC).copy(alpha = 0.84f)
+private val TileEdge = Color(0xFFD6D0BC).copy(alpha = 0.62f)
 
 @Composable
 fun DashboardScreen(
     onFeatureClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val preferences = remember(context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    var facilityName by rememberSaveable {
+        mutableStateOf(
+            preferences.getString(FACILITY_NAME_KEY, DEFAULT_FACILITY_NAME)
+                ?.takeIf { it.isNotBlank() }
+                ?: DEFAULT_FACILITY_NAME
+        )
+    }
+    var showFacilityEditor by rememberSaveable { mutableStateOf(false) }
+    var draftFacilityName by rememberSaveable { mutableStateOf("") }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -64,7 +94,7 @@ fun DashboardScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 34.dp),
+                .padding(horizontal = 20.dp, vertical = 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -76,61 +106,118 @@ fun DashboardScreen(
             )
 
             Text(
-                text = "SamilliMed Medical Centre",
+                text = facilityName,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextDark,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 2.dp)
+                maxLines = 2,
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable {
+                        draftFacilityName = facilityName
+                        showFacilityEditor = true
+                    }
+                    .padding(horizontal = 10.dp, vertical = 3.dp)
             )
 
-            Spacer(modifier = Modifier.height(30.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                horizontalArrangement = Arrangement.spacedBy(18.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+            BoxWithConstraints(
                 modifier = Modifier
-                    .widthIn(max = 780.dp)
-                    .wrapContentHeight()
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
             ) {
-                items(dashboardFeatures) { feature ->
-                    ReferenceTile(
-                        title = feature.title,
-                        icon = feature.icon,
-                        onClick = { onFeatureClick(feature.route) }
-                    )
+                val gridMaxWidth = minOf(maxWidth, 780.dp)
+
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 138.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier
+                        .width(gridMaxWidth)
+                        .align(Alignment.Center)
+                ) {
+                    items(dashboardFeatures, key = { it.route }) { feature ->
+                        ReferenceTile(
+                            title = feature.title,
+                            icon = feature.icon,
+                            onClick = { onFeatureClick(feature.route) }
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(18.dp))
 
             ReferenceDock(
-                modifier = Modifier.widthIn(max = 390.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 390.dp),
                 onNavigate = onFeatureClick
             )
+
+            Spacer(modifier = Modifier.height(4.dp))
         }
+    }
+
+    if (showFacilityEditor) {
+        AlertDialog(
+            onDismissRequest = { showFacilityEditor = false },
+            title = { Text("Edit facility name") },
+            text = {
+                OutlinedTextField(
+                    value = draftFacilityName,
+                    onValueChange = { draftFacilityName = it },
+                    singleLine = false,
+                    maxLines = 2,
+                    label = { Text("Facility name") }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = draftFacilityName.trim().isNotEmpty(),
+                    onClick = {
+                        val savedName = draftFacilityName.trim()
+                        facilityName = savedName
+                        preferences.edit()
+                            .putString(FACILITY_NAME_KEY, savedName)
+                            .apply()
+                        showFacilityEditor = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFacilityEditor = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
 @Composable
 private fun ReferenceBackground() {
     Box(modifier = Modifier.fillMaxSize()) {
-        // Very soft cream atmospheric lighting.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.72f), Color.Transparent),
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.72f),
+                            Color.Transparent
+                        ),
                         radius = 900f,
                         center = Offset(760f, 300f)
                     )
                 )
         )
 
-        // Blurred ambient glow behind the floating spheres.
         Box(
             modifier = Modifier
                 .size(280.dp)
@@ -148,7 +235,6 @@ private fun ReferenceBackground() {
         )
 
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Green glass spheres.
             drawSphere(
                 center = Offset(size.width * 0.17f, size.height * 0.48f),
                 radius = size.minDimension * 0.085f,
@@ -159,8 +245,6 @@ private fun ReferenceBackground() {
                 radius = size.minDimension * 0.065f,
                 base = Sage
             )
-
-            // Amber glass spheres.
             drawSphere(
                 center = Offset(size.width * 0.22f, size.height * 0.25f),
                 radius = size.minDimension * 0.045f,
@@ -172,7 +256,6 @@ private fun ReferenceBackground() {
                 base = Amber
             )
 
-            // Translucent water-like sweep beneath the dashboard.
             val y = size.height * 0.88f
             val ribbon = Path().apply {
                 moveTo(size.width * 0.27f, y)
@@ -269,50 +352,79 @@ private fun ReferenceTile(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1.15f)
-            .shadow(
-                elevation = 12.dp,
-                shape = shape,
-                ambientColor = Sage.copy(alpha = 0.16f),
-                spotColor = Amber.copy(alpha = 0.18f)
-            )
-            .clip(shape)
-            .background(TileWhite)
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.95f),
-                        AmberLight.copy(alpha = 0.38f),
-                        Color.White.copy(alpha = 0.48f)
-                    )
-                ),
-                shape = shape
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+            .aspectRatio(1.10f)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(8.dp)
+        // Lower translucent edge creates the physical depth visible in the reference.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .offset(y = 5.dp)
+                .clip(shape)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            TileEdge,
+                            Color(0xFFC4BDA8).copy(alpha = 0.78f)
+                        )
+                    )
+                )
+        )
+
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .shadow(
+                    elevation = 13.dp,
+                    shape = shape,
+                    ambientColor = Sage.copy(alpha = 0.18f),
+                    spotColor = Amber.copy(alpha = 0.20f)
+                )
+                .clip(shape)
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.90f),
+                            TileFace,
+                            Color(0xFFEDE8DB).copy(alpha = 0.80f)
+                        )
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.98f),
+                            AmberLight.copy(alpha = 0.38f),
+                            Color.White.copy(alpha = 0.46f)
+                        )
+                    ),
+                    shape = shape
+                )
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = SagePrimary,
-                modifier = Modifier.size(39.dp)
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = title,
-                color = TextDark,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                lineHeight = 16.sp,
-                maxLines = 2
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(8.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = SagePrimary,
+                    modifier = Modifier.size(39.dp)
+                )
+                Spacer(modifier = Modifier.height(9.dp))
+                Text(
+                    text = title,
+                    color = TextDark,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 16.sp,
+                    maxLines = 2
+                )
+            }
         }
     }
 }
