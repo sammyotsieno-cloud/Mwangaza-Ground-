@@ -91,76 +91,92 @@ fun DashboardScreen(
     ) {
         ReferenceBackground()
 
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 26.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 20.dp, vertical = 22.dp)
         ) {
-            Text(
-                text = "Dashboard",
-                fontSize = 30.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = TextDark,
-                textAlign = TextAlign.Center
-            )
-
-            Text(
-                text = facilityName,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
+            Column(
                 modifier = Modifier
-                    .padding(top = 2.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                        draftFacilityName = facilityName
-                        showFacilityEditor = true
-                    }
-                    .padding(horizontal = 10.dp, vertical = 3.dp)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false)
+                    .fillMaxSize()
+                    .padding(bottom = 92.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val gridMaxWidth = minOf(maxWidth, 780.dp)
+                Text(
+                    text = "Dashboard",
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextDark,
+                    textAlign = TextAlign.Center
+                )
 
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 138.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                Text(
+                    text = facilityName,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextDark,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
                     modifier = Modifier
-                        .width(gridMaxWidth)
-                        .heightIn(max = 520.dp)
-                        .align(Alignment.Center)
+                        .padding(top = 2.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            draftFacilityName = facilityName
+                            showFacilityEditor = true
+                        }
+                        .padding(horizontal = 10.dp, vertical = 3.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
                 ) {
-                    items(dashboardFeatures, key = { it.route }) { feature ->
-                        ReferenceTile(
-                            title = feature.title,
-                            icon = feature.icon,
-                            onClick = { onFeatureClick(feature.route) }
-                        )
+                    val isLandscapeLike = maxWidth > maxHeight
+                    val columns = when {
+                        maxWidth >= 900.dp -> 5
+                        isLandscapeLike && maxWidth >= 600.dp -> 4
+                        maxWidth >= 600.dp -> 3
+                        else -> 2
+                    }
+                    val gridMaxWidth = minOf(maxWidth, 900.dp)
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(columns),
+                        contentPadding = PaddingValues(
+                            start = 2.dp,
+                            end = 2.dp,
+                            top = 4.dp,
+                            bottom = 12.dp
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .widthIn(max = 900.dp)
+                            .fillMaxHeight()
+                            .align(Alignment.Center)
+                    ) {
+                        items(dashboardFeatures, key = { it.route }) { feature ->
+                            ReferenceTile(
+                                title = feature.title,
+                                icon = feature.icon,
+                                compact = columns >= 4,
+                                onClick = { onFeatureClick(feature.route) }
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
-
             ReferenceDock(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .widthIn(max = 390.dp),
+                    .widthIn(max = 430.dp),
                 onNavigate = onFeatureClick
             )
-
-            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 
@@ -346,26 +362,27 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSphere(
 private fun ReferenceTile(
     title: String,
     icon: ImageVector,
+    compact: Boolean = false,
     onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(if (compact) 20.dp else 24.dp)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1.10f)
+            .aspectRatio(if (compact) 1.16f else 1.08f)
     ) {
         // Lower translucent edge creates the physical depth visible in the reference.
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .offset(y = 5.dp)
+                .offset(y = 6.dp)
                 .clip(shape)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
                             TileEdge,
-                            Color(0xFFC4BDA8).copy(alpha = 0.78f)
+                            Color(0xFFBDB5A0).copy(alpha = 0.86f)
                         )
                     )
                 )
@@ -383,13 +400,33 @@ private fun ReferenceTile(
                 .clip(shape)
                 .background(
                     Brush.linearGradient(
+                        start = Offset(0f, 0f),
+                        end = Offset(900f, 900f),
                         colors = listOf(
-                            Color.White.copy(alpha = 0.90f),
+                            Color.White.copy(alpha = 0.97f),
+                            Color(0xFFF9F6ED).copy(alpha = 0.88f),
                             TileFace,
-                            Color(0xFFEDE8DB).copy(alpha = 0.80f)
+                            Color(0xFFE4DDCE).copy(alpha = 0.76f)
                         )
                     )
                 )
+                .drawBehind {
+                    drawRoundRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.62f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.05f)
+                            )
+                        ),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                            24.dp.toPx()
+                        ),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 1.5.dp.toPx()
+                        )
+                    )
+                }
                 .border(
                     width = 1.dp,
                     brush = Brush.linearGradient(
@@ -407,19 +444,19 @@ private fun ReferenceTile(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(8.dp)
+                modifier = Modifier.padding(if (compact) 6.dp else 8.dp)
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
                     tint = SagePrimary,
-                    modifier = Modifier.size(39.dp)
+                    modifier = Modifier.size(if (compact) 34.dp else 39.dp)
                 )
-                Spacer(modifier = Modifier.height(9.dp))
+                Spacer(modifier = Modifier.height(if (compact) 6.dp else 9.dp))
                 Text(
                     text = title,
                     color = TextDark,
-                    fontSize = 14.sp,
+                    fontSize = if (compact) 12.sp else 14.sp,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
                     lineHeight = 16.sp,
@@ -435,19 +472,27 @@ private fun ReferenceDock(
     modifier: Modifier = Modifier,
     onNavigate: (String) -> Unit
 ) {
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(28.dp)
 
     Box(
         modifier = modifier
-            .height(66.dp)
+            .height(70.dp)
             .shadow(
                 elevation = 14.dp,
                 shape = shape,
                 ambientColor = Color.Black.copy(alpha = 0.13f)
             )
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.48f))
-            .border(1.dp, Color.White.copy(alpha = 0.78f), shape)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.64f),
+                        Color(0xFFF4F0E5).copy(alpha = 0.38f),
+                        Color.White.copy(alpha = 0.26f)
+                    )
+                )
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.88f), shape)
             .padding(horizontal = 24.dp),
         contentAlignment = Alignment.Center
     ) {
