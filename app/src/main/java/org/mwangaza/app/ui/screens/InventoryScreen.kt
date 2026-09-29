@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.ExperimentalFoundationApi
 import core.domain.model.InventoryCostLayer
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
@@ -78,7 +79,7 @@ data class BatchStockSummary(
     val costLayers: List<InventoryCostLayer>
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun InventoryScreen(
     container: AppContainer,
@@ -692,7 +693,6 @@ fun InventoryScreen(
                                             color =
                                                 MaterialTheme.colorScheme
                                                     .onSurfaceVariant
-                                        )
                                     }
                                 }
                             }
