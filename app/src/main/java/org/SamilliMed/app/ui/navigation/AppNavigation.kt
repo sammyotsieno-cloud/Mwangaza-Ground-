@@ -2,10 +2,15 @@ package org.SamilliMed.app.ui.navigation
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Notifications
@@ -27,11 +32,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import org.SamilliMed.app.data.AppContainer
-import org.SamilliMed.app.ui.screens.DashboardScreen
 import org.SamilliMed.app.scanner.ProductScanDraft
+import org.SamilliMed.app.ui.screens.DashboardScreen
 import org.SamilliMed.app.ui.screens.DispensingScreen
 import org.SamilliMed.app.ui.screens.ExpiryAlertsScreen
 import org.SamilliMed.app.ui.screens.GoodsReceivingScreen
@@ -42,6 +51,7 @@ import org.SamilliMed.app.ui.screens.ProductScannerScreen
 import org.SamilliMed.app.ui.screens.ProductsScreen
 import org.SamilliMed.app.ui.screens.ReportsScreen
 import org.SamilliMed.app.ui.screens.SettingsScreen
+import org.SamilliMed.app.ui.theme.OatBackground
 
 private sealed class BottomNavItem(
     val title: String,
@@ -66,11 +76,7 @@ fun AppNavigation(
     var showExitConfirmation by remember { mutableStateOf(false) }
 
     BackHandler(enabled = currentFeature != null) {
-        currentFeature = if (currentFeature == "product-scanner") {
-            "products"
-        } else {
-            null
-        }
+        currentFeature = if (currentFeature == "product-scanner") "products" else null
     }
 
     BackHandler(enabled = currentFeature == null && currentBottomTab != BottomNavItem.Dashboard) {
@@ -92,14 +98,10 @@ fun AppNavigation(
                         showExitConfirmation = false
                         (context as? Activity)?.finish()
                     }
-                ) {
-                    Text("Exit")
-                }
+                ) { Text("Exit") }
             },
             dismissButton = {
-                TextButton(onClick = { showExitConfirmation = false }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = { showExitConfirmation = false }) { Text("Cancel") }
             }
         )
     }
@@ -108,12 +110,11 @@ fun AppNavigation(
         bottomBar = {
             if (currentFeature == null) {
                 NavigationBar {
-                    val bottomItems = listOf(
+                    listOf(
                         BottomNavItem.Dashboard,
                         BottomNavItem.Notifications,
                         BottomNavItem.Settings
-                    )
-                    bottomItems.forEach { item ->
+                    ).forEach { item ->
                         val selected = currentBottomTab == item
                         NavigationBarItem(
                             selected = selected,
@@ -137,88 +138,62 @@ fun AppNavigation(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            OatBackground,
+                            OatBackground.copy(red = 0.90f, green = 0.88f, blue = 0.82f)
+                        )
+                    )
+                )
                 .padding(if (currentFeature == null) innerPadding else PaddingValues())
         ) {
+            // Ambient light fields. They remain behind the translucent cards.
+            Box(
+                modifier = Modifier
+                    .size(220.dp)
+                    .offset(x = (-70).dp, y = 80.dp)
+                    .blur(42.dp)
+                    .background(
+                        Color(0xFFD8E4DB).copy(alpha = 0.70f),
+                        CircleShape
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .size(190.dp)
+                    .offset(x = 220.dp, y = 260.dp)
+                    .blur(46.dp)
+                    .background(
+                        Color(0xFFF0CFA0).copy(alpha = 0.52f),
+                        CircleShape
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .size(170.dp)
+                    .offset(x = 70.dp, y = 560.dp)
+                    .blur(48.dp)
+                    .background(
+                        Color(0xFFC9D9CC).copy(alpha = 0.58f),
+                        CircleShape
+                    )
+            )
+
             when {
-                currentFeature == "products" -> {
-                    ProductsScreen(
-                        container = appContainer,
-                        onBack = { currentFeature = null },
-                        onScanProduct = { currentFeature = "product-scanner" },
-                        initialScanDraft = pendingScanDraft,
-                        onScanDraftConsumed = { pendingScanDraft = null }
-                    )
-                }
-                currentFeature == "product-scanner" -> {
-                    ProductScannerScreen(
-                        onConfirmed = { draft ->
-                            pendingScanDraft = draft
-                            currentFeature = "products"
-                        }
-                    )
-                }
-                currentFeature == "receiving" -> {
-                    GoodsReceivingScreen(
-                        container = appContainer,
-                        onBack = { currentFeature = null }
-                    )
-                }
-                currentFeature == "dispensing" -> {
-                    DispensingScreen(
-                        container = appContainer,
-                        onBack = { currentFeature = null }
-                    )
-                }
-                currentFeature == "inventory" -> {
-                    InventoryScreen(
-                        container = appContainer,
-                        onBack = { currentFeature = null }
-                    )
-                }
-                currentFeature == "alerts" -> {
-                    ExpiryAlertsScreen(
-                        container = appContainer,
-                        onBack = { currentFeature = null }
-                    )
-                }
-                currentFeature == "reports" -> {
-                    ReportsScreen(
-                        container = appContainer,
-                        onBack = { currentFeature = null }
-                    )
-                }
-                currentFeature == "suppliers" -> {
-                    PlaceholderScreen(
-                        title = "Suppliers",
-                        explanation = "Supplier entity identity is defined in database schema, but automated supplier account ledger and procurement orchestration services are pending future architectural reconciliation. Use Goods Receiving for supplier invoice & batch tracking.",
-                        onBack = { currentFeature = null }
-                    )
-                }
-                currentFeature == "adjustments" -> {
-                    PlaceholderScreen(
-                        title = "Stock Adjustments",
-                        explanation = "Direct stock adjustments require atomic inventory cost layer reallocation and write-off ledger reconciliation to maintain zero-drift FIFO integrity. Currently, intake is recorded via Goods Receiving and reversals via Dispensing Void.",
-                        onBack = { currentFeature = null }
-                    )
-                }
-                currentFeature != null -> {
-                    PlaceholderScreen(
-                        title = "Feature",
-                        onBack = { currentFeature = null }
-                    )
-                }
-                currentBottomTab is BottomNavItem.Dashboard -> {
-                    DashboardScreen(
-                        onFeatureClick = { route -> currentFeature = route },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                currentBottomTab is BottomNavItem.Notifications -> {
-                    NotificationsScreen(modifier = Modifier.fillMaxSize())
-                }
-                currentBottomTab is BottomNavItem.Settings -> {
-                    SettingsScreen(modifier = Modifier.fillMaxSize())
-                }
+                currentFeature == "products" -> ProductsScreen(container = appContainer, onBack = { currentFeature = null }, onScanProduct = { currentFeature = "product-scanner" }, initialScanDraft = pendingScanDraft, onScanDraftConsumed = { pendingScanDraft = null })
+                currentFeature == "product-scanner" -> ProductScannerScreen(onConfirmed = { draft -> pendingScanDraft = draft; currentFeature = "products" })
+                currentFeature == "receiving" -> GoodsReceivingScreen(container = appContainer, onBack = { currentFeature = null })
+                currentFeature == "dispensing" -> DispensingScreen(container = appContainer, onBack = { currentFeature = null })
+                currentFeature == "inventory" -> InventoryScreen(container = appContainer, onBack = { currentFeature = null })
+                currentFeature == "alerts" -> ExpiryAlertsScreen(container = appContainer, onBack = { currentFeature = null })
+                currentFeature == "reports" -> ReportsScreen(container = appContainer, onBack = { currentFeature = null })
+                currentFeature == "suppliers" -> PlaceholderScreen(title = "Suppliers", explanation = "Supplier entity identity is defined in database schema, but automated supplier account ledger and procurement orchestration services are pending future architectural reconciliation. Use Goods Receiving for supplier invoice & batch tracking.", onBack = { currentFeature = null })
+                currentFeature == "adjustments" -> PlaceholderScreen(title = "Stock Adjustments", explanation = "Direct stock adjustments require atomic inventory cost layer reallocation and write-off ledger reconciliation to maintain zero-drift FIFO integrity. Currently, intake is recorded via Goods Receiving and reversals via Dispensing Void.", onBack = { currentFeature = null })
+                currentFeature != null -> PlaceholderScreen(title = "Feature", onBack = { currentFeature = null })
+                currentBottomTab is BottomNavItem.Dashboard -> DashboardScreen(onFeatureClick = { route -> currentFeature = route }, modifier = Modifier.fillMaxSize())
+                currentBottomTab is BottomNavItem.Notifications -> NotificationsScreen(modifier = Modifier.fillMaxSize())
+                currentBottomTab is BottomNavItem.Settings -> SettingsScreen(modifier = Modifier.fillMaxSize())
             }
         }
     }
