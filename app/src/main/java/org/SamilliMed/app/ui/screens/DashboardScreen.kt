@@ -138,6 +138,7 @@ fun DashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier
                         .width(gridMaxWidth)
+                        .heightIn(max = 520.dp)
                         .align(Alignment.Center)
                 ) {
                     items(dashboardFeatures, key = { it.route }) { feature ->
