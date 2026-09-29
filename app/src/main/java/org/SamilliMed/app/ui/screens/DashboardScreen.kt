@@ -1,5 +1,6 @@
 package org.SamilliMed.app.ui.screens
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -40,9 +42,12 @@ import androidx.compose.ui.unit.sp
 import org.SamilliMed.app.ui.theme.OatBackground
 import org.SamilliMed.app.ui.theme.SagePrimary
 
-private val AmberGlow = Color(0xFFD4A373)
-private val GlassWhite = Color.White.copy(alpha = 0.35f)
-private val TextDark = Color(0xFF1A1A1A)
+private val Amber = Color(0xFFD39A55)
+private val AmberLight = Color(0xFFF0C987)
+private val Sage = Color(0xFF64856A)
+private val SageLight = Color(0xFF9EB9A1)
+private val TextDark = Color(0xFF171714)
+private val TileWhite = Color(0xFFF8F5EC).copy(alpha = 0.78f)
 
 @Composable
 fun DashboardScreen(
@@ -54,167 +59,258 @@ fun DashboardScreen(
             .fillMaxSize()
             .background(OatBackground)
     ) {
-        AmbientBackground()
+        ReferenceBackground()
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(0.dp, 50.dp, 0.dp, 100.dp)
+                .padding(horizontal = 24.dp, vertical = 34.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Dashboard",
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = TextDark
-                )
-                Text(
-                    text = "SamilliMed Medical Centre",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFF555555),
-                    letterSpacing = 0.5.sp,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
+            Text(
+                text = "Dashboard",
+                fontSize = 30.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = TextDark,
+                textAlign = TextAlign.Center
+            )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Text(
+                text = "SamilliMed Medical Centre",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+
+            Spacer(modifier = Modifier.height(30.dp))
 
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(20.dp, 0.dp, 20.dp, 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
+                columns = GridCells.Fixed(4),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                modifier = Modifier
+                    .widthIn(max = 780.dp)
+                    .wrapContentHeight()
             ) {
                 items(dashboardFeatures) { feature ->
-                    Glass3DTile(
+                    ReferenceTile(
                         title = feature.title,
                         icon = feature.icon,
                         onClick = { onFeatureClick(feature.route) }
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            ReferenceDock(
+                modifier = Modifier.widthIn(max = 390.dp),
+                onNavigate = onFeatureClick
+            )
         }
-
-        GlassDock(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(0.dp, 0.dp, 0.dp, 30.dp),
-            onNavigate = onFeatureClick
-        )
     }
 }
 
 @Composable
-private fun AmbientBackground() {
+private fun ReferenceBackground() {
     Box(modifier = Modifier.fillMaxSize()) {
+        // Very soft cream atmospheric lighting.
         Box(
             modifier = Modifier
-                .size(220.dp)
-                .offset(x = (-70).dp, y = 100.dp)
-                .blur(42.dp)
-                .background(Color(0xFFD8E4DB).copy(alpha = 0.70f), CircleShape)
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color.White.copy(alpha = 0.72f), Color.Transparent),
+                        radius = 900f,
+                        center = Offset(760f, 300f)
+                    )
+                )
+        )
+
+        // Blurred ambient glow behind the floating spheres.
+        Box(
+            modifier = Modifier
+                .size(280.dp)
+                .offset(x = (-105).dp, y = 250.dp)
+                .blur(65.dp)
+                .background(SageLight.copy(alpha = 0.35f), CircleShape)
         )
         Box(
             modifier = Modifier
-                .size(190.dp)
+                .size(260.dp)
                 .align(Alignment.TopEnd)
-                .offset(x = 50.dp, y = 280.dp)
-                .blur(46.dp)
-                .background(AmberGlow.copy(alpha = 0.52f), CircleShape)
+                .offset(x = 110.dp, y = 170.dp)
+                .blur(70.dp)
+                .background(AmberLight.copy(alpha = 0.25f), CircleShape)
         )
-        Box(
-            modifier = Modifier
-                .size(170.dp)
-                .align(Alignment.BottomStart)
-                .offset(x = 70.dp, y = (-120).dp)
-                .blur(48.dp)
-                .background(Color(0xFFC9D9CC).copy(alpha = 0.58f), CircleShape)
-        )
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            // Green glass spheres.
+            drawSphere(
+                center = Offset(size.width * 0.17f, size.height * 0.48f),
+                radius = size.minDimension * 0.085f,
+                base = Sage
+            )
+            drawSphere(
+                center = Offset(size.width * 0.79f, size.height * 0.18f),
+                radius = size.minDimension * 0.065f,
+                base = Sage
+            )
+
+            // Amber glass spheres.
+            drawSphere(
+                center = Offset(size.width * 0.22f, size.height * 0.25f),
+                radius = size.minDimension * 0.045f,
+                base = Amber
+            )
+            drawSphere(
+                center = Offset(size.width * 0.89f, size.height * 0.42f),
+                radius = size.minDimension * 0.055f,
+                base = Amber
+            )
+
+            // Translucent water-like sweep beneath the dashboard.
+            val y = size.height * 0.88f
+            val ribbon = Path().apply {
+                moveTo(size.width * 0.27f, y)
+                cubicTo(
+                    size.width * 0.38f, y - 42f,
+                    size.width * 0.44f, y + 28f,
+                    size.width * 0.56f, y - 8f
+                )
+                cubicTo(
+                    size.width * 0.67f, y - 42f,
+                    size.width * 0.73f, y + 26f,
+                    size.width * 0.75f, y - 2f
+                )
+                cubicTo(
+                    size.width * 0.64f, y + 42f,
+                    size.width * 0.48f, y + 38f,
+                    size.width * 0.27f, y
+                )
+                close()
+            }
+            drawPath(
+                path = ribbon,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.70f),
+                        Color(0xFFD6D0BC).copy(alpha = 0.28f),
+                        Color.White.copy(alpha = 0.55f)
+                    )
+                )
+            )
+
+            val lowerRibbon = Path().apply {
+                moveTo(size.width * 0.34f, y + 20f)
+                cubicTo(
+                    size.width * 0.47f, y - 2f,
+                    size.width * 0.55f, y + 55f,
+                    size.width * 0.68f, y + 10f
+                )
+                cubicTo(
+                    size.width * 0.59f, y + 62f,
+                    size.width * 0.45f, y + 65f,
+                    size.width * 0.34f, y + 20f
+                )
+                close()
+            }
+            drawPath(
+                path = lowerRibbon,
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.20f),
+                        Amber.copy(alpha = 0.42f),
+                        Color.White.copy(alpha = 0.12f)
+                    )
+                )
+            )
+        }
     }
 }
 
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSphere(
+    center: Offset,
+    radius: Float,
+    base: Color
+) {
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.92f),
+                base.copy(alpha = 0.92f),
+                base.copy(alpha = 0.78f),
+                Color.Black.copy(alpha = 0.16f)
+            ),
+            center = Offset(center.x - radius * 0.30f, center.y - radius * 0.34f),
+            radius = radius * 1.35f
+        ),
+        radius = radius,
+        center = center
+    )
+    drawCircle(
+        color = Color.White.copy(alpha = 0.38f),
+        radius = radius * 0.18f,
+        center = Offset(center.x - radius * 0.30f, center.y - radius * 0.38f)
+    )
+}
+
 @Composable
-private fun Glass3DTile(
+private fun ReferenceTile(
     title: String,
     icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(24.dp)
 
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .aspectRatio(1.15f)
             .shadow(
-                elevation = 15.dp,
+                elevation = 12.dp,
                 shape = shape,
-                ambientColor = SagePrimary.copy(alpha = 0.15f),
-                spotColor = AmberGlow.copy(alpha = 0.10f)
+                ambientColor = Sage.copy(alpha = 0.16f),
+                spotColor = Amber.copy(alpha = 0.18f)
             )
             .clip(shape)
-            .background(GlassWhite)
+            .background(TileWhite)
             .border(
                 width = 1.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.80f),
-                        AmberGlow.copy(alpha = 0.40f),
-                        Color.White.copy(alpha = 0.20f)
-                    ),
-                    start = Offset(0f, 0f),
-                    end = Offset(1000f, 1000f)
+                        Color.White.copy(alpha = 0.95f),
+                        AmberLight.copy(alpha = 0.38f),
+                        Color.White.copy(alpha = 0.48f)
+                    )
                 ),
                 shape = shape
             )
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 24.dp,
-                        topEnd = 24.dp
-                    )
-                )
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.60f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(8.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = title,
                 tint = SagePrimary,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(39.dp)
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
                 color = TextDark,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
-                lineHeight = 14.sp,
+                lineHeight = 16.sp,
                 maxLines = 2
             )
         }
@@ -222,25 +318,24 @@ private fun Glass3DTile(
 }
 
 @Composable
-private fun GlassDock(
+private fun ReferenceDock(
     modifier: Modifier = Modifier,
     onNavigate: (String) -> Unit
 ) {
-    val shape = RoundedCornerShape(40.dp)
+    val shape = RoundedCornerShape(22.dp)
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .height(65.dp)
+            .height(66.dp)
             .shadow(
-                elevation = 20.dp,
+                elevation = 14.dp,
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.15f)
+                ambientColor = Color.Black.copy(alpha = 0.13f)
             )
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.40f))
-            .border(1.dp, Color.White.copy(alpha = 0.70f), shape),
+            .background(Color.White.copy(alpha = 0.48f))
+            .border(1.dp, Color.White.copy(alpha = 0.78f), shape)
+            .padding(horizontal = 24.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -248,24 +343,13 @@ private fun GlassDock(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            DockIcon(
-                icon = Icons.Outlined.Dashboard,
-                isActive = true,
-                contentDescription = "Dashboard",
-                onClick = { }
-            )
-            DockIcon(
-                icon = Icons.Outlined.Notifications,
-                isActive = false,
-                contentDescription = "Alerts",
-                onClick = { onNavigate("alerts") }
-            )
-            DockIcon(
-                icon = Icons.Outlined.Settings,
-                isActive = false,
-                contentDescription = "Settings",
-                onClick = { onNavigate("settings") }
-            )
+            DockIcon(Icons.Outlined.Dashboard, true, "Dashboard") {}
+            DockIcon(Icons.Outlined.Notifications, false, "Alerts") {
+                onNavigate("alerts")
+            }
+            DockIcon(Icons.Outlined.Settings, false, "Settings") {
+                onNavigate("settings")
+            }
         }
     }
 }
@@ -279,17 +363,20 @@ private fun DockIcon(
 ) {
     Box(
         modifier = Modifier
-            .size(50.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (isActive) SagePrimary else Color.Transparent)
+            .size(46.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                if (isActive) SagePrimary.copy(alpha = 0.16f)
+                else Color.Transparent
+            )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = if (isActive) Color.White else SagePrimary,
-            modifier = Modifier.size(24.dp)
+            tint = SagePrimary,
+            modifier = Modifier.size(25.dp)
         )
     }
 }
@@ -308,5 +395,5 @@ private val dashboardFeatures = listOf(
     DashboardFeature("Expiry Alerts", Icons.Outlined.Warning, "alerts"),
     DashboardFeature("Reports", Icons.Outlined.Assessment, "reports"),
     DashboardFeature("Suppliers", Icons.Outlined.People, "suppliers"),
-    DashboardFeature("Adjustments", Icons.Outlined.Sync, "adjustments")
+    DashboardFeature("Stock Adjustments", Icons.Outlined.Sync, "adjustments")
 )
