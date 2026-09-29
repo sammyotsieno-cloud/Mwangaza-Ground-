@@ -13,7 +13,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LetterSpacing
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -178,7 +177,7 @@ fun SamilliMedSplashScreen(
                 text = "SamilliMed",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = LetterSpacing(0.05.em),
+                letterSpacing = 0.05.em,
                 color = Color(0xFF1A1A1A),
                 modifier = Modifier
                     .offset(y = textOffset)
@@ -190,7 +189,7 @@ fun SamilliMedSplashScreen(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color(0xFF555555),
-                letterSpacing = LetterSpacing(0.1.em),
+                letterSpacing = 0.1.em,
                 modifier = Modifier
                     .offset(y = textOffset)
                     .alpha(textAlpha)
