@@ -108,7 +108,7 @@ fun AppNavigation(
 
     Scaffold(
         bottomBar = {
-            if (currentFeature == null) {
+            if (currentFeature == null && currentBottomTab != BottomNavItem.Dashboard) {
                 NavigationBar {
                     listOf(
                         BottomNavItem.Dashboard,
@@ -146,7 +146,12 @@ fun AppNavigation(
                         )
                     )
                 )
-                .padding(if (currentFeature == null) innerPadding else PaddingValues())
+                .padding(
+                    if (currentFeature == null && currentBottomTab != BottomNavItem.Dashboard)
+                        innerPadding
+                    else
+                        PaddingValues()
+                )
         ) {
             // Ambient light fields. They remain behind the translucent cards.
             Box(
