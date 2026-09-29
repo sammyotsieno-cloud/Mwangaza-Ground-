@@ -1,4 +1,4 @@
-package org.mwangaza.app.data
+package org.SamilliMed.app.data
 
 import android.content.Context
 import core.domain.consumption.ConsumptionService

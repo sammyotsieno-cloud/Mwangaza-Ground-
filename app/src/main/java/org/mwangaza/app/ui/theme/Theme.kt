@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.theme
+package org.SamilliMed.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
@@ -37,7 +37,7 @@ private val ClinicalZenColorScheme = lightColorScheme(
 )
 
 @Composable
-fun MwangazaTheme(content: @Composable () -> Unit) {
+fun SamilliMedTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = ClinicalZenColorScheme,
         content = content

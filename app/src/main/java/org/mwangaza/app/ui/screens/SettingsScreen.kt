@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.screens
+package org.SamilliMed.app.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -86,7 +86,7 @@ fun SettingsScreen(
 
         SettingsItem(
             icon = Icons.Outlined.Info,
-            title = "About Mwangaza",
+            title = "About SamilliMed",
             subtitle = "Version 1.0.0"
         )
     }

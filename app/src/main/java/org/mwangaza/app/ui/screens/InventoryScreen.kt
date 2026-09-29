@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.screens
+package org.SamilliMed.app.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -57,10 +57,10 @@ import core.domain.model.StockMovement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.mwangaza.app.data.AppContainer
-import org.mwangaza.app.ui.components.VitalityCard
-import org.mwangaza.app.ui.components.VitalityState
-import org.mwangaza.app.ui.formatters.MoneyDisplayFormatter
+import org.SamilliMed.app.data.AppContainer
+import org.SamilliMed.app.ui.components.VitalityCard
+import org.SamilliMed.app.ui.components.VitalityState
+import org.SamilliMed.app.ui.formatters.MoneyDisplayFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

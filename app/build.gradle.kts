@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "org.mwangaza.app"
+    namespace = "org.SamilliMed.app"
 
     androidComponents {
         beforeVariants { variantBuilder ->
@@ -19,7 +19,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "org.mwangaza.app"
+        applicationId = "org.SamilliMed.app"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

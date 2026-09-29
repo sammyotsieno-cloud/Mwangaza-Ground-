@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.navigation
+package org.SamilliMed.app.ui.navigation
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

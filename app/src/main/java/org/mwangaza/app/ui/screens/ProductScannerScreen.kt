@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.screens
+package org.SamilliMed.app.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -38,10 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
-import org.mwangaza.app.scanner.ProductScanAnalysis
-import org.mwangaza.app.scanner.ProductScanDraft
-import org.mwangaza.app.scanner.ProductScanEngine
-import org.mwangaza.app.scanner.ProductExtractionEngine
+import org.SamilliMed.app.scanner.ProductScanAnalysis
+import org.SamilliMed.app.scanner.ProductScanDraft
+import org.SamilliMed.app.scanner.ProductScanEngine
+import org.SamilliMed.app.scanner.ProductExtractionEngine
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date

@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Mwangaza-Ground"
+rootProject.name = "SamilliMed"
 include(":app")
 include(":core")

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "org.mwangaza.core"
+    namespace = "org.SamilliMed.core"
     compileSdk = 34
 
     defaultConfig {

@@ -10,7 +10,7 @@ import androidx.room.PrimaryKey
  *
  * Reusability & Facility Identity:
  * - This entity models facility configuration as DATA, not code or hard-coded domain logic.
- * - While the initial deployment operates at "Mwangaza-Ground", the software is designed to be
+ * - While the initial deployment operates at "SamilliMed", the software is designed to be
  *   reusable across any health facility (chemist, clinic, dispensary, pharmacy, hospital store)
  *   without altering business logic, database schemas, inventory rules, or transaction processing.
  *

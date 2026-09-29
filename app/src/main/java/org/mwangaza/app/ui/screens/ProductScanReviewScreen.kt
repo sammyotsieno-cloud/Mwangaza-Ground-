@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.screens
+package org.SamilliMed.app.ui.screens
 
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -25,8 +25,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
-import org.mwangaza.app.scanner.ProductScanAnalysis
-import org.mwangaza.app.scanner.ProductScanDraft
+import org.SamilliMed.app.scanner.ProductScanAnalysis
+import org.SamilliMed.app.scanner.ProductScanDraft
 
 @Composable
 fun ProductScanReviewScreen(

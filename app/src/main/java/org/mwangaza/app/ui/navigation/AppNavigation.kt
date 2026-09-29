@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.navigation
+package org.SamilliMed.app.ui.navigation
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
@@ -29,19 +29,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import org.mwangaza.app.data.AppContainer
-import org.mwangaza.app.ui.screens.DashboardScreen
-import org.mwangaza.app.scanner.ProductScanDraft
-import org.mwangaza.app.ui.screens.DispensingScreen
-import org.mwangaza.app.ui.screens.ExpiryAlertsScreen
-import org.mwangaza.app.ui.screens.GoodsReceivingScreen
-import org.mwangaza.app.ui.screens.InventoryScreen
-import org.mwangaza.app.ui.screens.NotificationsScreen
-import org.mwangaza.app.ui.screens.PlaceholderScreen
-import org.mwangaza.app.ui.screens.ProductScannerScreen
-import org.mwangaza.app.ui.screens.ProductsScreen
-import org.mwangaza.app.ui.screens.ReportsScreen
-import org.mwangaza.app.ui.screens.SettingsScreen
+import org.SamilliMed.app.data.AppContainer
+import org.SamilliMed.app.ui.screens.DashboardScreen
+import org.SamilliMed.app.scanner.ProductScanDraft
+import org.SamilliMed.app.ui.screens.DispensingScreen
+import org.SamilliMed.app.ui.screens.ExpiryAlertsScreen
+import org.SamilliMed.app.ui.screens.GoodsReceivingScreen
+import org.SamilliMed.app.ui.screens.InventoryScreen
+import org.SamilliMed.app.ui.screens.NotificationsScreen
+import org.SamilliMed.app.ui.screens.PlaceholderScreen
+import org.SamilliMed.app.ui.screens.ProductScannerScreen
+import org.SamilliMed.app.ui.screens.ProductsScreen
+import org.SamilliMed.app.ui.screens.ReportsScreen
+import org.SamilliMed.app.ui.screens.SettingsScreen
 
 private sealed class BottomNavItem(
     val title: String,
@@ -85,7 +85,7 @@ fun AppNavigation(
         AlertDialog(
             onDismissRequest = { showExitConfirmation = false },
             title = { Text("Exit Application") },
-            text = { Text("Are you sure you want to exit Mwangaza Ground?") },
+            text = { Text("Are you sure you want to exit SamilliMed Ground?") },
             confirmButton = {
                 Button(
                     onClick = {

@@ -204,7 +204,7 @@ object GoodsReceiptService {
         }
 
         /*
-         * BigInteger.longValueExact() is API 31+, while Mwangaza supports
+         * BigInteger.longValueExact() is API 31+, while SamilliMed supports
          * API 24. Convert through the decimal representation instead.
          *
          * An out-of-range BigInteger cannot be parsed as Long, while an

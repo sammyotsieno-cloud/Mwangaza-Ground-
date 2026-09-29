@@ -1,4 +1,4 @@
-package org.mwangaza.app
+package org.SamilliMed.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -9,16 +9,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import org.mwangaza.app.ui.navigation.AppNavigation
-import org.mwangaza.app.ui.screens.SamilliMedSplashScreen
-import org.mwangaza.app.ui.theme.MwangazaTheme
+import org.SamilliMed.app.ui.navigation.AppNavigation
+import org.SamilliMed.app.ui.screens.SamilliMedSplashScreen
+import org.SamilliMed.app.ui.theme.SamilliMedTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MwangazaTheme {
+            SamilliMedTheme {
                 MainActivityContent()
             }
         }

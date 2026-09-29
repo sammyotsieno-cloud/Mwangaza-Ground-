@@ -1,4 +1,4 @@
-package org.mwangaza.app.scanner
+package org.SamilliMed.app.scanner
 
 import java.util.Locale
 

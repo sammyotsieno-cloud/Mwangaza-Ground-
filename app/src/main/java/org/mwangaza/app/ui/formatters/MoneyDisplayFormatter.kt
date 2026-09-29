@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.formatters
+package org.SamilliMed.app.ui.formatters
 
 import core.domain.model.RationalCost
 import java.math.BigDecimal

@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.screens
+package org.SamilliMed.app.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -62,7 +62,7 @@ import androidx.compose.ui.unit.dp
 import core.domain.model.Money
 import core.domain.model.PharmaceuticalDetail
 import core.domain.model.ProductImage
-import org.mwangaza.app.scanner.ProductScanDraft
+import org.SamilliMed.app.scanner.ProductScanDraft
 import android.net.Uri
 import core.domain.model.ProductMaster
 import core.domain.model.ProductUnit
@@ -71,7 +71,7 @@ import core.domain.model.UnitPriceConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.mwangaza.app.data.AppContainer
+import org.SamilliMed.app.data.AppContainer
 import java.util.UUID
 
 data class ProductWithDetails(

@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.components
+package org.SamilliMed.app.ui.components
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat

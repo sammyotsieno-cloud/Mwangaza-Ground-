@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.screens
+package org.SamilliMed.app.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,8 +39,8 @@ import core.domain.model.RationalCost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.mwangaza.app.data.AppContainer
-import org.mwangaza.app.ui.formatters.MoneyDisplayFormatter
+import org.SamilliMed.app.data.AppContainer
+import org.SamilliMed.app.ui.formatters.MoneyDisplayFormatter
 import java.math.BigInteger
 
 data class FinancialReportData(

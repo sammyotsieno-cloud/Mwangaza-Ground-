@@ -1,1 +1,1 @@
-# Proguard rules for Mwangaza Ground Android Application
+# Proguard rules for SamilliMed Ground Android Application

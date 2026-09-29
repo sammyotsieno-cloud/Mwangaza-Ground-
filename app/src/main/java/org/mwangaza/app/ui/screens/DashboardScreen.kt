@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.screens
+package org.SamilliMed.app.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,7 +28,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.mwangaza.app.ui.components.FeatureCard
+import org.SamilliMed.app.ui.components.FeatureCard
 
 data class FeatureItem(
     val title: String,
@@ -67,7 +67,7 @@ fun DashboardScreen(
         )
 
         Text(
-            text = "Mwangaza Medical Centre",
+            text = "SamilliMed Medical Centre",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 14.sp

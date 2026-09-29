@@ -1,4 +1,4 @@
-package org.mwangaza.app.ui.screens
+package org.SamilliMed.app.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,7 +69,7 @@ import core.domain.receiving.ReceivingResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.mwangaza.app.data.AppContainer
+import org.SamilliMed.app.data.AppContainer
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat

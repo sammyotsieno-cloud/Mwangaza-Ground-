@@ -139,7 +139,7 @@ abstract class CoreDatabase : RoomDatabase() {
                 INSTANCE ?: androidx.room.Room.databaseBuilder(
                     context.applicationContext,
                     CoreDatabase::class.java,
-                    "mwangaza_ground.db"
+                    "SamilliMed_ground.db"
                 )
                     .addMigrations(MIGRATION_1_2)
                     .build()

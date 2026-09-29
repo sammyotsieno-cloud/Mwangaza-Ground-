@@ -4,7 +4,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
- * Exact monetary value object for Mwangaza-Ground Phase 1.
+ * Exact monetary value object for SamilliMed Phase 1.
  *
  * Currency:
  * - Kenyan Shilling (KES)
