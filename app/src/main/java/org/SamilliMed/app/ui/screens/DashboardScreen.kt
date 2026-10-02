@@ -1,33 +1,52 @@
 package org.SamilliMed.app.ui.screens
 
 import android.content.Context
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BasicMarquee
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Assessment
-import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.Inventory
 import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.outlined.MedicalServices
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.People
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.ShoppingCart
-import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Warning
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,16 +58,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.text.input.KeyboardType
 import org.SamilliMed.app.ui.theme.OatBackground
 import org.SamilliMed.app.ui.theme.SagePrimary
 
@@ -56,13 +90,11 @@ private const val PREFS_NAME = "samillimed_dashboard"
 private const val FACILITY_NAME_KEY = "facility_name"
 private const val DEFAULT_FACILITY_NAME = "SamilliMed Medical Centre"
 
-private val Amber = Color(0xFFD39A55)
-private val AmberLight = Color(0xFFF0C987)
-private val Sage = Color(0xFF64856A)
-private val SageLight = Color(0xFF9EB9A1)
-private val TextDark = Color(0xFF171714)
-private val TileFace = Color(0xFFF8F5EC).copy(alpha = 0.84f)
-private val TileEdge = Color(0xFFD6D0BC).copy(alpha = 0.62f)
+private val WarmOat = Color(0xFFF4F1EA)
+private val Sage = Color(0xFF5C7A65)
+private val Amber = Color(0xFFD4A373)
+private val Charcoal = Color(0xFF1A1A1A)
+private val SoftGrey = Color(0xFF555555)
 
 @Composable
 fun DashboardScreen(
@@ -81,258 +113,237 @@ fun DashboardScreen(
                 ?: DEFAULT_FACILITY_NAME
         )
     }
-    var showFacilityEditor by rememberSaveable { mutableStateOf(false) }
-    var draftFacilityName by rememberSaveable { mutableStateOf("") }
+    var editingFacilityName by rememberSaveable { mutableStateOf(false) }
+    var draftFacilityName by rememberSaveable { mutableStateOf(facilityName) }
+
+    fun saveFacilityName() {
+        val value = draftFacilityName.trim().ifBlank { DEFAULT_FACILITY_NAME }
+        facilityName = value
+        draftFacilityName = value
+        preferences.edit().putString(FACILITY_NAME_KEY, value).apply()
+        editingFacilityName = false
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(OatBackground)
+            .background(WarmOat)
     ) {
-        ReferenceBackground()
+        AmbientGlassEnvironment()
 
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 22.dp)
+                .padding(top = 44.dp, start = 20.dp, end = 20.dp, bottom = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 92.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Dashboard",
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = TextDark,
-                    textAlign = TextAlign.Center
-                )
-
-                Text(
-                    text = facilityName,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextDark,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
-                            draftFacilityName = facilityName
-                            showFacilityEditor = true
-                        }
-                        .padding(horizontal = 10.dp, vertical = 3.dp)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
-                    val isLandscapeLike = maxWidth > maxHeight
-                    val columns = when {
-                        maxWidth >= 900.dp -> 5
-                        isLandscapeLike && maxWidth >= 600.dp -> 4
-                        maxWidth >= 600.dp -> 3
-                        else -> 2
-                    }
-                    val gridMaxWidth = minOf(maxWidth, 900.dp)
-
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(columns),
-                        contentPadding = PaddingValues(
-                            start = 2.dp,
-                            end = 2.dp,
-                            top = 4.dp,
-                            bottom = 12.dp
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier
-                            .widthIn(max = 900.dp)
-                            .fillMaxHeight()
-                            .align(Alignment.Center)
-                    ) {
-                        items(dashboardFeatures, key = { it.route }) { feature ->
-                            ReferenceTile(
-                                title = feature.title,
-                                icon = feature.icon,
-                                compact = columns >= 4,
-                                onClick = { onFeatureClick(feature.route) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            ReferenceDock(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .widthIn(max = 430.dp),
-                onNavigate = onFeatureClick
+            Text(
+                text = "Dashboard",
+                fontSize = 28.sp,
+                lineHeight = 34.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Charcoal,
+                textAlign = TextAlign.Center
             )
-        }
-    }
 
-    if (showFacilityEditor) {
-        AlertDialog(
-            onDismissRequest = { showFacilityEditor = false },
-            title = { Text("Edit facility name") },
-            text = {
-                OutlinedTextField(
-                    value = draftFacilityName,
-                    onValueChange = { draftFacilityName = it },
-                    singleLine = false,
-                    maxLines = 2,
-                    label = { Text("Facility name") }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = draftFacilityName.trim().isNotEmpty(),
-                    onClick = {
-                        val savedName = draftFacilityName.trim()
-                        facilityName = savedName
-                        preferences.edit()
-                            .putString(FACILITY_NAME_KEY, savedName)
-                            .apply()
-                        showFacilityEditor = false
+            Spacer(modifier = Modifier.height(2.dp))
+
+            BasicTextField(
+                value = draftFacilityName,
+                onValueChange = { draftFacilityName = it },
+                readOnly = !editingFacilityName,
+                singleLine = false,
+                maxLines = 2,
+                textStyle = TextStyle(
+                    fontSize = 14.sp,
+                    lineHeight = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Charcoal,
+                    textAlign = TextAlign.Center
+                ),
+                cursorBrush = SolidColor(Sage),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = { saveFacilityName() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        draftFacilityName = facilityName
+                        editingFacilityName = true
                     }
+                    .onFocusChanged { state ->
+                        if (!state.isFocused && editingFacilityName) saveFacilityName()
+                    }
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 110.dp),
+                    contentPadding = PaddingValues(
+                        start = 0.dp,
+                        end = 0.dp,
+                        top = 2.dp,
+                        bottom = 92.dp
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showFacilityEditor = false }) {
-                    Text("Cancel")
+                    items(dashboardFeatures, key = { it.route }) { feature ->
+                        GlassDashboardTile(
+                            title = feature.title,
+                            icon = feature.icon,
+                            onClick = { onFeatureClick(feature.route) }
+                        )
+                    }
                 }
             }
+        }
+
+        LiquidGlassDock(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = 24.dp, end = 24.dp, bottom = 30.dp),
+            onUser = { onFeatureClick("settings") },
+            onCart = { onFeatureClick("receiving") },
+            onHeart = { onFeatureClick("dashboard") }
         )
     }
 }
 
 @Composable
-private fun ReferenceBackground() {
+private fun AmbientGlassEnvironment() {
+    val transition = rememberInfiniteTransition(label = "ambient-orbs")
+    val driftOne by transition.animateFloat(
+        initialValue = -10f,
+        targetValue = 12f,
+        animationSpec = infiniteRepeatable(tween(7000), RepeatMode.Reverse),
+        label = "orb-one"
+    )
+    val driftTwo by transition.animateFloat(
+        initialValue = 10f,
+        targetValue = -14f,
+        animationSpec = infiniteRepeatable(tween(9000), RepeatMode.Reverse),
+        label = "orb-two"
+    )
+    val driftThree by transition.animateFloat(
+        initialValue = -8f,
+        targetValue = 9f,
+        animationSpec = infiniteRepeatable(tween(11000), RepeatMode.Reverse),
+        label = "orb-three"
+    )
+    val driftFour by transition.animateFloat(
+        initialValue = 8f,
+        targetValue = -10f,
+        animationSpec = infiniteRepeatable(tween(8000), RepeatMode.Reverse),
+        label = "orb-four"
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .size(230.dp)
+                .offset(x = (-82).dp, y = 170.dp + driftOne.dp)
+                .blur(58.dp)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.72f),
+                            Sage.copy(alpha = 0.20f),
+                            Sage.copy(alpha = 0.06f),
                             Color.Transparent
-                        ),
-                        radius = 900f,
-                        center = Offset(760f, 300f)
-                    )
+                        )
+                    ),
+                    CircleShape
                 )
         )
-
         Box(
             modifier = Modifier
-                .size(280.dp)
-                .offset(x = (-105).dp, y = 250.dp)
-                .blur(65.dp)
-                .background(SageLight.copy(alpha = 0.35f), CircleShape)
+                .size(210.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 74.dp, y = 96.dp + driftTwo.dp)
+                .blur(60.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Amber.copy(alpha = 0.18f),
+                            Amber.copy(alpha = 0.05f),
+                            Color.Transparent
+                        )
+                    ),
+                    CircleShape
+                )
         )
         Box(
             modifier = Modifier
-                .size(260.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 110.dp, y = 170.dp)
-                .blur(70.dp)
-                .background(AmberLight.copy(alpha = 0.25f), CircleShape)
+                .size(180.dp)
+                .align(Alignment.CenterEnd)
+                .offset(x = 74.dp, y = 40.dp + driftThree.dp)
+                .blur(52.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Sage.copy(alpha = 0.17f),
+                            Sage.copy(alpha = 0.04f),
+                            Color.Transparent
+                        )
+                    ),
+                    CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(170.dp)
+                .align(Alignment.BottomStart)
+                .offset(x = (-48).dp, y = (-95).dp + driftFour.dp)
+                .blur(54.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Amber.copy(alpha = 0.16f),
+                            Amber.copy(alpha = 0.04f),
+                            Color.Transparent
+                        )
+                    ),
+                    CircleShape
+                )
         )
 
         Canvas(modifier = Modifier.fillMaxSize()) {
-            drawSphere(
-                center = Offset(size.width * 0.17f, size.height * 0.48f),
-                radius = size.minDimension * 0.085f,
+            drawGlassSphere(
+                center = Offset(size.width * 0.14f, size.height * 0.47f),
+                radius = size.minDimension * 0.075f,
                 base = Sage
             )
-            drawSphere(
-                center = Offset(size.width * 0.79f, size.height * 0.18f),
-                radius = size.minDimension * 0.065f,
-                base = Sage
+            drawGlassSphere(
+                center = Offset(size.width * 0.84f, size.height * 0.20f),
+                radius = size.minDimension * 0.052f,
+                base = Amber
             )
-            drawSphere(
-                center = Offset(size.width * 0.22f, size.height * 0.25f),
+            drawGlassSphere(
+                center = Offset(size.width * 0.20f, size.height * 0.25f),
+                radius = size.minDimension * 0.040f,
+                base = Amber
+            )
+            drawGlassSphere(
+                center = Offset(size.width * 0.91f, size.height * 0.55f),
                 radius = size.minDimension * 0.045f,
-                base = Amber
-            )
-            drawSphere(
-                center = Offset(size.width * 0.89f, size.height * 0.42f),
-                radius = size.minDimension * 0.055f,
-                base = Amber
-            )
-
-            val y = size.height * 0.88f
-            val ribbon = Path().apply {
-                moveTo(size.width * 0.27f, y)
-                cubicTo(
-                    size.width * 0.38f, y - 42f,
-                    size.width * 0.44f, y + 28f,
-                    size.width * 0.56f, y - 8f
-                )
-                cubicTo(
-                    size.width * 0.67f, y - 42f,
-                    size.width * 0.73f, y + 26f,
-                    size.width * 0.75f, y - 2f
-                )
-                cubicTo(
-                    size.width * 0.64f, y + 42f,
-                    size.width * 0.48f, y + 38f,
-                    size.width * 0.27f, y
-                )
-                close()
-            }
-            drawPath(
-                path = ribbon,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.70f),
-                        Color(0xFFD6D0BC).copy(alpha = 0.28f),
-                        Color.White.copy(alpha = 0.55f)
-                    )
-                )
-            )
-
-            val lowerRibbon = Path().apply {
-                moveTo(size.width * 0.34f, y + 20f)
-                cubicTo(
-                    size.width * 0.47f, y - 2f,
-                    size.width * 0.55f, y + 55f,
-                    size.width * 0.68f, y + 10f
-                )
-                cubicTo(
-                    size.width * 0.59f, y + 62f,
-                    size.width * 0.45f, y + 65f,
-                    size.width * 0.34f, y + 20f
-                )
-                close()
-            }
-            drawPath(
-                path = lowerRibbon,
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.20f),
-                        Amber.copy(alpha = 0.42f),
-                        Color.White.copy(alpha = 0.12f)
-                    )
-                )
+                base = Sage
             )
         }
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSphere(
+private fun DrawScope.drawGlassSphere(
     center: Offset,
     radius: Float,
     base: Color
@@ -340,160 +351,193 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSphere(
     drawCircle(
         brush = Brush.radialGradient(
             colors = listOf(
-                Color.White.copy(alpha = 0.92f),
-                base.copy(alpha = 0.92f),
-                base.copy(alpha = 0.78f),
-                Color.Black.copy(alpha = 0.16f)
+                Color.White.copy(alpha = 0.88f),
+                base.copy(alpha = 0.72f),
+                base.copy(alpha = 0.38f),
+                Color.Transparent
             ),
-            center = Offset(center.x - radius * 0.30f, center.y - radius * 0.34f),
-            radius = radius * 1.35f
+            center = Offset(center.x - radius * 0.32f, center.y - radius * 0.38f),
+            radius = radius * 1.28f
         ),
         radius = radius,
         center = center
     )
     drawCircle(
-        color = Color.White.copy(alpha = 0.38f),
-        radius = radius * 0.18f,
+        color = Color.White.copy(alpha = 0.42f),
+        radius = radius * 0.17f,
         center = Offset(center.x - radius * 0.30f, center.y - radius * 0.38f)
     )
 }
 
 @Composable
-private fun ReferenceTile(
+private fun GlassDashboardTile(
     title: String,
     icon: ImageVector,
-    compact: Boolean = false,
     onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(if (compact) 20.dp else 24.dp)
+    val shape = RoundedCornerShape(24.dp)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(if (compact) 1.16f else 1.08f)
+            .aspectRatio(1f)
     ) {
-        // Lower translucent edge creates the physical depth visible in the reference.
+        // Warm light spilling from behind the lower edge.
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .offset(y = 6.dp)
+                .padding(top = 4.dp)
                 .clip(shape)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            TileEdge,
-                            Color(0xFFBDB5A0).copy(alpha = 0.86f)
+                            Color.Transparent,
+                            Amber.copy(alpha = 0.08f),
+                            Amber.copy(alpha = 0.42f)
                         )
                     )
                 )
+                .blur(5.dp)
         )
 
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .shadow(
-                    elevation = 13.dp,
+                    elevation = 12.dp,
                     shape = shape,
-                    ambientColor = Sage.copy(alpha = 0.18f),
-                    spotColor = Amber.copy(alpha = 0.20f)
+                    ambientColor = Sage.copy(alpha = 0.10f),
+                    spotColor = Sage.copy(alpha = 0.10f)
                 )
                 .clip(shape)
-                .background(
-                    Brush.linearGradient(
-                        start = Offset(0f, 0f),
-                        end = Offset(900f, 900f),
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.97f),
-                            Color(0xFFF9F6ED).copy(alpha = 0.88f),
-                            TileFace,
-                            Color(0xFFE4DDCE).copy(alpha = 0.76f)
-                        )
-                    )
-                )
-                .drawBehind {
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.62f),
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.05f)
-                            )
-                        ),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(
-                            24.dp.toPx()
-                        ),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(
-                            width = 1.5.dp.toPx()
-                        )
-                    )
-                }
+                .background(Color.White.copy(alpha = 0.35f))
                 .border(
                     width = 1.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.98f),
-                            AmberLight.copy(alpha = 0.38f),
-                            Color.White.copy(alpha = 0.46f)
-                        )
-                    ),
+                    color = Color.White.copy(alpha = 0.60f),
                     shape = shape
                 )
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
+                .clickable(onClick = onClick)
         ) {
+            // Glossy upper half.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.56f)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 24.dp,
+                            topEnd = 24.dp,
+                            bottomStart = 34.dp,
+                            bottomEnd = 34.dp
+                        )
+                    )
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.60f),
+                                Color.White.copy(alpha = 0.16f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            // Amber refraction along the lower edge.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Amber.copy(alpha = 0.08f),
+                                Amber.copy(alpha = 0.40f)
+                            )
+                        )
+                    )
+            )
+
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(if (compact) 6.dp else 8.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = SagePrimary,
-                    modifier = Modifier.size(if (compact) 34.dp else 39.dp)
-                )
-                Spacer(modifier = Modifier.height(if (compact) 6.dp else 9.dp))
-                Text(
-                    text = title,
-                    color = TextDark,
-                    fontSize = if (compact) 12.sp else 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 16.sp,
-                    maxLines = 2
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.60f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = Sage,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.40f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = title,
+                        color = Charcoal,
+                        fontSize = 12.sp,
+                        lineHeight = 14.4.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ReferenceDock(
+private fun LiquidGlassDock(
     modifier: Modifier = Modifier,
-    onNavigate: (String) -> Unit
+    onUser: () -> Unit,
+    onCart: () -> Unit,
+    onHeart: () -> Unit
 ) {
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(
+        topStart = 40.dp,
+        topEnd = 60.dp,
+        bottomEnd = 30.dp,
+        bottomStart = 50.dp
+    )
 
     Box(
         modifier = modifier
-            .height(70.dp)
+            .widthIn(max = 360.dp)
+            .fillMaxWidth()
+            .height(82.dp)
             .shadow(
-                elevation = 14.dp,
+                elevation = 16.dp,
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.13f)
+                ambientColor = Sage.copy(alpha = 0.10f),
+                spotColor = Amber.copy(alpha = 0.14f)
             )
             .clip(shape)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.64f),
-                        Color(0xFFF4F0E5).copy(alpha = 0.38f),
-                        Color.White.copy(alpha = 0.26f)
+                        Color.White.copy(alpha = 0.20f),
+                        Color.White.copy(alpha = 0.12f),
+                        Amber.copy(alpha = 0.18f)
                     )
                 )
             )
-            .border(1.dp, Color.White.copy(alpha = 0.88f), shape)
-            .padding(horizontal = 24.dp),
+            .border(1.dp, Color.White.copy(alpha = 0.48f), shape)
+            .padding(horizontal = 28.dp, vertical = 18.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -501,40 +545,41 @@ private fun ReferenceDock(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            DockIcon(Icons.Outlined.Dashboard, true, "Dashboard") {}
-            DockIcon(Icons.Outlined.Notifications, false, "Alerts") {
-                onNavigate("alerts")
-            }
-            DockIcon(Icons.Outlined.Settings, false, "Settings") {
-                onNavigate("settings")
-            }
+            LiquidDockIcon(Icons.Outlined.Person, "User", onUser)
+            LiquidDockIcon(Icons.Outlined.ShoppingCart, "Cart", onCart)
+            LiquidDockIcon(Icons.Outlined.Favorite, "Heart", onHeart)
         }
     }
 }
 
 @Composable
-private fun DockIcon(
+private fun LiquidDockIcon(
     icon: ImageVector,
-    isActive: Boolean,
-    contentDescription: String,
+    description: String,
     onClick: () -> Unit
 ) {
+    val shape = RoundedCornerShape(12.dp)
+
     Box(
         modifier = Modifier
-            .size(46.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(
-                if (isActive) SagePrimary.copy(alpha = 0.16f)
-                else Color.Transparent
+            .size(40.dp)
+            .shadow(
+                elevation = 7.dp,
+                shape = shape,
+                ambientColor = Sage.copy(alpha = 0.12f),
+                spotColor = Amber.copy(alpha = 0.12f)
             )
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.30f))
+            .border(1.dp, Color.White.copy(alpha = 0.58f), shape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = contentDescription,
-            tint = SagePrimary,
-            modifier = Modifier.size(25.dp)
+            contentDescription = description,
+            tint = Sage,
+            modifier = Modifier.size(21.dp)
         )
     }
 }
