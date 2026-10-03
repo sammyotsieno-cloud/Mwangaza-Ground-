@@ -443,4 +443,18 @@ data class Money(
             return Money(minorUnits)
         }
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other is Money) return this.amountMinorUnits == other.amountMinorUnits
+        if (other is RationalCost) {
+            return other.denominator == java.math.BigInteger.ONE &&
+                other.numerator == java.math.BigInteger.valueOf(amountMinorUnits)
+        }
+        return false
+    }
+
+    override fun hashCode(): Int {
+        return amountMinorUnits.hashCode()
+    }
 }
