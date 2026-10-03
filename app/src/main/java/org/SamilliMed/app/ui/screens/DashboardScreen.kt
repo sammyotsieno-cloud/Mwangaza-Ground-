@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -495,6 +496,134 @@ private fun AmbientBackground(
                     SAGE.copy(alpha = 0.75f),
                     quality
                 )
+            }
+        }
+    }
+}
+
+private fun DrawScope.glassSphere(
+    center: Offset,
+    radius: Float,
+    tint: Color,
+    quality: Int
+) {
+    val outerAlpha = if (quality >= 2) 0.28f else 0.20f
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.72f),
+                tint.copy(alpha = outerAlpha),
+                tint.copy(alpha = 0.07f),
+                Color.Transparent
+            ),
+            center = Offset(center.x - radius * 0.28f, center.y - radius * 0.32f),
+            radius = radius * 1.18f
+        ),
+        radius = radius * 1.08f,
+        center = center
+    )
+
+    drawCircle(
+        color = Color.White.copy(alpha = if (quality >= 2) 0.44f else 0.30f),
+        radius = radius * 0.20f,
+        center = Offset(center.x - radius * 0.34f, center.y - radius * 0.38f)
+    )
+
+    drawCircle(
+        color = tint.copy(alpha = if (quality >= 2) 0.14f else 0.09f),
+        radius = radius * 0.82f,
+        center = Offset(center.x + radius * 0.10f, center.y + radius * 0.12f)
+    )
+
+    drawCircle(
+        color = Color.White.copy(alpha = if (quality >= 2) 0.38f else 0.24f),
+        radius = radius * 0.035f,
+        center = Offset(center.x - radius * 0.48f, center.y - radius * 0.52f)
+    )
+}
+
+@Composable
+private fun LineIcon(
+    kind: IconKind,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val s = Stroke(
+            width = size.minDimension * 0.055f,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
+        )
+        val left = w * 0.18f
+        val right = w * 0.82f
+        val top = h * 0.15f
+        val bottom = h * 0.85f
+
+        when (kind) {
+            IconKind.Receiving -> {
+                drawLine(SAGE, Offset(w * 0.50f, top), Offset(w * 0.50f, h * 0.58f), s.width)
+                drawLine(SAGE, Offset(w * 0.34f, h * 0.44f), Offset(w * 0.50f, h * 0.60f), s.width)
+                drawLine(SAGE, Offset(w * 0.66f, h * 0.44f), Offset(w * 0.50f, h * 0.60f), s.width)
+                drawLine(SAGE, Offset(w * 0.22f, h * 0.68f), Offset(w * 0.78f, h * 0.68f), s.width)
+                drawLine(SAGE, Offset(w * 0.22f, h * 0.68f), Offset(w * 0.22f, h * 0.82f), s.width)
+                drawLine(SAGE, Offset(w * 0.78f, h * 0.68f), Offset(w * 0.78f, h * 0.82f), s.width)
+                drawLine(SAGE, Offset(w * 0.22f, h * 0.82f), Offset(w * 0.78f, h * 0.82f), s.width)
+            }
+            IconKind.Dispensing -> {
+                drawRoundRect(SAGE, Offset(w * 0.20f, h * 0.28f), Size(w * 0.60f, h * 0.48f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.08f, h * 0.08f), style = s)
+                drawLine(SAGE, Offset(w * 0.50f, h * 0.28f), Offset(w * 0.50f, h * 0.76f), s.width)
+                drawLine(SAGE, Offset(w * 0.20f, h * 0.52f), Offset(w * 0.80f, h * 0.52f), s.width)
+                drawLine(SAGE, Offset(w * 0.34f, h * 0.20f), Offset(w * 0.66f, h * 0.20f), s.width)
+            }
+            IconKind.Inventory -> {
+                val p = Path().apply {
+                    moveTo(w * 0.18f, h * 0.30f)
+                    lineTo(w * 0.50f, h * 0.16f)
+                    lineTo(w * 0.82f, h * 0.30f)
+                    lineTo(w * 0.50f, h * 0.45f)
+                    close()
+                    moveTo(w * 0.18f, h * 0.30f)
+                    lineTo(w * 0.18f, h * 0.70f)
+                    lineTo(w * 0.50f, h * 0.84f)
+                    lineTo(w * 0.50f, h * 0.45f)
+                    moveTo(w * 0.82f, h * 0.30f)
+                    lineTo(w * 0.82f, h * 0.70f)
+                    lineTo(w * 0.50f, h * 0.84f)
+                }
+                drawPath(p, SAGE, style = s)
+            }
+            IconKind.Products -> {
+                drawRoundRect(SAGE, Offset(w * 0.20f, h * 0.28f), Size(w * 0.60f, h * 0.44f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.07f, h * 0.07f), style = s)
+                drawLine(SAGE, Offset(w * 0.32f, h * 0.28f), Offset(w * 0.32f, h * 0.72f), s.width)
+                drawLine(SAGE, Offset(w * 0.68f, h * 0.28f), Offset(w * 0.68f, h * 0.72f), s.width)
+                drawLine(SAGE, Offset(w * 0.20f, h * 0.44f), Offset(w * 0.80f, h * 0.44f), s.width)
+            }
+            IconKind.Expiry -> {
+                drawCircle(SAGE, radius = w * 0.32f, center = Offset(w * 0.50f, h * 0.50f), style = s)
+                drawLine(SAGE, Offset(w * 0.50f, h * 0.31f), Offset(w * 0.50f, h * 0.51f), s.width)
+                drawLine(SAGE, Offset(w * 0.50f, h * 0.51f), Offset(w * 0.63f, h * 0.59f), s.width)
+            }
+            IconKind.Reports -> {
+                drawLine(SAGE, Offset(w * 0.20f, h * 0.80f), Offset(w * 0.80f, h * 0.80f), s.width)
+                drawLine(SAGE, Offset(w * 0.26f, h * 0.74f), Offset(w * 0.26f, h * 0.52f), s.width)
+                drawLine(SAGE, Offset(w * 0.48f, h * 0.74f), Offset(w * 0.48f, h * 0.36f), s.width)
+                drawLine(SAGE, Offset(w * 0.70f, h * 0.74f), Offset(w * 0.70f, h * 0.24f), s.width)
+                drawLine(SAGE, Offset(w * 0.22f, h * 0.43f), Offset(w * 0.48f, h * 0.25f), s.width)
+                drawLine(SAGE, Offset(w * 0.48f, h * 0.25f), Offset(w * 0.70f, h * 0.16f), s.width)
+            }
+            IconKind.Suppliers -> {
+                drawCircle(SAGE, radius = w * 0.13f, center = Offset(w * 0.50f, h * 0.28f), style = s)
+                drawArc(SAGE, 200f, 140f, false, Offset(w * 0.22f, h * 0.43f), Size(w * 0.56f, h * 0.43f), style = s)
+                drawLine(SAGE, Offset(w * 0.25f, h * 0.73f), Offset(w * 0.75f, h * 0.73f), s.width)
+            }
+            IconKind.Adjustments -> {
+                drawLine(SAGE, Offset(left, h * 0.28f), Offset(right, h * 0.28f), s.width)
+                drawLine(SAGE, Offset(left, h * 0.50f), Offset(right, h * 0.50f), s.width)
+                drawLine(SAGE, Offset(left, h * 0.72f), Offset(right, h * 0.72f), s.width)
+                drawCircle(SAGE, w * 0.10f, Offset(w * 0.36f, h * 0.28f), style = s)
+                drawCircle(SAGE, w * 0.10f, Offset(w * 0.64f, h * 0.50f), style = s)
+                drawCircle(SAGE, w * 0.10f, Offset(w * 0.42f, h * 0.72f), style = s)
             }
         }
     }
