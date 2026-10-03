@@ -684,14 +684,14 @@ private fun LiquidSurface(
 
         // The surface occupies the bottom visual region. Its upper contour
         // deliberately remains irregular rather than becoming a flat bar.
-        val baseY = h * 0.43f
+        val baseY = h * 0.40f
 
         val body = Path().apply {
             moveTo(-35f, baseY + 28f)
             cubicTo(
-                w * 0.10f, baseY - 20f,
-                w * 0.26f, baseY + 38f,
-                w * 0.40f, baseY + 5f
+                w * 0.08f, baseY - 34f,
+                w * 0.25f, baseY + 42f,
+                w * 0.41f, baseY + 4f
             )
             cubicTo(
                 w * 0.54f, baseY - 18f,
@@ -713,8 +713,8 @@ private fun LiquidSurface(
             Brush.verticalGradient(
                 listOf(
                     Color.White.copy(alpha = 0.62f),
-                    AMBER.copy(alpha = 0.23f),
-                    AMBER.copy(alpha = 0.39f),
+                    AMBER.copy(alpha = 0.27f),
+                    AMBER.copy(alpha = 0.46f),
                     Color.White.copy(alpha = 0.15f)
                 )
             )
