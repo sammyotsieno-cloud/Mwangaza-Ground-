@@ -213,6 +213,8 @@ fun DashboardScreen(onFeatureClick: (String) -> Unit, modifier: Modifier = Modif
                 color = CHARCOAL
             )
 
+            Spacer(Modifier.height(if (landscape) 2.dp else 5.dp))
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -456,13 +458,13 @@ private fun AmbientBackground(
 
             glassSphere(
                 Offset(size.width * 0.125f, size.height * 0.455f),
-                m * 0.082f,
+                m * 0.091f,
                 SAGE,
                 quality
             )
             glassSphere(
                 Offset(size.width * 0.825f, size.height * 0.175f),
-                m * 0.065f,
+                m * 0.073f,
                 SAGE,
                 quality
             )
@@ -551,6 +553,21 @@ private fun GlassTile(
                             Color.White.copy(alpha = 0.47f),
                             Color.White.copy(alpha = 0.43f)
                         )
+                    )
+                )
+                // Directional lower-right light field, matching the photographed reference.
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            AMBER.copy(alpha = 0.10f),
+                            AMBER.copy(alpha = 0.22f)
+                        ),
+                        center = Offset(
+                            Float.POSITIVE_INFINITY,
+                            Float.POSITIVE_INFINITY
+                        ),
+                        radius = Float.POSITIVE_INFINITY
                     )
                 )
                 .border(
@@ -686,24 +703,24 @@ private fun LiquidSurface(
 
         // The surface occupies the bottom visual region. Its upper contour
         // deliberately remains irregular rather than becoming a flat bar.
-        val baseY = h * 0.40f
+        val baseY = h * 0.48f
 
         val body = Path().apply {
-            moveTo(-35f, baseY + 28f)
+            moveTo(-35f, baseY + 20f)
             cubicTo(
-                w * 0.08f, baseY - 34f,
-                w * 0.25f, baseY + 42f,
-                w * 0.41f, baseY + 4f
+                w * 0.07f, baseY - 58f,
+                w * 0.20f, baseY - 12f,
+                w * 0.39f, baseY + 18f
             )
             cubicTo(
-                w * 0.54f, baseY - 18f,
-                w * 0.68f, baseY + 32f,
-                w * 0.82f, baseY + 1f
+                w * 0.54f, baseY + 36f,
+                w * 0.68f, baseY + 10f,
+                w * 0.79f, baseY - 4f
             )
             cubicTo(
-                w * 0.93f, baseY - 12f,
-                w * 1.04f, baseY + 24f,
-                w + 45f, baseY + 15f
+                w * 0.90f, baseY - 18f,
+                w * 1.03f, baseY + 16f,
+                w + 45f, baseY + 8f
             )
             lineTo(w + 45f, h + 25f)
             lineTo(-35f, h + 25f)
@@ -715,9 +732,9 @@ private fun LiquidSurface(
             Brush.verticalGradient(
                 listOf(
                     Color.White.copy(alpha = 0.62f),
-                    AMBER.copy(alpha = 0.27f),
-                    AMBER.copy(alpha = 0.46f),
-                    Color.White.copy(alpha = 0.15f)
+                    AMBER.copy(alpha = 0.30f),
+                    AMBER.copy(alpha = 0.52f),
+                    Color.White.copy(alpha = 0.12f)
                 )
             )
         )
@@ -729,30 +746,30 @@ private fun LiquidSurface(
                         AMBER.copy(alpha = 0.27f),
                         Color.Transparent
                     ),
-                    center = Offset(w * 0.50f, baseY + 20f),
-                    radius = w * 0.44f
+                    center = Offset(w * 0.62f, baseY + 34f),
+                    radius = w * 0.52f
                 ),
-                topLeft = Offset(w * 0.16f, baseY - 6f),
-                size = Size(w * 0.68f, 52f)
+                topLeft = Offset(w * 0.24f, baseY + 4f),
+                size = Size(w * 0.76f, 62f)
             )
         }
 
         val edge = Path().apply {
-            moveTo(-25f, baseY + 8f)
+            moveTo(-25f, baseY + 2f)
             cubicTo(
-                w * 0.16f, baseY - 28f,
-                w * 0.30f, baseY + 24f,
-                w * 0.46f, baseY - 4f
+                w * 0.15f, baseY - 42f,
+                w * 0.30f, baseY + 18f,
+                w * 0.46f, baseY + 2f
             )
             cubicTo(
-                w * 0.62f, baseY - 24f,
-                w * 0.76f, baseY + 18f,
-                w * 0.92f, baseY - 8f
+                w * 0.62f, baseY - 22f,
+                w * 0.77f, baseY + 20f,
+                w * 0.91f, baseY - 13f
             )
             cubicTo(
-                w * 1.02f, baseY + 6f,
-                w + 35f, baseY + 2f,
-                w + 35f, baseY + 2f
+                w * 1.01f, baseY - 1f,
+                w + 35f, baseY + 3f,
+                w + 35f, baseY + 3f
             )
         }
 
@@ -772,16 +789,16 @@ private fun LiquidSurface(
         )
 
         val highlight = Path().apply {
-            moveTo(-18f, baseY + 16f)
+            moveTo(-18f, baseY + 12f)
             cubicTo(
-                w * 0.18f, baseY,
-                w * 0.36f, baseY + 34f,
-                w * 0.54f, baseY + 12f
+                w * 0.18f, baseY - 6f,
+                w * 0.36f, baseY + 30f,
+                w * 0.55f, baseY + 9f
             )
             cubicTo(
-                w * 0.72f, baseY - 4f,
-                w * 0.86f, baseY + 26f,
-                w + 22f, baseY + 10f
+                w * 0.72f, baseY - 10f,
+                w * 0.88f, baseY + 24f,
+                w + 22f, baseY + 6f
             )
         }
 
@@ -817,7 +834,7 @@ private fun DockIcon(
         contentAlignment = Alignment.Center
     ) {
         Canvas(Modifier.size(iconSize * 0.72f)) {
-            val stroke = size.minDimension * 0.075f
+            val stroke = size.minDimension * 0.066f
             val s = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
             when (kind) {
                 DockKind.Person -> {
