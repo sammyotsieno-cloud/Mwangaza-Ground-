@@ -340,19 +340,17 @@ fun DashboardScreen(onFeatureClick: (String) -> Unit, modifier: Modifier = Modif
                 quality = visualQuality
             )
 
-            GlassDock(
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(
-                        horizontal = horizontalInset.coerceAtLeast(18.dp),
-                        bottom = if (landscape) 10.dp else 12.dp
-                    ),
-                iconSize = (tile * 0.255f)
-                    .coerceIn(34.dp, 54.dp),
-                user = { onFeatureClick("settings") },
-                cart = { onFeatureClick("receiving") },
-                heart = { onFeatureClick("dashboard") }
-            )
+                    .padding(bottom = if (landscape) 8.dp else 10.dp),
+                horizontalArrangement = Arrangement.spacedBy((tile * 0.28f).coerceIn(34.dp, 58.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DockIcon(DockKind.Person, (tile * 0.255f).coerceIn(34.dp, 54.dp)) { onFeatureClick("settings") }
+                DockIcon(DockKind.Cart, (tile * 0.255f).coerceIn(34.dp, 54.dp)) { onFeatureClick("receiving") }
+                DockIcon(DockKind.Heart, (tile * 0.255f).coerceIn(34.dp, 54.dp)) { onFeatureClick("dashboard") }
+            }
         }
     }
 }
@@ -504,7 +502,7 @@ private fun GlassTile(
     variant: Int,
     quality: Int
 ) {
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(25.dp)
 
     Box(
         modifier
@@ -536,7 +534,7 @@ private fun GlassTile(
             Modifier
                 .matchParentSize()
                 .shadow(
-                    elevation = if (quality >= 2) 15.dp else 10.dp,
+                    elevation = if (quality >= 2) 12.dp else 8.dp,
                     shape = shape,
                     ambientColor = SAGE.copy(alpha = 0.13f),
                     spotColor = AMBER.copy(alpha = 0.20f)
@@ -545,9 +543,9 @@ private fun GlassTile(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            Color.White.copy(alpha = 0.58f),
-                            Color.White.copy(alpha = 0.46f),
-                            Color.White.copy(alpha = 0.40f)
+                            Color.White.copy(alpha = 0.50f),
+                            Color.White.copy(alpha = 0.47f),
+                            Color.White.copy(alpha = 0.43f)
                         )
                     )
                 )
@@ -557,8 +555,8 @@ private fun GlassTile(
                         listOf(
                             Color.White.copy(alpha = 0.96f),
                             Color.White.copy(alpha = 0.62f),
-                            AMBER.copy(alpha = 0.34f),
-                            Color.White.copy(alpha = 0.72f)
+                            AMBER.copy(alpha = 0.42f),
+                            Color.White.copy(alpha = 0.60f)
                         )
                     ),
                     shape = shape
@@ -795,82 +793,14 @@ private fun LiquidSurface(
 }
 
 @Composable
-private fun GlassDock(
-    modifier: Modifier,
-    iconSize: Dp,
-    user: () -> Unit,
-    cart: () -> Unit,
-    heart: () -> Unit
-) {
-    val shape = RoundedCornerShape(42.dp)
-
-    Box(
-        modifier
-            .widthIn(max = 350.dp)
-            .fillMaxWidth()
-            .height(iconSize + 32.dp)
-            .shadow(
-                elevation = 18.dp,
-                shape = shape,
-                ambientColor = SAGE.copy(alpha = 0.13f),
-                spotColor = AMBER.copy(alpha = 0.20f)
-            )
-            .clip(shape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.38f),
-                        Color.White.copy(alpha = 0.18f),
-                        AMBER.copy(alpha = 0.20f)
-                    )
-                )
-            )
-            .border(
-                width = 1.15.dp,
-                brush = Brush.linearGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.82f),
-                        Color.White.copy(alpha = 0.42f),
-                        AMBER.copy(alpha = 0.32f)
-                    )
-                ),
-                shape = shape
-            )
-            .padding(horizontal = 26.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DockIcon(DockKind.Person, iconSize, user)
-            DockIcon(DockKind.Cart, iconSize, cart)
-            DockIcon(DockKind.Heart, iconSize, heart)
-        }
-    }
-}
-
-@Composable
 private fun DockIcon(
     kind: DockKind,
     iconSize: Dp,
     onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(14.dp)
-
     Box(
         Modifier
-            .size(iconSize)
-            .shadow(
-                elevation = 9.dp,
-                shape = shape,
-                ambientColor = SAGE.copy(alpha = 0.15f),
-                spotColor = AMBER.copy(alpha = 0.15f)
-            )
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.42f))
-            .border(1.05.dp, Color.White.copy(alpha = 0.70f), shape)
+            .size(iconSize + 18.dp)
             .clickable(onClick = onClick)
             .semantics {
                 contentDescription = when (kind) {
@@ -882,40 +812,16 @@ private fun DockIcon(
             },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(Modifier.fillMaxSize(0.58f)) {
-            val stroke = size.minDimension * 0.085f
-            val s = Stroke(
-                width = stroke,
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round
-            )
-
+        Canvas(Modifier.size(iconSize * 0.72f)) {
+            val stroke = size.minDimension * 0.075f
+            val s = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
             when (kind) {
                 DockKind.Person -> {
-                    drawCircle(
-                        SAGE,
-                        size.minDimension * 0.18f,
-                        Offset(size.width * 0.50f, size.height * 0.27f),
-                        style = s
-                    )
-                    drawArc(
-                        SAGE,
-                        205f,
-                        130f,
-                        false,
-                        Offset(size.width * 0.24f, size.height * 0.43f),
-                        Size(size.width * 0.52f, size.height * 0.50f),
-                        style = s
-                    )
+                    drawCircle(SAGE, size.minDimension * 0.18f, Offset(size.width * 0.50f, size.height * 0.27f), style = s)
+                    drawArc(SAGE, 205f, 130f, false, Offset(size.width * 0.24f, size.height * 0.43f), Size(size.width * 0.52f, size.height * 0.50f), style = s)
                 }
-
                 DockKind.Cart -> {
-                    drawLine(
-                        SAGE,
-                        Offset(size.width * 0.18f, size.height * 0.27f),
-                        Offset(size.width * 0.30f, size.height * 0.27f),
-                        stroke
-                    )
+                    drawLine(SAGE, Offset(size.width * 0.18f, size.height * 0.27f), Offset(size.width * 0.30f, size.height * 0.27f), stroke)
                     val path = Path().apply {
                         moveTo(size.width * 0.30f, size.height * 0.27f)
                         lineTo(size.width * 0.38f, size.height * 0.68f)
@@ -924,43 +830,16 @@ private fun DockIcon(
                         lineTo(size.width * 0.34f, size.height * 0.40f)
                     }
                     drawPath(path, SAGE, style = s)
-                    drawCircle(
-                        SAGE,
-                        size.minDimension * 0.07f,
-                        Offset(size.width * 0.43f, size.height * 0.83f),
-                        style = s
-                    )
-                    drawCircle(
-                        SAGE,
-                        size.minDimension * 0.07f,
-                        Offset(size.width * 0.72f, size.height * 0.83f),
-                        style = s
-                    )
+                    drawCircle(SAGE, size.minDimension * 0.07f, Offset(size.width * 0.43f, size.height * 0.83f), style = s)
+                    drawCircle(SAGE, size.minDimension * 0.07f, Offset(size.width * 0.72f, size.height * 0.83f), style = s)
                 }
-
                 DockKind.Heart -> {
                     val path = Path().apply {
                         moveTo(size.width * 0.50f, size.height * 0.83f)
-                        cubicTo(
-                            size.width * 0.12f, size.height * 0.58f,
-                            size.width * 0.13f, size.height * 0.24f,
-                            size.width * 0.34f, size.height * 0.24f
-                        )
-                        cubicTo(
-                            size.width * 0.45f, size.height * 0.24f,
-                            size.width * 0.50f, size.height * 0.34f,
-                            size.width * 0.50f, size.height * 0.34f
-                        )
-                        cubicTo(
-                            size.width * 0.50f, size.height * 0.34f,
-                            size.width * 0.56f, size.height * 0.24f,
-                            size.width * 0.66f, size.height * 0.24f
-                        )
-                        cubicTo(
-                            size.width * 0.88f, size.height * 0.24f,
-                            size.width * 0.89f, size.height * 0.58f,
-                            size.width * 0.50f, size.height * 0.83f
-                        )
+                        cubicTo(size.width * 0.12f, size.height * 0.58f, size.width * 0.13f, size.height * 0.24f, size.width * 0.34f, size.height * 0.24f)
+                        cubicTo(size.width * 0.45f, size.height * 0.24f, size.width * 0.50f, size.height * 0.34f, size.width * 0.50f, size.height * 0.34f)
+                        cubicTo(size.width * 0.50f, size.height * 0.34f, size.width * 0.56f, size.height * 0.24f, size.width * 0.66f, size.height * 0.24f)
+                        cubicTo(size.width * 0.88f, size.height * 0.24f, size.width * 0.89f, size.height * 0.58f, size.width * 0.50f, size.height * 0.83f)
                     }
                     drawPath(path, SAGE, style = s)
                 }
