@@ -349,7 +349,7 @@ fun DashboardScreen(onFeatureClick: (String) -> Unit, modifier: Modifier = Modif
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = if (landscape) 8.dp else 10.dp),
+                    .padding(bottom = if (landscape) 4.dp else 5.dp),
                 horizontalArrangement = Arrangement.spacedBy((tile * 0.28f).coerceIn(34.dp, 58.dp)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -540,7 +540,7 @@ private fun GlassTile(
             Modifier
                 .matchParentSize()
                 .shadow(
-                    elevation = if (quality >= 2) 12.dp else 8.dp,
+                    elevation = if (quality >= 2) 10.dp else 7.dp,
                     shape = shape,
                     ambientColor = SAGE.copy(alpha = 0.13f),
                     spotColor = AMBER.copy(alpha = 0.20f)
@@ -553,21 +553,6 @@ private fun GlassTile(
                             Color.White.copy(alpha = 0.47f),
                             Color.White.copy(alpha = 0.43f)
                         )
-                    )
-                )
-                // Directional lower-right light field, matching the photographed reference.
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            AMBER.copy(alpha = 0.10f),
-                            AMBER.copy(alpha = 0.22f)
-                        ),
-                        center = Offset(
-                            Float.POSITIVE_INFINITY,
-                            Float.POSITIVE_INFINITY
-                        ),
-                        radius = Float.POSITIVE_INFINITY
                     )
                 )
                 .border(
@@ -584,6 +569,24 @@ private fun GlassTile(
                 )
                 .clickable(onClick = onClick)
         ) {
+            // Directional lower-right amber field. Unlike a uniform wash, this
+            // concentrates the reflected light where the reference catches it.
+            if (quality >= 1) {
+                Canvas(Modifier.matchParentSize()) {
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                AMBER.copy(alpha = 0.24f),
+                                AMBER.copy(alpha = 0.09f),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * 1.02f, size.height * 1.02f),
+                            radius = size.maxDimension * 0.92f
+                        )
+                    )
+                }
+            }
+
             // Broad upper reflection — the most important visual cue that
             // separates these from ordinary Material cards.
             Box(
@@ -783,7 +786,7 @@ private fun LiquidSurface(
                 )
             ),
             style = Stroke(
-                width = if (quality >= 2) 5f else 3.5f,
+                width = if (quality >= 2) 4.5f else 3.2f,
                 cap = StrokeCap.Round
             )
         )
@@ -821,7 +824,7 @@ private fun DockIcon(
 ) {
     Box(
         Modifier
-            .size(iconSize + 18.dp)
+            .size(iconSize + 12.dp)
             .clickable(onClick = onClick)
             .semantics {
                 contentDescription = when (kind) {
