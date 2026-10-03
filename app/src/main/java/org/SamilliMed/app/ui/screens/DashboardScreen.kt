@@ -436,7 +436,7 @@ private fun AmbientBackground(
                     .size(190.dp)
                     .align(Alignment.BottomEnd)
                     .offset((-25).dp, (-35).dp + driftC.dp)
-                    .blur(quality >= 2 ? 56.dp : 38.dp)
+                    .blur(if (quality >= 2) 56.dp else 38.dp)
                     .background(
                         Brush.radialGradient(
                             listOf(
